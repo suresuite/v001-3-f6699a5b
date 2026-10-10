@@ -22535,7 +22535,7 @@ export const REFERENCE_TABLES: RefTable[] = [
       {
         "page": "SimulationLab.tsx",
         "via": "table read",
-        "evidence": "src/hooks/useScenarios.tsx:109"
+        "evidence": "src/hooks/useScenarios.tsx:95"
       }
     ],
     "governance": {

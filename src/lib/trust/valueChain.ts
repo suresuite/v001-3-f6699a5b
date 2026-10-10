@@ -170,7 +170,7 @@ const cell = (bag: Record<string, unknown> | null, key: string): { text: string 
 };
 
 /** What the reader can DO about this value — per provenance state, never generic. */
-const REMEDY: Record<Provenance, string> = {
+export const VALUE_CHAIN_REMEDY: Record<Provenance, string> = {
   data: "Re-upload this dataset to change it.",
   master: "Edit the item master, or upload a new master file.",
   contract: "Fill this cell in an upload — while it is empty the schema's declared meaning applies.",
@@ -356,7 +356,7 @@ export function buildValueChain(input: ValueChainInput): ValueChain {
   });
 
   // ── what would change it ─────────────────────────────────────────────────
-  push({ key: "remedy", label: "What would change it", value: REMEDY[provenance], part: "next" });
+  push({ key: "remedy", label: "What would change it", value: VALUE_CHAIN_REMEDY[provenance], part: "next" });
 
   const tracesToAFile = !!row?.has_provenance && !!row.original_filename && row.source_row_number != null;
   const headline = tracesToAFile

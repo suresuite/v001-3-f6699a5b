@@ -6,7 +6,26 @@
 // is empty in practice because nobody has run an analysis since it shipped
 // (§4 D88).
 
-import { PageTitle, Section, P, Key, Callout, Term, DocLink, Provenance } from "@/components/docs/prose";
+import { capacityVerdict, type CapacityState } from "@/lib/sim/labModel";
+import { PageTitle, InShort, Section, P, Key, Callout, Defs, DocTable, Term, DocLink, Provenance } from "@/components/docs/prose";
+
+/** An illustrative plan: 5,000 replication-weeks a month, 2 runs at once, 50 replications per run. */
+const plan = (o: Partial<CapacityState["pool"]> = {}, share: CapacityState["share"] = null): CapacityState => ({
+  org_id: "example", role: "analyst",
+  pool: {
+    compute_quota_rep_weeks_month: 5000, compute_used_rep_weeks: 1200, storage_quota_bytes: null, storage_used_bytes: 0,
+    max_concurrent_runs: 2, active_runs: 0, max_replications_per_run: 50, ...o,
+  },
+  share,
+});
+const run = (replications: number, weeks = 52) => ({ replications, repWeeks: replications * weeks, bytes: 0 });
+const CAPACITY_CASES: { when: string; v: ReturnType<typeof capacityVerdict> }[] = [
+  { when: "10 replications × 52 weeks, room to spare", v: capacityVerdict(plan(), run(10)) },
+  { when: "100 replications in one run", v: capacityVerdict(plan(), run(100)) },
+  { when: "Two runs already queued or running", v: capacityVerdict(plan({ active_runs: 2 }), run(10)) },
+  { when: "Month nearly used up", v: capacityVerdict(plan({ compute_used_rep_weeks: 4900 }), run(10)) },
+  { when: "No limits on the plan", v: capacityVerdict(plan({ compute_quota_rep_weeks_month: null, max_concurrent_runs: null, max_replications_per_run: null }), run(10)) },
+];
 
 export default function PerformanceAndCaching() {
   return (
@@ -14,6 +33,11 @@ export default function PerformanceAndCaching() {
       <PageTitle lead="Why a second run is faster, and when the answer is recomputed instead.">
         Performance &amp; caching
       </PageTitle>
+      <InShort items={[
+        <>An answer is reused when it was computed from the same data, parameters and code — never just because it is recent.</>,
+        <>An identical simulation offers to <strong>reuse</strong> the stored results; you choose, and Re-run always computes again.</>,
+        <>Your organization's plan can limit replications per run, runs at once and replication-weeks a month. The Run card says what is left before you click.</>,
+      ]} />
 
       <Section id="the-rule" title="The rule that decides a reuse">
         <Key>
@@ -55,6 +79,36 @@ export default function PerformanceAndCaching() {
           explains why the old rows cannot be back-filled rather than being given a plausible stamp.
         </p>
       </Callout>
+
+      <Section id="simulation-reuse" title="Reusing a simulation">
+        <P>Every dispatched run gets a <strong>RunKey</strong>: a fingerprint of everything that decides its numbers — the engine build, the policy version, the data the simulation reads, and the scenario's settings, seed and disruptions. Two runs with the same key produce the same results.</P>
+        <P>So when you dispatch a scenario whose key matches a completed run, the Lab asks <strong>Reuse the stored results?</strong>, naming when that run finished, its replications and its engine. <strong>Reuse results</strong> shows it instantly; <strong>Re-run</strong> computes it again from scratch. Neither is automatic.</P>
+        <Defs items={[
+          { term: "Changes the key", def: "A data edit the simulation reads, a new policy version, any scenario setting (horizon, warm-up, replications, seed, disruptions), or a new engine build." },
+          { term: "Does not change it", def: "Deep-tier company data, network layouts and centralities — the simulation does not read them, so they cannot make an identical run a new one." },
+        ]} />
+      </Section>
+
+      <Section id="capacity" title="What your organization's plan allows">
+        <P>An organization can have up to five limits: replication-weeks per month (compute), storage, runs queued or running at once, replications per run, and how long a run's weekly series are kept. A role can also be given a share of the organization's compute and storage. A limit left empty is unlimited.</P>
+        <P>The Run card states what is left, and forecasts — in the dispatcher's own order — the refusal a run would get, before you click. These are its words for an illustrative plan of 5,000 replication-weeks a month, 2 runs at once and 50 replications per run, with 1,200 replication-weeks already used:</P>
+        <DocTable
+          caption="The Run card's capacity line and forecast refusal — computed by the Lab's own function."
+          head={["Situation", "Capacity line", "Refused because"]}
+          rows={CAPACITY_CASES.map(({ when, v }) => [when, v.line, v.refusal ?? "fits"])}
+        />
+        <P>A replication-week is one replication simulating one week, so a run costs replications × horizon weeks. Halving either halves the cost.</P>
+      </Section>
+
+      <Section id="retention" title="How long a run's weekly series are kept">
+        <P>A finished run's KPIs are kept. Its <strong>weekly series</strong> — the traces behind the charts — are kept for the organization's retention period, then removed to free storage. The line under a finished run says which of three states it is in:</P>
+        <Defs items={[
+          { term: "Standard", def: "Kept until a date, then removed. Editors can choose Keep series to pin it." },
+          { term: "Pinned", def: "Kept until someone with Edit Policies chooses Release." },
+          { term: "Evidence", def: "The runs behind a Validated Model are kept for as long as the model needs them, and cannot be released." },
+        ]} />
+        <P>A run whose series were removed says so, with its RunKey — dispatching the same key again reproduces the series exactly. The KPIs never go away.</P>
+      </Section>
 
       <Section id="why-a-run-is-slow" title="Why a particular run is slow">
         <P>

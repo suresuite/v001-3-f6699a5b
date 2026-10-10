@@ -730,9 +730,11 @@ export function deriveRunKpis(root) {
 
   // The scenario's objective, which drives the convergence plot and the stage
   // rail's own sub-label. Five choices, from the same legacy vocabulary.
-  const setup = readFileSync(join(root, "src", "components", "sim", "ScenarioSetupForm.tsx"), "utf8");
+  // Declared in a leaf module since WP 5.2a's manual pass, so /docs can read it too;
+  // `ScenarioSetupForm.tsx` re-exports it.
+  const setup = readFileSync(join(root, "src", "lib", "sim", "scenarioDefaults.ts"), "utf8");
   const oBlock = /const KPI_OPTIONS = \[([\s\S]*?)\n\];/.exec(setup);
-  if (!oBlock) throw new Error("chains: KPI_OPTIONS not found in src/components/sim/ScenarioSetupForm.tsx");
+  if (!oBlock) throw new Error("chains: KPI_OPTIONS not found in src/lib/sim/scenarioDefaults.ts");
   const objectives = [];
   const orow = /\{\s*value:\s*"(\w+)",\s*label:\s*"([^"]+)"\s*\}/g;
   while ((m = orow.exec(oBlock[1]))) objectives.push({ key: m[1], label: m[2] });
@@ -858,7 +860,8 @@ export function deriveReplicationSeries(root) {
  *   · `ScenarioSetupForm.tsx` gives each field the label a reader sees, its
  *     unit, and its control — and in the same object literal names the default
  *     it compares against, `SCENARIO_ENGINE_DEFAULTS.<key>`.
- *   · `useScenarios.tsx` gives that default's value.
+ *   · `scenarioDefaults.ts` gives that default's value (`useScenarios.tsx`
+ *     re-exports it).
  *
  * So label → key → default is a join the source already makes, not one this
  * file invents. That satisfies §6.1 rule 1 — the reader's name leads, the
@@ -866,11 +869,11 @@ export function deriveReplicationSeries(root) {
  * stale when the form changes.
  */
 export function deriveScenarioSetup(root) {
-  const hook = readFileSync(join(root, "src", "hooks", "useScenarios.tsx"), "utf8");
+  const hook = readFileSync(join(root, "src", "lib", "sim", "scenarioDefaults.ts"), "utf8");
   const dBlock = /SCENARIO_ENGINE_DEFAULTS = \{([\s\S]*?)\n\} satisfies/.exec(hook);
   if (!dBlock) {
     throw new Error(
-      "chains: SCENARIO_ENGINE_DEFAULTS not found in src/hooks/useScenarios.tsx. Fix the " +
+      "chains: SCENARIO_ENGINE_DEFAULTS not found in src/lib/sim/scenarioDefaults.ts. Fix the " +
         "scan rather than shipping a scenario page that states no default.",
     );
   }

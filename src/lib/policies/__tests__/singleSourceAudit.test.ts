@@ -105,7 +105,7 @@ describe("D190 · the Data Map names a demand-distribution default the engine do
     expect(read("scsim/scsim/io/project_map.py")).toMatch(
       /if product_dist:[\s\S]{0,120}if scenario_model and scenario_model\.get\("kind"\):[\s\S]{0,120}return "triangular"/,
     );
-    expect(read("src/hooks/useScenarios.tsx")).toMatch(/kind: "poisson"/);
+    expect(read("src/lib/sim/scenarioDefaults.ts")).toMatch(/kind: "poisson"/);
   });
   // CLOSED 2026-09-29 (the Data map reconciliation): `.fails` removed in the
   // same commit that made this pass, as the file header requires.

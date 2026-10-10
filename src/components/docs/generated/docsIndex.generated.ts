@@ -781,11 +781,19 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
     ]
   },
   "how-planning-works": {
-    "minutes": 3,
+    "minutes": 7,
     "sections": [
       {
         "id": "the-flow",
         "title": "The flow, end to end"
+      },
+      {
+        "id": "worked-example",
+        "title": "A worked example, week by week"
+      },
+      {
+        "id": "the-settings",
+        "title": "What each setting means"
       },
       {
         "id": "one-rule",
@@ -911,7 +919,7 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
     ]
   },
   "where-a-number-came-from": {
-    "minutes": 3,
+    "minutes": 6,
     "sections": [
       {
         "id": "the-promise",
@@ -920,6 +928,14 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
       {
         "id": "the-dots",
         "title": "The marks"
+      },
+      {
+        "id": "check-a-value",
+        "title": "Check one value, end to end"
+      },
+      {
+        "id": "change-it",
+        "title": "What would change it"
       },
       {
         "id": "empty-means-something",
@@ -1679,11 +1695,23 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
     ]
   },
   "performance-and-caching": {
-    "minutes": 2,
+    "minutes": 5,
     "sections": [
       {
         "id": "the-rule",
         "title": "The rule that decides a reuse"
+      },
+      {
+        "id": "simulation-reuse",
+        "title": "Reusing a simulation"
+      },
+      {
+        "id": "capacity",
+        "title": "What your organization's plan allows"
+      },
+      {
+        "id": "retention",
+        "title": "How long a run's weekly series are kept"
       },
       {
         "id": "why-a-run-is-slow",
@@ -1838,7 +1866,7 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
     ]
   },
   "roles-and-capabilities": {
-    "minutes": 3,
+    "minutes": 4,
     "sections": [
       {
         "id": "layers",
@@ -1850,7 +1878,7 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
       },
       {
         "id": "project-rights",
-        "title": "Default project rights in the current source"
+        "title": "Default project rights"
       },
       {
         "id": "find-rights",
@@ -1867,19 +1895,23 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
     ]
   },
   "project-access": {
-    "minutes": 2,
+    "minutes": 5,
     "sections": [
       {
         "id": "roles",
-        "title": "Start with the project, not the account label"
+        "title": "What each project role allows"
       },
       {
         "id": "check",
-        "title": "Inspect effective access"
+        "title": "See your role and rights"
+      },
+      {
+        "id": "ask",
+        "title": "Ask for the right access"
       },
       {
         "id": "delegation",
-        "title": "Delegation and expiration"
+        "title": "Delegation and expiry"
       },
       {
         "id": "errors",

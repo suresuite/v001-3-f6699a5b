@@ -353,7 +353,7 @@ surfaces:
   - page: "SimulationLab.tsx"
     via: "table read"
     grain: table
-    evidence: "src/hooks/useScenarios.tsx:109"
+    evidence: "src/hooks/useScenarios.tsx:95"
     confirmed: true
   - page: "SimulationLab.tsx"
     via: "table read"

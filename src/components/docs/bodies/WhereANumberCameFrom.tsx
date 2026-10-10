@@ -6,7 +6,8 @@
 // point of display, not in a log". A user who cannot decode the dot is a user
 // for whom T2 is not met.
 
-import { PageTitle, Section, P, Key, Callout, Term, DocLink, AppLink, Provenance } from "@/components/docs/prose";
+import { PageTitle, InShort, Section, P, Key, Callout, Steps, DocTable, Term, DocLink, AppLink, Provenance, Prose } from "@/components/docs/prose";
+import { buildValueChain, VALUE_CHAIN_REMEDY } from "@/lib/trust/valueChain";
 import { DocFigure } from "@/components/docs/DocFigure";
 import { PROVENANCE, type Provenance as ProvenanceKind } from "@/components/policies/policyGridUi";
 
@@ -38,6 +39,32 @@ const MEANING: Partial<Record<string, string>> = {
   default: "Nothing in your data resolved it, so the policy bundle's default applies.",
 };
 
+/**
+ * A worked chain: the tutorial's S-BOARD → M-BOARD lead time, as the popover
+ * builds it for an upload that went through review. The upload is illustrative
+ * (names, file and times are made up); every label, sentence and absence is
+ * produced by `buildValueChain`, the function the popover itself calls.
+ */
+const EXAMPLE = buildValueChain({
+  row: {
+    has_provenance: true, project_id: "example", target_table: "inbound_logistics", source_kind: "csv",
+    original_filename: "inbound_logistics.csv", content_sha256: null, byte_size: 182, source_row_number: 2,
+    raw: { supplier_id: "S-BOARD", material_id: "M-BOARD", lead_time: "2", lead_time_unit: "weeks" },
+    parsed: { supplier_id: "S-BOARD", material_id: "M-BOARD", lead_time: 2, lead_time_unit: "weeks" },
+    findings: [], diff_state: "new",
+    uploaded_by_name: "Ana Analyst", uploaded_by_email: null, received_at: "2026-10-01T09:00:00Z",
+    promoted_by_name: "Pat Planner", promoted_by_email: null, promoted_at: "2026-10-01T09:20:00Z",
+    run_status: "promoted", later_uploads: 0, latest_upload_at: null,
+  },
+  dataset: "inbound_logistics",
+  column: "lead_time",
+  stage: "supplier",
+  field: "lead_time_weeks",
+  provenance: "data",
+  displayed: "2",
+  uploadable: true,
+});
+
 export default function WhereANumberCameFrom() {
   const dots = ORDER.filter((k) => PROVENANCE[k]);
 
@@ -46,6 +73,11 @@ export default function WhereANumberCameFrom() {
       <PageTitle lead="Every number in the grid carries a mark saying where it came from. This is how to read them.">
         Where a number came from
       </PageTitle>
+      <InShort items={[
+        <>The coloured dot on a /policies cell says what <em>kind</em> of number it is: yours, worked out, or assumed.</>,
+        <>Click the dot for the whole chain — file, row, who uploaded and promoted it, unit, what the engine does with it, and what would change it.</>,
+        <>An unmarked cell is the bundle default. A step the system cannot answer says “unknown” and why; it is never left out.</>,
+      ]} />
 
       <Section id="the-promise" title="The promise this keeps">
         <Key>
@@ -96,6 +128,33 @@ export default function WhereANumberCameFrom() {
           are naming it here rather than letting the legend imply every substitution is visible.
         </p>
       </Callout>
+
+      <Section id="check-a-value" title="Check one value, end to end">
+        <Steps steps={[
+          { title: "Find the cell", where: "/policies", body: <>Open the stage the field belongs to and find the row. The dot sits beside the value.</> },
+          { title: "Click the dot", where: "the cell's dot", body: <>A panel opens with the value's chain. It is a panel rather than a tooltip so you can read it on a phone and copy from it.</> },
+          { title: "Read every step, including the unknowns", where: "value chain", body: <>A step that cannot be answered says so and why — most often because the row was loaded before uploads were recorded. Unknown is not the same as “there was none”.</>, check: "a source file and row for an uploaded value, or a clear statement of why there isn't one." },
+        ]} />
+        <DocTable
+          caption="The tutorial's S-BOARD → M-BOARD lead time, as the panel shows it — produced by the panel's own code from an illustrative upload."
+          head={["Step", "Shows"]}
+          rows={EXAMPLE.steps.map((st) => [
+            <Prose text={st.label} />,
+            st.value != null ? <Prose text={st.value} /> : <span className="text-gray-600"><Prose text={st.absentBecause ?? "not recorded"} /></span>,
+          ])}
+        />
+        <P><Prose text={EXAMPLE.headline} /></P>
+      </Section>
+
+      <Section id="change-it" title="What would change it">
+        <P>The last step of every chain names the one action that would change the value. It depends only on the mark:</P>
+        <DocTable
+          caption="The remedy for each mark — read from the value-chain code."
+          head={["Mark", "To change the value"]}
+          rows={dots.map((k) => [PROVENANCE[k].title, VALUE_CHAIN_REMEDY[k as keyof typeof VALUE_CHAIN_REMEDY] ?? "—"])}
+        />
+        <P>An overridden cell also offers <strong>Reset to master</strong>, which removes your /policies override and shows the item-master or lane-derived value again — the master itself was never changed.</P>
+      </Section>
 
       <Section id="empty-means-something" title="When empty is an answer">
         <P>
