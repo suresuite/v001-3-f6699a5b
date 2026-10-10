@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { ScenarioRole } from "@/lib/sim/validationBaseline";
+import { SCENARIO_ENGINE_DEFAULTS } from "@/lib/sim/scenarioDefaults";
 
 export interface Scenario {
   id: string;
@@ -36,24 +37,9 @@ export interface Scenario {
   updated_at: string;
 }
 
-/** The engine's neutral starting point for a new scenario. Exported so the
- *  setup form can mark a field "edited" against ONE source of truth instead of
- *  re-declaring the defaults next to the inputs. */
-export const SCENARIO_ENGINE_DEFAULTS = {
-  description: "",
-  horizon_days: 364,
-  time_step: "day",
-  warmup_mode: "auto",
-  warmup_days: 14,
-  replications: 10,
-  seed: 42,
-  crn: true,
-  demand_model: { kind: "poisson", lambda: 50 },
-  disruption_schedule: [],
-  recovery_overrides: {},
-  stopping_rule: { kind: "fixed_horizon", max_wall_seconds: 600 },
-  primary_kpi: "fill_rate",
-} satisfies Partial<Scenario>;
+/** The engine's neutral starting point for a new scenario. Declared in a leaf
+ *  module (no Supabase client) so the manual can read the same values. */
+export { SCENARIO_ENGINE_DEFAULTS } from "@/lib/sim/scenarioDefaults";
 
 const SCENARIO_DEFAULTS = (projectId: string, name = "Baseline"): Partial<Scenario> => ({
   project_id: projectId,

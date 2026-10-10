@@ -1069,27 +1069,39 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
     ]
   },
   "simulation-lab": {
-    "minutes": 3,
+    "minutes": 11,
     "sections": [
       {
         "id": "the-rail",
         "title": "Before you run"
       },
       {
+        "id": "new-scenario",
+        "title": "Create a scenario"
+      },
+      {
         "id": "setup",
-        "title": "Setup and Recovery playbook"
+        "title": "Setup: horizon, warm-up and precision"
+      },
+      {
+        "id": "setup-recovery",
+        "title": "Recovery playbook: events and responses"
       },
       {
         "id": "the-gate",
-        "title": "Run: findings and save state"
+        "title": "Run: the gate"
       },
       {
         "id": "how-a-run-goes",
-        "title": "Queued, running, done, failed or cancelled"
+        "title": "While it runs"
       },
       {
         "id": "results",
-        "title": "Results and Compare"
+        "title": "Results"
+      },
+      {
+        "id": "compare",
+        "title": "Compare"
       }
     ]
   },
@@ -1157,32 +1169,36 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
     ]
   },
   "experiments-and-comparison": {
-    "minutes": 3,
+    "minutes": 7,
     "sections": [
       {
         "id": "what-an-experiment-is",
         "title": "Choose the question first"
       },
       {
-        "id": "the-four-conditions",
-        "title": "What the comparison checks"
+        "id": "build-it",
+        "title": "Build the pair"
       },
       {
-        "id": "review-protocol",
-        "title": "Check what the screen cannot decide for you"
+        "id": "the-four-conditions",
+        "title": "What Compare checks"
       },
       {
         "id": "reading-the-table",
         "title": "Read the difference and its interval"
       },
       {
+        "id": "review-protocol",
+        "title": "Check what the screen cannot decide for you"
+      },
+      {
         "id": "scope",
-        "title": "Application workflow versus engine library"
+        "title": "What the app does, and what only the engine library does"
       }
     ]
   },
   "seeds-replications-confidence": {
-    "minutes": 2,
+    "minutes": 5,
     "sections": [
       {
         "id": "seeds",
@@ -1194,7 +1210,7 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
       },
       {
         "id": "warmup",
-        "title": "Warm-up and the measurement window"
+        "title": "Warm-up and the measured window"
       },
       {
         "id": "confidence",

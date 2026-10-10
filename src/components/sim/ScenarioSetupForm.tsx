@@ -5,6 +5,7 @@ import type { Scenario } from "@/hooks/useScenarios";
 import { SCENARIO_ENGINE_DEFAULTS } from "@/hooks/useScenarios";
 import { useTimeUnit, UNIT_LABEL_PLURAL } from "@/hooks/useTimeUnit";
 import { HORIZON_WEEKS, editWeeks, engineWeeks, formatDuration } from "@/lib/sim/planningTime";
+import { KPI_OPTIONS } from "@/lib/sim/scenarioDefaults";
 
 interface Props {
   scenario: Scenario;
@@ -21,13 +22,8 @@ interface Props {
   section?: "all" | "identity" | "runWindow" | "precision" | "objective";
 }
 
-export const KPI_OPTIONS = [
-  { value: "fill_rate", label: "Fill rate" },
-  { value: "otif", label: "OTIF" },
-  { value: "lead_time_days", label: "Lead time" },
-  { value: "profit", label: "Profit" },
-  { value: "utilization", label: "Utilization" },
-];
+/** Declared in a leaf module so the manual can list the same choices. */
+export { KPI_OPTIONS } from "@/lib/sim/scenarioDefaults";
 
 /**
  * The scenario's parameters as two (plus one) titled Parameter | Value | Unit
