@@ -1252,11 +1252,19 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
     ]
   },
   "product-level-network": {
-    "minutes": 2,
+    "minutes": 7,
     "sections": [
       {
         "id": "what-you-see",
-        "title": "Read the four roles"
+        "title": "Read the four columns"
+      },
+      {
+        "id": "use-the-view",
+        "title": "Use the view"
+      },
+      {
+        "id": "the-numbers",
+        "title": "The numbers beside the graph"
       },
       {
         "id": "worked-example",
@@ -1265,6 +1273,10 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
       {
         "id": "questions",
         "title": "What this view can answer"
+      },
+      {
+        "id": "add-disruption",
+        "title": "Turn a node into a scenario"
       },
       {
         "id": "missing",
@@ -1277,11 +1289,19 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
     ]
   },
   "process-level-network": {
-    "minutes": 2,
+    "minutes": 7,
     "sections": [
       {
         "id": "what-you-see",
         "title": "What a process node means here"
+      },
+      {
+        "id": "use-the-view",
+        "title": "Use the view"
+      },
+      {
+        "id": "the-numbers",
+        "title": "The numbers beside the graph"
       },
       {
         "id": "worked-example",
@@ -1289,7 +1309,7 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
       },
       {
         "id": "tiers",
-        "title": "BOM level is not company tier"
+        "title": "BOM depth is not company tier"
       },
       {
         "id": "focus",
@@ -1302,11 +1322,19 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
     ]
   },
   "firm-level-network": {
-    "minutes": 2,
+    "minutes": 7,
     "sections": [
       {
         "id": "what-you-see",
         "title": "A separate company graph"
+      },
+      {
+        "id": "use-the-view",
+        "title": "Use the view"
+      },
+      {
+        "id": "the-numbers",
+        "title": "The numbers beside the graph"
       },
       {
         "id": "worked-example",
@@ -1315,6 +1343,10 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
       {
         "id": "questions",
         "title": "Questions this graph can support"
+      },
+      {
+        "id": "add-disruption",
+        "title": "Turn a firm into a scenario"
       },
       {
         "id": "upload",
