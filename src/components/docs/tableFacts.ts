@@ -92,6 +92,27 @@ export function blankBehaviour(c: RefColumn): BlankAnswer {
 }
 
 /** Columns an analysis wrote, from the contract's declared `computed_by`. */
+/**
+ * The row key a table declares, and whether the database enforces it.
+ *
+ * "Enforced" means the declared key is the landed unique index — the only
+ * case in which uploading the same rows twice updates them rather than adding
+ * them again. Read by `HowItLoads` and by a reference page's upload card, so
+ * the two cannot say different things about re-uploading.
+ */
+export function rowKey(t: RefTable) {
+  // A sidecar states `natural_key_intended` only where it differs from what
+  // landed (R5 fails a table whose two disagree). Where it is null and the
+  // landed key carries no surrogate `id`, the landed unique key IS the natural
+  // key — the item masters, since WP 3.3 — and it is enforced by definition.
+  if (t.naturalKeyIntended === null && t.naturalKey.length > 0 && !t.naturalKey.includes("id")) {
+    return { key: t.naturalKey, enforced: true };
+  }
+  const key = t.naturalKeyIntended ?? [];
+  const enforced = key.length > 0 && key.every((k) => t.naturalKey.includes(k)) && t.naturalKey.length > 1;
+  return { key, enforced };
+}
+
 export const computedColumns = (t: RefTable) => t.columns.filter((c) => c.computedBy);
 /** Everything else on the row — what a person or a discovery run supplied. */
 export const suppliedColumns = (t: RefTable) => t.columns.filter((c) => !c.computedBy);

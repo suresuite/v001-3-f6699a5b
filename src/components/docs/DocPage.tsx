@@ -13,14 +13,31 @@
 // written yet". Naming the owing package makes the absence a fact rather than
 // a silence (§5.3 T3).
 
+import type { ReactNode } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useCapabilities } from "@/hooks/useCapabilities";
-import { PageTitle, P, Key, DocLink } from "@/components/docs/prose";
+import { PageTitle, P, Callout, DocLink, Section } from "@/components/docs/prose";
 import { ALL_PAGES, DEFAULT_SLUG, getGroup, getPage } from "@/components/docs/registry";
 import { DOC_BODIES } from "@/components/docs/bodies";
+import { DocPageContext } from "@/components/docs/docPageContext";
+import { KIND_MAX_WIDTH } from "@/components/docs/docKinds";
+import { DOCS_INDEX } from "@/components/docs/generated/docsIndex.generated";
+import { UploadCard } from "@/components/docs/UploadCard";
+import { cn } from "@/lib/utils";
+
+/**
+ * The article column every page renders in. `data-kind` selects the template's
+ * spacing and numbering in index.css; the width is the kind's reading measure.
+ */
+function Article({ kind, children }: { kind?: keyof typeof KIND_MAX_WIDTH; children: ReactNode }) {
+  return (
+    <article className={cn("docs-article", KIND_MAX_WIDTH[kind ?? "guide"])} data-kind={kind}>
+      {children}
+    </article>
+  );
+}
 
 function Stub({ slug }: { slug: string }) {
   const page = getPage(slug);
@@ -32,23 +49,21 @@ function Stub({ slug }: { slug: string }) {
     <>
       <PageTitle lead={page.summary}>{page.title}</PageTitle>
 
-      <div className="rounded-sm border border-border bg-card p-4 shadow-xs">
-        <div className="mb-2 flex flex-wrap items-center gap-2">
-          <Badge variant="outline">Not written yet</Badge>
-
-        </div>
-        <Key>
-          This page is planned and not yet written
-          .
-        </Key>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          It is listed in the navigation rather than left out so that you can tell the difference
-          between a feature this product does not have and a page this manual has not written. Consult the related guides for the workflows currently documented.
+      <Callout tone="note" title="Not written yet">
+        <p>
+          This page is planned and not yet written. It is listed in the navigation rather than left
+          out so that you can tell the difference between a feature this product does not have and a
+          page this manual has not written.
         </p>
-      </div>
+        <p>
+          Missing: the{" "}
+          {page.kind === "guide" ? "steps" : page.kind === "reference" ? "reference entries" : "explanation"}{" "}
+          the summary above promises. The pages below cover what is documented so far.
+        </p>
+      </Callout>
 
       {group && (
-        <div className="space-y-2">
+        <Section id="in-this-section" title="In this section">
           <P>
             <strong className="text-foreground">{group.group}</strong> — {group.blurb}
           </P>
@@ -64,7 +79,7 @@ function Stub({ slug }: { slug: string }) {
               .
             </P>
           )}
-        </div>
+        </Section>
       )}
 
       <P>
@@ -89,27 +104,22 @@ function NotReleased({ slug }: { slug: string }) {
   return (
     <>
       <PageTitle lead={`Part of ${page.group}.`}>{page.title}</PageTitle>
-      <div className="rounded-sm border border-border bg-card p-4 shadow-xs">
-        <div className="mb-2 flex flex-wrap items-center gap-2">
-          <Badge variant="outline">Not available to you</Badge>
-        </div>
-        <Key>
+      <Callout tone="note" title="Not available to you">
+        <p>
           {user
             ? "This section of the manual has not been released to your account."
-            : "This section of the manual is open to signed-in users only."}
-        </Key>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            : "This section of the manual is open to signed-in users only."}{" "}
           The manual is released section by section.{" "}
           {user
             ? "If you need it, ask your administrator for access."
             : "Sign in to see whether your account can read it."}
         </p>
         {!user && (
-          <Button asChild size="sm" className="mt-3">
+          <Button asChild size="sm" className="mt-1 h-11 md:h-9">
             <Link to="/auth" state={{ from: location }}>Sign in</Link>
           </Button>
         )}
-      </div>
+      </Callout>
     </>
   );
 }
@@ -120,9 +130,7 @@ function Unknown({ slug }: { slug: string }) {
       <PageTitle lead="There is no page at this address.">Page not found</PageTitle>
       <P>
         The manual has no page with the address{" "}
-        <code className="rounded-sm border border-border bg-muted/50 px-1.5 py-0.5 font-mono text-[12px]">
-          {slug}
-        </code>
+        <code className="docs-code">{slug}</code>
         . It may have been renamed, or the link may be from an older version of the site.
       </P>
       <P>
@@ -140,11 +148,27 @@ export default function DocPage() {
   const page = getPage(slug);
   const { docs } = useCapabilities();
 
-  if (!page) return <Unknown slug={slug} />;
-  if (!docs.canReadSection(page.sectionKey)) return <NotReleased slug={slug} />;
+  const gate = (() => {
+    if (!page) return <Unknown slug={slug} />;
+    if (!docs.canReadSection(page.sectionKey)) return <NotReleased slug={slug} />;
+    return null;
+  })();
+  if (gate || !page) return <Article>{gate}</Article>;
 
   const Body = DOC_BODIES[slug];
-  if (page.status !== "live" || !Body) return <Stub slug={slug} />;
+  const indexed = DOCS_INDEX[slug];
+  const meta = {
+    page,
+    minutes: page.minutes ?? indexed?.minutes ?? null,
+    sections: indexed?.sections ?? [],
+    // An input table's reference opens with how to upload it (§6.3 section 3).
+    summaryCard: page.section === 3 && page.table ? <UploadCard table={page.table} /> : undefined,
+  };
+  const live = page.status === "live" && Body;
 
-  return <Body />;
+  return (
+    <DocPageContext.Provider value={live ? meta : { ...meta, minutes: null, summaryCard: undefined }}>
+      <Article kind={page.kind}>{live ? <Body /> : <Stub slug={slug} />}</Article>
+    </DocPageContext.Provider>
+  );
 }

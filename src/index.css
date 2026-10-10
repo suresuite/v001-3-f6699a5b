@@ -90,6 +90,18 @@
     --hair-quiet: #6b6b6b;
     --ledger-quiet: #6b6b6b;
 
+    /* ── The manual's signal tokens (WP 5.2a redesign) ─────────────────────
+       Taken from the design system's tokens/colors.css rather than invented:
+       brand red is the same #bf2330 MobileSheet and ConfirmSheet already use,
+       and the two status hues are its emerald/amber pair. Brand red marks
+       NUMBERS only — section numbers, Figure/Table labels, the docs kicker
+       and the reading-progress bar — and is never a fill. */
+    --brand-red: #bf2330;
+    --status-ok: 158 64% 40%;
+    --status-warn: 38 92% 50%;
+    --hair-th: #fafafa;
+    --hair-row-hover: #fcfcfc;
+
     /* ── Fluid type scale (mobile UI spec §2.2) ──────────────────────────
        Three sizes plus mobile body copy. The vw term only bites below `md`;
        at 768px and up every token is pinned to its upper bound. Never take a
@@ -468,4 +480,147 @@
   .m-cq-hide {
     display: none;
   }
+}
+
+/* ── The /docs manual (WP 5.2a redesign, PLAN.md §6.4) ───────────────────
+   Spacing between blocks is decided HERE, from each pair of neighbours, not by
+   the blocks: prose.tsx marks a block `data-b="text"` or `"check"` and leaves
+   visual blocks unmarked. Figure and table numbers are CSS counters, so they
+   restart on every page without a body numbering anything. */
+.docs-article {
+  counter-reset: docs-sec docs-fig docs-tab;
+}
+.docs-article > * + * { margin-top: 28px; }
+
+.docs-header {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid hsl(var(--border-strong));
+}
+.docs-h1 {
+  font-size: 24px;
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: -0.024em;
+  text-wrap: balance;
+}
+.docs-lead {
+  max-width: 62ch;
+  font-size: 15px;
+  line-height: 1.5;
+  color: hsl(var(--gray-700));
+}
+.docs-header[data-kind="concept"] .docs-lead { font-size: 16px; color: hsl(var(--foreground)); }
+@media (min-width: 768px) {
+  .docs-h1 { font-size: 28px; }
+  .docs-lead { font-size: 16px; }
+  .docs-header[data-kind="concept"] .docs-lead { font-size: 17px; }
+}
+
+/* Sections: a rule and 40px between them; cards on an overview page. */
+.docs-sec { scroll-margin-top: 76px; }
+.docs-sec .docs-h2 { scroll-margin-top: 76px; }
+.docs-article .docs-sec ~ .docs-sec {
+  margin-top: 40px;
+  padding-top: 36px;
+  border-top: 1px solid hsl(var(--border));
+}
+.docs-article[data-kind="overview"] .docs-sec {
+  padding: 20px;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+}
+.docs-article[data-kind="overview"] .docs-sec ~ .docs-sec { margin-top: 16px; }
+
+.docs-h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.012em;
+  text-wrap: balance;
+}
+.docs-article[data-kind="troubleshooting"] .docs-h2 { font-size: 16px; }
+.docs-secnum { display: none; }
+.docs-article[data-kind="guide"] .docs-sec:not([data-related]) { counter-increment: docs-sec; }
+.docs-article[data-kind="guide"] .docs-sec:not([data-related]) .docs-secnum { display: inline; }
+.docs-article[data-kind="guide"] .docs-sec:not([data-related]) .docs-secnum::before {
+  content: counter(docs-sec, decimal-leading-zero);
+  font-family: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--brand-red);
+}
+
+/* Block rhythm inside a section. Order matters: later rules win ties. */
+.docs-article .docs-sec > * + * { margin-top: 24px; }
+.docs-article .docs-sec > [data-b="text"] + :not([data-b="text"]),
+.docs-article .docs-sec > :not([data-b="text"]) + [data-b="text"] { margin-top: 28px; }
+.docs-article .docs-sec > [data-b="text"] + [data-b="text"] { margin-top: 14px; }
+.docs-article .docs-sec > * + [data-b="check"] { margin-top: 12px; }
+.docs-article .docs-sec > .docs-h2 + * { margin-top: 12px; }
+
+.docs-p {
+  max-width: 68ch;
+  font-size: 14px;
+  line-height: 1.7;
+  color: hsl(var(--foreground));
+  text-wrap: pretty;
+}
+.docs-callout-body p + p { margin-top: 8px; }
+
+.docs-kicker {
+  font-family: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: hsl(var(--gray-600));
+}
+
+/* "Figure N" / "Table N" — counted per page, brand red. */
+.docs-label {
+  font-family: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--brand-red);
+  white-space: nowrap;
+}
+.docs-label-figure { counter-increment: docs-fig; }
+.docs-label-figure::before { content: "Figure " counter(docs-fig); }
+.docs-label-table { counter-increment: docs-tab; }
+.docs-label-table::before { content: "Table " counter(docs-tab); }
+
+/* Inline. */
+.docs-code {
+  font-family: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.86em;
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+  border-radius: 3px;
+  padding: 1px 5px;
+  color: hsl(var(--foreground));
+  overflow-wrap: anywhere;
+}
+.docs-link {
+  color: hsl(var(--foreground));
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: hsl(var(--border-strong));
+  transition: text-decoration-color 200ms cubic-bezier(.2, 0, 0, 1);
+}
+.docs-link:hover { text-decoration-color: hsl(var(--foreground)); }
+.docs-article .docs-p a:not(.docs-link),
+.docs-article .docs-callout-body a:not(.docs-link) {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docs-link, .docs-progress { transition: none !important; }
 }

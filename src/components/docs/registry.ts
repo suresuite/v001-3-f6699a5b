@@ -20,9 +20,32 @@ export type DocStatus =
   /** In the site map, owed by `wp`. Renders as a stub that says so. */
   | "planned";
 
+/**
+ * Which page template a page renders with (WP 5.2a redesign, §6.4).
+ *
+ *   guide           — a task: numbered sections, steps, "You should see" checks
+ *   concept         — an idea: the lead is the one-sentence answer, then a diagram
+ *   reference       — a lookup: generated facts lead, explanation follows
+ *   troubleshooting — questions, each a heading with a short answer
+ *   overview        — a map of other pages: sections render as cards
+ *
+ * An editorial decision about how the page READS, so it lives here with the
+ * title rather than being inferred from the body. Every page carries one;
+ * `registry.test.ts` fails on a page without it.
+ */
+export type DocKind = "guide" | "concept" | "reference" | "troubleshooting" | "overview";
+
 export type DocPage = {
   slug: string;
   title: string;
+  kind: DocKind;
+  /**
+   * Reading time, in minutes, where the computed one is wrong for a reason.
+   * Normally absent: the figure is computed from the rendered body
+   * (`generated/docsIndex.generated.ts`), so it cannot go stale when the copy
+   * changes the way a typed number would.
+   */
+  minutes?: number;
   /** Short blurb used in search results and on stub pages. */
   summary?: string;
   /** Extra search keywords (space-separated). */
@@ -90,6 +113,8 @@ export type DocGroup = {
    */
   key: string;
   group: string;
+  /** Who the section is written for — the page header's "For …". Sentence case, plural. */
+  audience: string;
   /** One line on what the section answers, shown at the top of a stub. */
   blurb: string;
   pages: DocPage[];
@@ -103,11 +128,12 @@ export const DOC_GROUPS: DocGroup[] = [
     section: 1,
     key: "overview",
     group: "Overview & architecture",
+    audience: "Everyone",
     blurb: "How the software is put together, and whether you can trust it.",
     pages: [
       {
         ...live,
-        slug: "what-suresuite-is",
+        slug: "what-suresuite-is", kind: "overview",
         title: "What SuReSuite is",
         summary: "The tool in one page — the problem it solves and what it produces.",
         keywords: "overview introduction digital twin dsct supply chain resilience accurate horizon europe",
@@ -115,7 +141,7 @@ export const DOC_GROUPS: DocGroup[] = [
       },
       {
         ...live,
-        slug: "how-suresuite-is-designed",
+        slug: "how-suresuite-is-designed", kind: "concept",
         title: "How SuReSuite is designed",
         summary: "The six tiers as the journey your data takes, and the three laws that govern it.",
         keywords: "architecture tiers design laws staging canonical derived decisions results governance engineer setup npm",
@@ -123,7 +149,7 @@ export const DOC_GROUPS: DocGroup[] = [
       },
       {
         ...live,
-        slug: "how-your-data-flows",
+        slug: "how-your-data-flows", kind: "concept",
         title: "How your data flows",
         summary: "Upload, check, accept, compute, decide, simulate, stamp — follow one example row.",
         keywords: "flow pipeline upload validate promote compute simulate results lifecycle",
@@ -131,7 +157,7 @@ export const DOC_GROUPS: DocGroup[] = [
       },
       {
         ...live,
-        slug: "what-happens-to-your-data",
+        slug: "what-happens-to-your-data", kind: "concept",
         title: "What happens to your data",
         summary: "Five transparency commitments: sources, substitutions, limits, repeatable results and checked definitions.",
         keywords: "transparency commitments privacy substitution provenance export delete ownership",
@@ -139,7 +165,7 @@ export const DOC_GROUPS: DocGroup[] = [
       },
       {
         ...live,
-        slug: "system-boundary",
+        slug: "system-boundary", kind: "concept",
         title: "System boundary",
         summary: "What runs where — browser, Supabase, simulation worker, engine — and what crosses each line.",
         keywords: "boundary it security architecture supabase fly worker scsim browser deployment",
@@ -147,7 +173,7 @@ export const DOC_GROUPS: DocGroup[] = [
       },
       {
         ...live,
-        slug: "known-limits",
+        slug: "known-limits", kind: "troubleshooting",
         title: "Known limits",
         summary: "The model, data and access limits to check before using a result for a decision.",
         keywords: "limits limitations caveats steady state graph hash price volatility blind spots",
@@ -155,7 +181,7 @@ export const DOC_GROUPS: DocGroup[] = [
       },
       {
         ...live,
-        slug: "data-model",
+        slug: "data-model", kind: "reference",
         title: "The data model at a glance",
         summary: "Reference: every table in the system, grouped by the six numbered data tiers.",
         keywords: "tables schema data model tiers reference map contract coverage",
@@ -168,19 +194,20 @@ export const DOC_GROUPS: DocGroup[] = [
     section: 2,
     key: "getting-started",
     group: "Getting started",
+    audience: "Planners and analysts",
     blurb: "From an empty account to a first set of results.",
     pages: [
       {
         ...live,
-        slug: "your-first-project",
+        slug: "your-first-project", kind: "guide",
         title: "Your first project",
-        summary: "End to end: create, upload, verify, set policies, simulate, read results.",
+        summary: "Build a small control-unit supply chain from example data, run a baseline, and measure what one disruption costs.",
         keywords: "getting started tutorial walkthrough first project quickstart steps start begin example sample demo tour data",
         related: ["projects", "uploading-data", "verify-your-inputs"],
       },
       {
         ...live,
-        slug: "projects",
+        slug: "projects", kind: "reference",
         table: "projects",
         title: "Projects",
         summary: "The container everything else hangs off — plant, BOM level, simulation window.",
@@ -189,10 +216,10 @@ export const DOC_GROUPS: DocGroup[] = [
       },
       {
         ...live,
-        slug: "uploading-data",
+        slug: "uploading-data", kind: "guide",
         title: "Uploading data",
-        summary: "The upload wizard, what is checked, and what gets rejected and why.",
-        keywords: "upload wizard csv template import validate reject headers files",
+        summary: "Get a CSV into your project, check what changed, and accept the rows that are right.",
+        keywords: "upload wizard csv template import validate reject headers files bom lanes masters promote",
         related: ["your-first-project", "verify-your-inputs", "inbound-logistics"],
       },
     ],
@@ -201,188 +228,202 @@ export const DOC_GROUPS: DocGroup[] = [
     section: 3,
     key: "input-tables",
     group: "Input tables",
+    audience: "Planners",
     blurb: "The data you provide. One page per table, leading with the header you type.",
     pages: [
-      { ...live, slug: "inbound-logistics", table: "inbound_logistics", title: "Inbound Logistics", summary: "Supply arcs: which supplier delivers which material, at what price and lead time.", keywords: "inbound logistics supplier material volume lead time unit price csv", source: "contract" },
-      { ...live, slug: "outbound-logistics", table: "outbound_logistics", title: "Outbound Logistics", summary: "Demand arcs: which customer buys which product, at what price — and, per row, how much and how it varies.", keywords: "outbound logistics customer product volume expected lead time unit price csv demand distribution mean variation cv normal triangular per row", source: "contract" },
-      { ...live, slug: "demand-forecasts", table: "demand_forecasts", title: "Demand Forecast", summary: "The forecast per customer × product, per week or month — the centre the run draws demand around.", keywords: "demand forecast series customer product period start week month quantity spread weekly forecast mode model", source: "contract" },
-      { ...live, slug: "bom-single-level", table: "bom_single_level", title: "BOM — single level", summary: "How much of each material one unit of a product consumes.", keywords: "bom bill of materials single level product material consumption rate", source: "contract" },
-      { ...live, slug: "bom-multi-level", table: "bom_multi_level", title: "BOM — multi level", summary: "The deep bill of materials, level by level.", keywords: "bom bill of materials multi level higher level component consumption rate depth", source: "contract" },
-      { ...live, slug: "materials", table: "materials", title: "Materials", summary: "The economics the simulation reads for each material.", keywords: "materials cost holding cost moq initial on hand lead time distribution cv", source: "contract" },
-      { ...live, slug: "products", table: "products", title: "Products", summary: "Price, capacity, fulfilment mode and the shape of demand.", keywords: "products sell price production capacity fulfillment mode demand distribution mean cv", source: "contract" },
-      { ...live, slug: "suppliers", table: "suppliers", title: "Suppliers", summary: "Capacity and reliability, beyond the arcs that connect a supplier to materials.", keywords: "suppliers capacity per week reliability score", source: "contract" },
-      { ...live, slug: "node-list", wizardId: "node_list", table: "node_list", title: "Node List", summary: "Named locations and their coordinates.", keywords: "node list location longitude latitude description map", source: "contract" },
-      { ...live, slug: "deep-tier-nodes", wizardId: "network_nodes", table: "network_nodes", title: "Deep-Tier Nodes", summary: "Firms discovered beyond tier one, with the attributes known about each.", keywords: "network nodes deep tier firm depth country industry employees revenue seed", source: "contract" },
-      { ...live, slug: "deep-tier-edges", wizardId: "network_edges", table: "network_edges", title: "Deep-Tier Edges", summary: "Relationships between deep-tier firms, and their direction.", keywords: "network edges deep tier relation type relative revenue direction depth", source: "contract" },
-      { ...live, slug: "multi-tier-suppliers", table: "multi_tier_supply_chain", title: "Multi-Tier Suppliers", summary: "The firm-to-firm supply relationships that make up the deep chain.", keywords: "multi tier supply chain from firm to firm tier relationship", source: "contract" },
-      { ...live, slug: "units-and-time-periods", title: "Units and time periods", summary: "The page that settles time_unit against lead_time, once.", keywords: "units time period week day lead time unit conversion normalization" },
+      { ...live, slug: "inbound-logistics", kind: "reference", table: "inbound_logistics", title: "Inbound Logistics", summary: "Supply arcs: which supplier delivers which material, at what price and lead time.", keywords: "inbound logistics supplier material volume lead time unit price csv", source: "contract" },
+      { ...live, slug: "outbound-logistics", kind: "reference", table: "outbound_logistics", title: "Outbound Logistics", summary: "Demand arcs: which customer buys which product, at what price — and, per row, how much and how it varies.", keywords: "outbound logistics customer product volume expected lead time unit price csv demand distribution mean variation cv normal triangular per row", source: "contract" },
+      { ...live, slug: "demand-forecasts", kind: "reference", table: "demand_forecasts", title: "Demand Forecast", summary: "The forecast per customer × product, per week or month — the centre the run draws demand around.", keywords: "demand forecast series customer product period start week month quantity spread weekly forecast mode model", source: "contract" },
+      { ...live, slug: "bom-single-level", kind: "reference", table: "bom_single_level", title: "BOM — single level", summary: "How much of each material one unit of a product consumes.", keywords: "bom bill of materials single level product material consumption rate upload template csv", source: "contract" },
+      { ...live, slug: "bom-multi-level", kind: "reference", table: "bom_multi_level", title: "BOM — multi level", summary: "The deep bill of materials, level by level.", keywords: "bom bill of materials multi level higher level component consumption rate depth upload template csv", source: "contract" },
+      { ...live, slug: "materials", kind: "reference", table: "materials", title: "Materials", summary: "The economics the simulation reads for each material.", keywords: "materials cost holding cost moq initial on hand lead time distribution cv", source: "contract" },
+      { ...live, slug: "products", kind: "reference", table: "products", title: "Products", summary: "Price, capacity, fulfilment mode and the shape of demand.", keywords: "products sell price production capacity fulfillment mode demand distribution mean cv", source: "contract" },
+      { ...live, slug: "suppliers", kind: "reference", table: "suppliers", title: "Suppliers", summary: "Capacity and reliability, beyond the arcs that connect a supplier to materials.", keywords: "suppliers capacity per week reliability score", source: "contract" },
+      { ...live, slug: "node-list", kind: "reference", wizardId: "node_list", table: "node_list", title: "Node List", summary: "Named locations and their coordinates.", keywords: "node list location longitude latitude description map", source: "contract" },
+      { ...live, slug: "deep-tier-nodes", kind: "reference", wizardId: "network_nodes", table: "network_nodes", title: "Deep-Tier Nodes", summary: "Firms discovered beyond tier one, with the attributes known about each.", keywords: "network nodes deep tier firm depth country industry employees revenue seed", source: "contract" },
+      { ...live, slug: "deep-tier-edges", kind: "reference", wizardId: "network_edges", table: "network_edges", title: "Deep-Tier Edges", summary: "Relationships between deep-tier firms, and their direction.", keywords: "network edges deep tier relation type relative revenue direction depth", source: "contract" },
+      { ...live, slug: "multi-tier-suppliers", kind: "reference", table: "multi_tier_supply_chain", title: "Multi-Tier Suppliers", summary: "The firm-to-firm supply relationships that make up the deep chain.", keywords: "multi tier supply chain from firm to firm tier relationship", source: "contract" },
+      { ...live, slug: "units-and-time-periods", kind: "concept", title: "Units and time periods", summary: "The page that settles time_unit against lead_time, once.", keywords: "units time period week day lead time unit conversion normalization" },
     ],
   },
   {
     section: 4,
     key: "computed-tables",
     group: "Computed tables",
+    audience: "Analysts",
     blurb: "What we build from your data. Always rebuildable, never edited by hand.",
     pages: [
-      { ...live, slug: "supply-chain-data", table: "supply_chain_data", title: "Supply Chain Data", summary: "How sourcing shares and consumption rates are derived.", keywords: "supply chain data sourcing ratio weighted material consumption rate etl", source: "contract" },
-      { ...live, slug: "multi-tier-data", table: "supply_chain_data_multi_tier", title: "Multi-Tier Data", summary: "How tiers are expanded into paths.", keywords: "multi tier data level path root expansion", source: "contract" },
-      { ...live, slug: "network-summary", table: "network_summary", title: "Network Summary", summary: "Cartographer output and the evidence behind it.", keywords: "network summary external evidence cartographer", source: "contract" },
-      { ...live, slug: "dataset-versions", table: "dataset_versions", title: "Dataset Versions", summary: "The graph hash, the snapshot, and why a version changes.", keywords: "dataset versions graph hash snapshot trust anchor reproducibility", source: "contract" },
+      { ...live, slug: "supply-chain-data", kind: "reference", table: "supply_chain_data", title: "Supply Chain Data", summary: "How sourcing shares and consumption rates are derived.", keywords: "supply chain data sourcing ratio weighted material consumption rate etl", source: "contract" },
+      { ...live, slug: "multi-tier-data", kind: "reference", table: "supply_chain_data_multi_tier", title: "Multi-Tier Data", summary: "How tiers are expanded into paths.", keywords: "multi tier data level path root expansion", source: "contract" },
+      { ...live, slug: "network-summary", kind: "reference", table: "network_summary", title: "Network Summary", summary: "Cartographer output and the evidence behind it.", keywords: "network summary external evidence cartographer", source: "contract" },
+      { ...live, slug: "dataset-versions", kind: "concept", table: "dataset_versions", title: "Dataset Versions", summary: "The graph hash, the snapshot, and why a version changes.", keywords: "dataset versions graph hash snapshot trust anchor reproducibility", source: "contract" },
     ],
   },
   {
     section: 5,
     key: "policies",
     group: "Policies",
+    audience: "Planners and analysts",
     blurb: "The decisions you make about how the chain should behave.",
     pages: [
-      { ...live, slug: "how-policies-work", title: "How policies work", summary: "Stages, scope, and defaults against overrides.", keywords: "policy policies stages scope defaults overrides bundle patch" },
-      { ...live, slug: "how-planning-works", title: "How planning works", summary: "From customer demand to planned production, material orders and per-row fulfillment.", keywords: "planning demand forecast planned production capacity mrp material requirements fg policy base stock min max days of cover backorder allocation" },
-      { ...live, slug: "supplier-stage", title: "Supplier stage", summary: "Every column of the supplier policy grid.", keywords: "supplier stage policy grid columns sourcing backup expediting", source: "contract" },
-      { ...live, slug: "plant-stage", title: "Plant stage", summary: "Every column of the plant policy grid.", keywords: "plant stage policy grid columns production capacity overtime inventory", source: "contract" },
-      { ...live, slug: "customer-stage", title: "Customer stage", summary: "Every column of the customer policy grid.", keywords: "customer stage policy grid columns fulfilment allocation service", source: "contract" },
-      { ...live, slug: "policy-types", title: "Policy types", summary: "Min/max, base stock, ROP-Q, periodic review and MRP, and when each applies.", keywords: "policy types min max base stock rop q reorder point periodic review mrp material requirements planning inventory", source: "registry" },
-      { ...live, slug: "policy-catalog", title: "The policy catalog", summary: "Every policy in the catalog, by stage.", keywords: "policy catalog supplier plant transport customer forecasting cross cutting", source: "registry" },
-      { ...live, slug: "where-a-number-came-from", title: "Where a number came from", summary: "The provenance dots, and what each one is telling you.", keywords: "provenance dots source derived default substitution colour grid" },
-      { ...live, slug: "when-a-value-is-missing", title: "When a value is missing", summary: "Every substitution the system will make, and how it is marked.", keywords: "missing value substitution fallback default derived chain grade", source: "contract" },
-      { ...live, slug: "policy-versions-and-presets", title: "Policy versions & presets", summary: "Saving, reusing and comparing policy sets.", keywords: "policy versions presets save reuse compare snapshot" },
+      { ...live, slug: "how-policies-work", kind: "concept", title: "How policies work", summary: "A policy is a rule for running the chain — when to reorder, where to source, how to treat demand you can't meet.", keywords: "policy policies stages scope defaults overrides bundle patch" },
+      { ...live, slug: "how-planning-works", kind: "concept", title: "How planning works", summary: "From customer demand to planned production, material orders and per-row fulfillment.", keywords: "planning demand forecast planned production capacity mrp material requirements fg policy base stock min max days of cover backorder allocation" },
+      { ...live, slug: "supplier-stage", kind: "reference", title: "Supplier stage", summary: "Every column of the supplier policy grid.", keywords: "supplier stage policy grid columns sourcing backup expediting", source: "contract" },
+      { ...live, slug: "plant-stage", kind: "reference", title: "Plant stage", summary: "Every column of the plant policy grid.", keywords: "plant stage policy grid columns production capacity overtime inventory", source: "contract" },
+      { ...live, slug: "customer-stage", kind: "reference", title: "Customer stage", summary: "Every column of the customer policy grid.", keywords: "customer stage policy grid columns fulfilment allocation service", source: "contract" },
+      { ...live, slug: "policy-types", kind: "reference", title: "Policy types", summary: "Min/max, base stock, ROP-Q, periodic review and MRP, and when each applies.", keywords: "policy types min max base stock rop q reorder point periodic review mrp material requirements planning inventory", source: "registry" },
+      { ...live, slug: "policy-catalog", kind: "reference", title: "The policy catalog", summary: "Every policy in the catalog, by stage.", keywords: "policy catalog supplier plant transport customer forecasting cross cutting", source: "registry" },
+      { ...live, slug: "where-a-number-came-from", kind: "concept", title: "Where a number came from", summary: "The provenance dots, and what each one is telling you.", keywords: "provenance dots source derived default substitution colour grid" },
+      { ...live, slug: "when-a-value-is-missing", kind: "reference", title: "When a value is missing", summary: "Every substitution the system will make, and how it is marked.", keywords: "missing value substitution fallback default derived chain grade", source: "contract" },
+      { ...live, slug: "policy-versions-and-presets", kind: "guide", title: "Policy versions & presets", summary: "Saving, reusing and comparing policy sets.", keywords: "policy versions presets save reuse compare snapshot" },
     ],
   },
   {
     section: 6,
     key: "verification",
     group: "Verification",
+    audience: "Analysts and managers",
     blurb: "How to tell whether the model you have built can be believed.",
     pages: [
-      { ...live, slug: "verify-your-inputs", title: "Verify your inputs", summary: "Block, warn and info findings — and how to clear each one.", keywords: "verify validation findings block warn info grading clear errors" },
-      { ...live, slug: "data-trust-report", title: "Data Trust Report", summary: "Coverage, freshness, ingest history and known limits in one artifact.", keywords: "data trust report coverage freshness ingest history staleness" },
-      { ...live, slug: "model-validation", title: "Model validation", summary: "Checking the model against what actually happened.", keywords: "model validation backtest comparison actuals" },
+      { ...live, slug: "verify-your-inputs", kind: "troubleshooting", title: "Verify your inputs", summary: "Block, warn and info findings — and how to clear each one.", keywords: "verify validation findings block warn info grading clear errors" },
+      { ...live, slug: "data-trust-report", kind: "concept", title: "Data Trust Report", summary: "Coverage, freshness, ingest history and known limits in one artifact.", keywords: "data trust report coverage freshness ingest history staleness" },
+      { ...live, slug: "model-validation", kind: "concept", title: "Model validation", summary: "Checking the model against what actually happened.", keywords: "model validation backtest comparison actuals" },
     ],
   },
   {
     section: 7,
     key: "experiments",
     group: "Experiments & scenarios",
+    audience: "Analysts",
     blurb: "Asking what would happen, and getting an answer you can defend.",
     pages: [
-      { ...live, slug: "simulation-lab", title: "Simulation Lab — running an experiment", summary: "Preview and experiment modes, and what each produces.", keywords: "simulation lab run experiment preview replications jobs" },
-      { ...live, slug: "scenarios", title: "Scenarios", summary: "Saving and reusing a set of conditions.", keywords: "scenarios templates sim scenarios saved conditions" },
-      { ...live, slug: "disruptions", title: "Disruptions", summary: "Profiles, settings, targets and effects.", keywords: "disruption scenarios profiles settings targets effects shock outage" },
-      { ...live, slug: "recovery-playbooks", title: "Recovery playbooks", summary: "What the chain does once something has gone wrong.", keywords: "recovery playbooks response mitigation strategy" },
-      { ...live, slug: "experiments-and-comparison", title: "Experiments & comparison", summary: "Ranking strategies against each other.", keywords: "experiments comparison compare ranking portfolio synergy" },
-      { ...live, slug: "seeds-replications-confidence", title: "Seeds, replications & confidence", summary: "Why the same run gives a range, and how wide that range is.", keywords: "seeds replications confidence intervals crn warmup bootstrap statistics", source: "registry" },
-      { ...live, slug: "stress-tests", title: "Stress tests", summary: "The seven one-click presets, what each fills in, and which of them the engine acts on.", keywords: "stress tests presets single supplier outage plant shutdown material shortage lead time shock demand surge multi hit nexus attack disruption schedule battery st1 st7 robustness", related: ["disruptions", "simulation-lab", "experiments-and-comparison"] },
+      { ...live, slug: "simulation-lab", kind: "guide", title: "Simulation Lab — running an experiment", summary: "Preview and experiment modes, and what each produces.", keywords: "simulation lab run experiment preview replications jobs" },
+      { ...live, slug: "scenarios", kind: "guide", title: "Scenarios", summary: "Saving and reusing a set of conditions.", keywords: "scenarios templates sim scenarios saved conditions" },
+      { ...live, slug: "disruptions", kind: "concept", title: "Disruptions", summary: "Profiles, settings, targets and effects.", keywords: "disruption scenarios profiles settings targets effects shock outage" },
+      { ...live, slug: "recovery-playbooks", kind: "guide", title: "Recovery playbooks", summary: "What the chain does once something has gone wrong.", keywords: "recovery playbooks response mitigation strategy" },
+      { ...live, slug: "experiments-and-comparison", kind: "guide", title: "Experiments & comparison", summary: "Ranking strategies against each other.", keywords: "experiments comparison compare ranking portfolio synergy" },
+      { ...live, slug: "seeds-replications-confidence", kind: "concept", title: "Seeds, replications & confidence", summary: "Why the same run gives a range, and how wide that range is.", keywords: "seeds replications confidence intervals crn warmup bootstrap statistics", source: "registry" },
+      { ...live, slug: "stress-tests", kind: "reference", title: "Stress tests", summary: "The seven one-click presets, what each fills in, and which of them the engine acts on.", keywords: "stress tests presets single supplier outage plant shutdown material shortage lead time shock demand surge multi hit nexus attack disruption schedule battery st1 st7 robustness", related: ["disruptions", "simulation-lab", "experiments-and-comparison"] },
     ],
   },
   {
     section: 8,
     key: "networks",
     group: "Networks",
+    audience: "Analysts",
     blurb: "Seeing the chain's structure, and what the structure implies.",
     pages: [
-      { ...live, slug: "product-level-network", title: "Product-Level Network", summary: "Supplier to material to product to customer.", keywords: "product level network graph view material product flow" },
-      { ...live, slug: "process-level-network", title: "Process-Level Network", summary: "The shop-floor view, level by level.", keywords: "process level network shop floor bom levels" },
-      { ...live, slug: "firm-level-network", title: "Firm-Level Network", summary: "The deep-tier firm graph.", keywords: "firm level network deep tier firms suppliers graph" },
-      { ...live, slug: "interactive-network-space", title: "Interactive Network Space", summary: "Exploring the chain without a fixed layout.", keywords: "interactive network space explore layout canvas" },
-      { ...live, slug: "network-science-metrics", title: "Network science metrics", summary: "Centrality, prominence and critical-node prediction — what each means.", keywords: "centrality degree betweenness eigenvector prominence critical node nexus material" },
+      { ...live, slug: "product-level-network", kind: "guide", title: "Product-Level Network", summary: "Supplier to material to product to customer.", keywords: "product level network graph view material product flow" },
+      { ...live, slug: "process-level-network", kind: "guide", title: "Process-Level Network", summary: "The shop-floor view, level by level.", keywords: "process level network shop floor bom levels" },
+      { ...live, slug: "firm-level-network", kind: "guide", title: "Firm-Level Network", summary: "The deep-tier firm graph.", keywords: "firm level network deep tier firms suppliers graph" },
+      { ...live, slug: "interactive-network-space", kind: "guide", title: "Interactive Network Space", summary: "Exploring the chain without a fixed layout.", keywords: "interactive network space explore layout canvas" },
+      { ...live, slug: "network-science-metrics", kind: "concept", title: "Network science metrics", summary: "Centrality, prominence and critical-node prediction — what each means.", keywords: "centrality degree betweenness eigenvector prominence critical node nexus material" },
     ],
   },
   {
     section: 9,
     key: "project-intelligence",
     group: "Project Intelligence",
+    audience: "Everyone",
     blurb: "The assistant, what it can see, and what it is allowed to change.",
     pages: [
-      { ...live, slug: "ai-assistant", title: "The AI assistant", summary: "What it can see and what it can do.", keywords: "ai assistant chat threads messages folders intelligence" },
-      { ...live, slug: "plans-and-proposals", title: "Plans and proposals", summary: "Review before apply — nothing changes without your say.", keywords: "plans proposals review apply approve changes" },
-      { ...live, slug: "project-memory", title: "Project memory", summary: "What the assistant remembers between conversations.", keywords: "project memory context recall persistence" },
-      { ...live, slug: "models-budgets-limits", title: "Models, budgets and limits", summary: "Which models run, what they cost, and who may use them.", keywords: "ai models budgets usage logs permissions limits spend" },
+      { ...live, slug: "ai-assistant", kind: "concept", title: "The AI assistant", summary: "What it can see and what it can do.", keywords: "ai assistant chat threads messages folders intelligence" },
+      { ...live, slug: "plans-and-proposals", kind: "guide", title: "Plans and proposals", summary: "Review before apply — nothing changes without your say.", keywords: "plans proposals review apply approve changes" },
+      { ...live, slug: "project-memory", kind: "concept", title: "Project memory", summary: "What the assistant remembers between conversations.", keywords: "project memory context recall persistence" },
+      { ...live, slug: "models-budgets-limits", kind: "reference", title: "Models, budgets and limits", summary: "Which models run, what they cost, and who may use them.", keywords: "ai models budgets usage logs permissions limits spend" },
     ],
   },
   {
     section: 10,
     key: "connectors",
     group: "Connectors",
+    audience: "Engineers and admins",
     blurb: "Getting data in from a system you already run.",
     pages: [
-      { ...live, slug: "connecting-erp", title: "Connecting an ERP / MRP system", summary: "Linking a project to a system of record.", keywords: "erp mrp connector link integration orbit oauth" },
-      { ...live, slug: "reviewing-a-sync", title: "Reviewing and applying a sync", summary: "Seeing what changed before it lands.", keywords: "sync runs staged review apply diff promote" },
-      { ...live, slug: "csv-vs-connector", title: "CSV or connector — which to use", summary: "The trade-off, stated plainly.", keywords: "csv connector choice comparison upload integration" },
+      { ...live, slug: "connecting-erp", kind: "guide", title: "Connecting an ERP / MRP system", summary: "Linking a project to a system of record.", keywords: "erp mrp connector link integration orbit oauth" },
+      { ...live, slug: "reviewing-a-sync", kind: "guide", title: "Reviewing and applying a sync", summary: "Seeing what changed before it lands.", keywords: "sync runs staged review apply diff promote" },
+      { ...live, slug: "csv-vs-connector", kind: "concept", title: "CSV or connector — which to use", summary: "The trade-off, stated plainly.", keywords: "csv connector choice comparison upload integration" },
     ],
   },
   {
     section: 11,
     key: "results",
     group: "Results & statistics",
+    audience: "Analysts and managers",
     blurb: "Reading what came back, and knowing how much of it is signal.",
     pages: [
-      { ...live, slug: "reading-your-results", title: "Reading your results", summary: "What a run produces and how to interpret it.", keywords: "results runs replications interpret read output", source: "registry" },
-      { ...live, slug: "kpis-and-resilience-index", title: "KPIs & the Resilience Index", summary: "Every KPI, its definition and its unit.", keywords: "kpi fill rate cost of resilience ttr tts resilience index service level", source: "registry" },
-      { ...live, slug: "per-item-time-series", title: "Per-item time series", summary: "What happened to one material, week by week.", keywords: "time series per item weekly inventory backlog series", source: "registry" },
-      { ...live, slug: "performance-and-caching", title: "Performance & caching", summary: "Why a second run is faster, and when the cache is dropped.", keywords: "performance caching metrics speed invalidation" },
-      { ...live, slug: "reports-and-files", title: "Reports & files", summary: "Rendered reports and where they are kept.", keywords: "reports files render export download user files" },
+      { ...live, slug: "reading-your-results", kind: "guide", title: "Reading your results", summary: "Check the run first, then the assumptions, then read service, cost and how sure you can be.", keywords: "results runs replications interpret read output", source: "registry" },
+      { ...live, slug: "kpis-and-resilience-index", kind: "reference", title: "KPIs & the Resilience Index", summary: "Every KPI, its definition and its unit.", keywords: "kpi fill rate cost of resilience ttr tts resilience index service level", source: "registry" },
+      { ...live, slug: "per-item-time-series", kind: "reference", title: "Per-item time series", summary: "What happened to one material, week by week.", keywords: "time series per item weekly inventory backlog series", source: "registry" },
+      { ...live, slug: "performance-and-caching", kind: "troubleshooting", title: "Performance & caching", summary: "Why a second run is faster, and when the cache is dropped.", keywords: "performance caching metrics speed invalidation" },
+      { ...live, slug: "reports-and-files", kind: "guide", title: "Reports & files", summary: "Rendered reports and where they are kept.", keywords: "reports files render export download user files" },
     ],
   },
   {
     section: 12,
     key: "exports",
     group: "Exports & reproducibility",
+    audience: "Analysts and researchers",
     blurb: "Taking a figure out of the system with its provenance attached.",
     pages: [
-      { ...live, slug: "verifiable-exports", title: "Verifiable exports", summary: "The workbooks, and what makes each one checkable.", keywords: "exports workbooks verifiable xlsx download provenance" },
-      { ...live, slug: "reproducibility-record", title: "Reproducibility record", summary: "The stamp that lets someone else rerun what you ran.", keywords: "reproducibility record versions dataset policy scenario engine stamp" },
-      { ...live, slug: "engine-versions", title: "Engine versions & changes", summary: "Every engine version, what it changed, who it affects, and how to re-run a result on its own engine.", keywords: "engine version build changelog changes release comparable withdrawn archive install reproduce scsim", related: ["reproducibility-record", "model-validation", "experiments-and-comparison"] },
-      { ...live, slug: "exporting-and-deleting", title: "Exporting and deleting your data", summary: "Getting everything out, and getting it removed.", keywords: "export delete data removal gdpr portability account" },
+      { ...live, slug: "verifiable-exports", kind: "concept", title: "Verifiable exports", summary: "The workbooks, and what makes each one checkable.", keywords: "exports workbooks verifiable xlsx download provenance" },
+      { ...live, slug: "reproducibility-record", kind: "concept", title: "Reproducibility record", summary: "The stamp that lets someone else rerun what you ran.", keywords: "reproducibility record versions dataset policy scenario engine stamp" },
+      { ...live, slug: "engine-versions", kind: "reference", title: "Engine versions & changes", summary: "Every engine version, what it changed, who it affects, and how to re-run a result on its own engine.", keywords: "engine version build changelog changes release comparable withdrawn archive install reproduce scsim", related: ["reproducibility-record", "model-validation", "experiments-and-comparison"] },
+      { ...live, slug: "exporting-and-deleting", kind: "guide", title: "Exporting and deleting your data", summary: "Getting everything out, and getting it removed.", keywords: "export delete data removal gdpr portability account" },
     ],
   },
   {
     section: 13,
     key: "access",
     group: "Access & administration",
+    audience: "Admins",
     blurb: "Who can see what, and who decided that.",
     pages: [
-      { ...live, slug: "organizations-and-members", table: "organizations", title: "Organizations and members", summary: "The tenant boundary and who sits inside it.", keywords: "organizations members tenant org boundary invite", source: "contract" },
-      { ...live, slug: "roles-and-capabilities", title: "Roles and capabilities", summary: "What a role may do, and where that is decided.", keywords: "roles capabilities permissions grants catalog" },
-      { ...live, slug: "project-access", title: "Project access", summary: "Membership of a single project, as distinct from the organization.", keywords: "project access members project role delegation" },
-      { ...live, slug: "who-can-see-your-data", title: "Who can see your data", summary: "The honest answer, including the parts that are not you.", keywords: "privacy visibility access rls isolation support staff" },
-      { ...live, slug: "audit-log", title: "Audit log", summary: "What is recorded, and what is not yet.", keywords: "audit log admin actions history record actor" },
-      { ...live, slug: "admin-screens", title: "Admin screens", summary: "The administrative surfaces and what each controls.", keywords: "admin users roles organizations projects models usage screens" },
-      { ...live, slug: "account-and-password", title: "Account & password", summary: "Managing your own sign-in.", keywords: "account password profile sign in login log credentials" },
+      { ...live, slug: "organizations-and-members", kind: "reference", table: "organizations", title: "Organizations and members", summary: "The tenant boundary and who sits inside it.", keywords: "organizations members tenant org boundary invite", source: "contract" },
+      { ...live, slug: "roles-and-capabilities", kind: "reference", title: "Roles and capabilities", summary: "What a role may do, and where that is decided.", keywords: "roles capabilities permissions grants catalog" },
+      { ...live, slug: "project-access", kind: "guide", title: "Project access", summary: "Membership of a single project, as distinct from the organization.", keywords: "project access members project role delegation" },
+      { ...live, slug: "who-can-see-your-data", kind: "troubleshooting", title: "Who can see your data", summary: "The honest answer, including the parts that are not you.", keywords: "privacy visibility access rls isolation support staff" },
+      { ...live, slug: "audit-log", kind: "reference", title: "Audit log", summary: "What is recorded, and what is not yet.", keywords: "audit log admin actions history record actor" },
+      { ...live, slug: "admin-screens", kind: "overview", title: "Admin screens", summary: "The administrative surfaces and what each controls.", keywords: "admin users roles organizations projects models usage screens" },
+      { ...live, slug: "account-and-password", kind: "guide", title: "Account & password", summary: "Managing your own sign-in.", keywords: "account password profile sign in login log credentials" },
     ],
   },
   {
     section: 14,
     key: "developer-api",
     group: "Developer API",
+    audience: "Developers",
     blurb: "Driving the platform from your own code.",
     pages: [
-      { ...live, slug: "getting-an-api-key", title: "Getting an API key", summary: "Issuing, scoping and revoking a key.", keywords: "api key developer token issue revoke scope" },
-      { ...live, slug: "endpoints-and-schemas", title: "Endpoints & schemas", summary: "Every endpoint and the shape it expects.", keywords: "api endpoints schemas request response openapi", source: "contract" },
-      { ...live, slug: "rate-limits-and-idempotency", title: "Rate limits & idempotency", summary: "How often you may call, and how to retry safely.", keywords: "rate limits idempotency retry throttle keys" },
-      { ...live, slug: "request-log", title: "Request log", summary: "What your key did, and when.", keywords: "request log api history calls audit" },
+      { ...live, slug: "getting-an-api-key", kind: "guide", title: "Getting an API key", summary: "Create a key scoped to one job, make a read-only request, then submit and fetch a run.", keywords: "api key developer token issue revoke scope" },
+      { ...live, slug: "endpoints-and-schemas", kind: "reference", title: "Endpoints & schemas", summary: "Every endpoint and the shape it expects.", keywords: "api endpoints schemas request response openapi", source: "contract" },
+      { ...live, slug: "rate-limits-and-idempotency", kind: "concept", title: "Rate limits & idempotency", summary: "How often you may call, and how to retry safely.", keywords: "rate limits idempotency retry throttle keys" },
+      { ...live, slug: "request-log", kind: "guide", title: "Request log", summary: "What your key did, and when.", keywords: "request log api history calls audit" },
     ],
   },
   {
     section: 15,
     key: "reference",
     group: "Reference",
+    audience: "Everyone",
     blurb: "The lookup section — every table, every field, every term.",
     pages: [
-      { ...live, slug: "all-tables", title: "All tables", summary: "The detailed index — every column of every described table, and the package that owes the rest.", keywords: "all tables index columns reference schema complete", source: "contract" },
-      { ...live, slug: "units-and-conventions", title: "Units & conventions", summary: "Every unit the system uses, and the one place it is defined.", keywords: "units conventions days weeks currency percent normalization", source: "contract" },
-      { ...live, slug: "glossary", title: "Glossary", summary: "Plain-language definitions across all domains.", keywords: "glossary definitions terms vocabulary jargon" },
-      { ...live, slug: "field-index", title: "Field index", summary: "Every field, A to Z, linking to the table it belongs to.", keywords: "field index alphabetical a to z columns lookup", source: "contract" },
+      { ...live, slug: "all-tables", kind: "reference", title: "All tables", summary: "The detailed index — every column of every described table, and the package that owes the rest.", keywords: "all tables index columns reference schema complete", source: "contract" },
+      { ...live, slug: "units-and-conventions", kind: "reference", title: "Units & conventions", summary: "Every unit the system uses, and the one place it is defined.", keywords: "units conventions days weeks currency percent normalization", source: "contract" },
+      { ...live, slug: "glossary", kind: "reference", title: "Glossary", summary: "Plain-language definitions across all domains.", keywords: "glossary definitions terms vocabulary jargon" },
+      { ...live, slug: "field-index", kind: "reference", title: "Field index", summary: "Every field, A to Z, linking to the table it belongs to.", keywords: "field index alphabetical a to z columns lookup", source: "contract" },
     ],
   },
   {
     section: 16,
     key: "questions",
     group: "Questions & answers",
+    audience: "Everyone",
     blurb: "Common questions, with prepared answers that point to the page that owns each fact.",
     pages: [
       {
         ...live,
-        slug: "questions",
+        slug: "questions", kind: "troubleshooting",
         title: "Questions & answers",
         summary: "Common questions about the tool, answered briefly, each linking to the page that goes deeper.",
         keywords: "faq questions answers help common q&a how do i why",
@@ -392,9 +433,9 @@ export const DOC_GROUPS: DocGroup[] = [
   },
 ];
 
-export const ALL_PAGES: (DocPage & { group: string; section: number; sectionKey: string })[] =
+export const ALL_PAGES: (DocPage & { group: string; section: number; sectionKey: string; audience: string })[] =
   DOC_GROUPS.flatMap((g) =>
-    g.pages.map((p) => ({ ...p, group: g.group, section: g.section, sectionKey: g.key })),
+    g.pages.map((p) => ({ ...p, group: g.group, section: g.section, sectionKey: g.key, audience: g.audience })),
   );
 
 export const DEFAULT_SLUG = "what-suresuite-is";
@@ -433,24 +474,61 @@ export function prevNext(slug: string, canSee: (sectionKey: string) => boolean =
 }
 
 /** Reader questions use word starts, never arbitrary substrings ("in" is not "design"). */
-const SEARCH_STOP_WORDS = new Set(["how", "do", "i", "a", "an", "is", "what", "the", "to"]);
+const SEARCH_STOP_WORDS = new Set(["how", "do", "i", "a", "an", "is", "what", "the", "to", "my", "of"]);
 const words = (text: string) => (text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).map(w => w === "policies" ? "policy" : w);
+const searchTerms = (query: string) => [...new Set(words(query).filter(t => !SEARCH_STOP_WORDS.has(t)))];
+const hits = (term: string, tokens: string[]) => tokens.some(w => w.startsWith(term));
 
 export const DOC_SEARCH_FALLBACK = ["your-first-project", "glossary", "questions"] as const;
 
+/**
+ * Pages matching every term, best first.
+ *
+ * Ranking (§6.4 redesign): every term in the title +1000, every term in the
+ * summary +300, then per term +100 title / +30 summary / +10 keywords / +1
+ * group. The summary is what the reader is shown under the title, so a page
+ * whose summary answers the question outranks one that only lists the word
+ * among its keywords. Written pages still rank above stubs.
+ */
 export function searchPages(query: string, canSee: (sectionKey: string) => boolean = () => true) {
-  const terms = [...new Set(words(query).filter(t => !SEARCH_STOP_WORDS.has(t)))];
+  const terms = searchTerms(query);
   if (!terms.length) return [];
-  const matches = (term: string, tokens: string[]) => tokens.some(w => w.startsWith(term));
   return ALL_PAGES.filter(p => canSee(p.sectionKey)).map(page => {
     const title = words(page.title);
+    const summary = words(page.summary ?? "");
     const keywords = words(page.keywords ?? "");
-    const rest = words(`${page.summary ?? ""} ${page.group}`);
-    if (!terms.every(t => matches(t, [...title, ...keywords, ...rest]))) return null;
-    const fieldBonus = terms.every(t => matches(t, title)) ? 1000 : terms.every(t => matches(t, keywords)) ? 500 : 0;
-    const score = fieldBonus + terms.reduce((n, t) => n + (matches(t, title) ? 100 : matches(t, keywords) ? 10 : 1), 0);
+    const group = words(page.group);
+    if (!terms.every(t => hits(t, [...title, ...summary, ...keywords, ...group]))) return null;
+    const score =
+      (terms.every(t => hits(t, title)) ? 1000 : 0) +
+      (terms.every(t => hits(t, summary)) ? 300 : 0) +
+      terms.reduce((n, t) => n + (hits(t, title) ? 100 : hits(t, summary) ? 30 : hits(t, keywords) ? 10 : 1), 0);
     return { page, score };
   }).filter((hit): hit is { page: (typeof ALL_PAGES)[number]; score: number } => hit !== null)
     .sort((a, b) => Number(b.page.status === "live") - Number(a.page.status === "live") || b.score - a.score)
-    .slice(0, 8).map(hit => hit.page);
+    .slice(0, 6).map(hit => hit.page);
+}
+
+/**
+ * Section headings matching every term — "Inside pages" in the search box.
+ *
+ * `sections` is the generated index of every live page's `Section` ids and
+ * titles, passed in rather than imported so this module stays free of the
+ * rendered bodies it is the site map for.
+ */
+export function searchSections(
+  query: string,
+  sections: Record<string, { id: string; title: string }[]>,
+  canSee: (sectionKey: string) => boolean = () => true,
+) {
+  const terms = searchTerms(query);
+  if (!terms.length) return [];
+  const out: { page: (typeof ALL_PAGES)[number]; id: string; title: string }[] = [];
+  for (const page of ALL_PAGES) {
+    if (page.status !== "live" || !canSee(page.sectionKey)) continue;
+    for (const s of sections[page.slug] ?? []) {
+      if (terms.every(t => hits(t, words(s.title)))) out.push({ page, id: s.id, title: s.title });
+    }
+  }
+  return out.slice(0, 5);
 }

@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import { DocPageTitle, InShort, Section, P, Key, Bullets, Callout, Defs, DocLink } from "@/components/docs/prose";
+import { DocPageTitle, InShort, Section, P, Key, Bullets, Callout, Defs, DocLink, DocTable } from "@/components/docs/prose";
 
 export default function WhatSureSuiteIs() {
   return (
@@ -27,6 +27,15 @@ export default function WhatSureSuiteIs() {
           SuReSuite builds a working model of your chain from the data you already have, then lets
           you break it on purpose and measure what happens.
         </Key>
+        <DocTable
+          caption="The three lenses on one network. Each layer has its own view in the app."
+          head={["Lens", "View", "What it answers"]}
+          rows={[
+            ["Firm level", <DocLink to="firm-level-network">Firm-Level Network</DocLink>, "Who supplies whom — suppliers, customers, the focal firm"],
+            ["Product level", <DocLink to="product-level-network">Product-Level Network</DocLink>, "Which materials feed which products, and where a material has one source"],
+            ["Process level", <DocLink to="process-level-network">Process-Level Network</DocLink>, "The steps that make each product, and where capacity and lead time bind"],
+          ]}
+        />
       </Section>
 
       <Section id="what-it-produces" title="What it produces">
