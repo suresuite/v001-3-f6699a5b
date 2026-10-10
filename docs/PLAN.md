@@ -1028,6 +1028,12 @@ content hash over the merged contract, which changes exactly when the contract
 does. `contract_version` lives in `build/data-contract.generated.json`; the pages
 name it.
 
+**Every page declares how it reads.** *(Added in the WP 5.2a redesign.)* `DocPage.kind` —
+guide, concept, reference, troubleshooting, overview — selects the page template; each
+section names its audience. Reading time and each page's section headings are not typed:
+they are derived from the rendered body into `generated/docsIndex.generated.ts`
+(`npm run docs:index`), which a test holds equal to the bodies.
+
 ### 6.5 Publishing the spine — section 1
 
 The architecture is a selling point, not an internal secret, and it is the first
@@ -24444,6 +24450,77 @@ analyzer still samples the first 50 sources for betweenness; the exact version n
 version. (7) Not measured in production: the after-merge §15 reading (node counts per project,
 `node_list.is_critical_node` no longer 0 everywhere) is owed in the push after the merge (D153).
 
+
+### WP 5.2a redesign — Task-first /docs: page kinds, templates, shell, landing, search · 2026-10-10 · no migration
+
+**Owner-requested**: implement the "/docs redesign" design handoff (audit, visual board and
+interactive prototype) inside the existing React/Tailwind manual.
+
+Preconditions held? **Yes, with three handoff assumptions that were false here.** (1) The
+handoff called every colour "an existing token in `src/index.css`"; `--brand-red`,
+`--status-ok`, `--status-warn`, `--hair-th` and `--hair-row-hover` exist only in the design
+system bundle. They are added to `:root` with the bundle's values (brand red is the
+`#bf2330` two sheets already hard-code). (2) It asked for a theme toggle and dark mode
+"through the app's existing theme provider" — that provider is `forcedTheme="light"` and the
+hairline tokens have no dark values, so the manual stays light and has no toggle. (3) It drew
+the three-pane switch at 1100px; the UI spec allows one second breakpoint, `lg`, for this file,
+so the switch is at 1024px. Radii follow the product's one-radius rule (`rounded-*` = 4px),
+not the bundle's 6/8px.
+
+Exit checks passed? **Partial, and every red is on the base branch too.** `npm test`: 1 788 of
+1 794 — the six are `manualExample.test.ts`'s source-review hashes, red identically on base.
+`npm run lint`: `audit:ui`, `check:docs`, typecheck (15 of 15 held) and notebooks pass; eslint
+red at the base branch's 289 errors / 110 warnings, none in `src/components/docs`.
+`contract:check` holds with its two existing warnings. Screens checked at 1440, 768 and 375px
+(light only, per (2)).
+
+What changed:
+- **Registry.** `kind` on all 84 pages, `audience` on all 16 sections; `registry.test.ts`
+  requires both and refuses a typed `minutes`. The five journey summaries now carry the
+  rewritten leads, so the registry stays their one author.
+- **Generated index.** Reading time (rendered words / 200) and every page's `Section`
+  headings, in `generated/docsIndex.generated.ts`; `docsIndex.test.tsx` fails when a body
+  changes without `npm run docs:index`.
+- **Page header and templates.** `PageTitle` reads the page from context: breadcrumb, kind
+  pill, reading time, audience, generated-source line; a troubleshooting page's jump chips;
+  an input-table page's upload card (`UploadCard.tsx`), every fact on it read through
+  `tableFacts` and the template button the sanctioned `TEMPLATE_BTN`. Guide sections are
+  numbered by a CSS counter; Figure/Table numbers are counters too.
+- **Blocks.** Four callout tones told apart by shape (`limit`/`law` alias `warning`/`note`, so
+  no body changed for them); `Check`, `Steps` with checks, `Details`, `QA`, `DocTable`,
+  `Flow`, `Stats`, `Code`, `RelatedCards`. Block spacing is set in `index.css` from each pair
+  of neighbours, not by bodies. `TypedColumns` gained a filter that hides rows and keeps every
+  anchor.
+- **Shell.** Sticky toolbar with `/` search, arrow keys, Enter and Esc, "Inside pages" section
+  hits and a reading-progress bar; nav with kind badges; "On this page" rail with scroll-spy;
+  sheets for both below `lg`; pager cards with summaries. Text size persists as
+  `docs.textScale` (the old key is read once).
+- **Landing.** Five task cards, four role pills, a section grid with three lead pages each.
+  "How do I upload my BOM?" now ranks *Uploading data* first (pinned in `registry.test.ts`).
+- **Journey copy.** The five journey bodies take the handoff's final copy; every section id is
+  kept. Natural keys on *Uploading data* are now a table read from the contract
+  (`RowKeyTable`) instead of the hand-typed list both old and proposed copy carried.
+- **`rowKey`** moved to `tableFacts` and now treats a landed natural key with no surrogate
+  `id` and no `natural_key_intended` as the key, enforced — the item masters since WP 3.3. So
+  *Materials*, *Products* and *Suppliers* now state their key; they said nothing before.
+
+Gap check — flagged, **not** fixed (the handoff's audit, its §5):
+1. *Model validation*: "This table is not yet described in the contract" renders
+   unconditionally; check against the coverage list.
+2. *Model validation*: "the reproducibility record is owed" contradicts `result-binding`
+   (WP 6.3, WP 10.4).
+3. *Your first project*: "Engine 0.6.1 results" is a typed engine version — kept as written; it
+   should come from the protocol's recorded output.
+4. *Stress tests*: `Provenance from=` names source paths; harmless while `Provenance` ignores
+   it, which this change keeps.
+5. *Getting an API key*: the eight empty anchors still land at the page top rather than on the
+   section that now holds their content.
+
+Not done, and owed to a later step of this package: the other 79 pages keep their text (only
+restyled); the handoff's added visuals were taken only where hand-written explanation is safe
+(the three lenses, the journeys) — the per-item series, stress-test targets, validation badges
+and verification severities are facts with generated or code owners and need rendering from
+them; and the Q&A page's group headings are still `h3`, so they are absent from "On this page".
 
 ## 17. Sequencing
 
