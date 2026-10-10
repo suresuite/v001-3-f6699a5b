@@ -32,14 +32,18 @@
 // engine field. If a page needs a fact this file cannot reach, the fix is a
 // sidecar edit and a regenerate — never a literal.
 
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
+import { Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { P, Key, Prose, Term, Callout, Section, DocLink } from "@/components/docs/prose";
+import { P, Key, Prose, Term, Callout, Section, DocLink, DocTable } from "@/components/docs/prose";
+import { ALL_PAGES } from "@/components/docs/registry";
 import type { RefColumn, RefTable } from "@/components/docs/generated/reference.generated";
 import {
   blankBehaviour,
   computedColumns,
   filled,
+  refTable,
+  rowKey,
   suppliedColumns,
   typed,
   uploadAssetFor,
@@ -153,10 +157,10 @@ function TechnicalDetails({ c }: { c: RefColumn }) {
  * (§6.4). Where there is no CSV header the anchor is the column name, because
  * that is then the only name the reader has.
  */
-export function Column({ c, note }: { c: RefColumn; note?: ReactNode }) {
+export function Column({ c, note, hidden }: { c: RefColumn; note?: ReactNode; hidden?: boolean }) {
   const lead = c.csvHeader ?? c.name;
   return (
-    <div id={lead} className="scroll-mt-20 border-t border-border py-4 first:border-t-0">
+    <div id={lead} hidden={hidden} className="scroll-mt-20 border-t border-border py-4 first:border-t-0">
       <div className="flex flex-wrap items-baseline gap-2">
         <span className="font-mono text-sm font-semibold text-foreground">{lead}</span>
         {c.unit && (
@@ -197,11 +201,40 @@ export function TypedColumns({
   notes?: Record<string, ReactNode>;
 }) {
   const cols = typed(table);
+  // A filter, not a search: it hides rows and never reorders them, so contract
+  // order survives. Empty by default, which keeps every `#header` anchor
+  // visible to the deep link that lands on it.
+  const [q, setQ] = useState("");
+  const needle = q.trim().toLowerCase();
+  const shown = (c: RefColumn) =>
+    !needle || `${c.csvHeader ?? ""} ${c.name} ${c.meaning}`.toLowerCase().includes(needle);
+  const visible = cols.filter(shown).length;
   return (
-    <div className="rounded-sm border border-border bg-card px-4 shadow-xs">
-      {cols.map((c) => (
-        <Column key={c.name} c={c} note={notes[c.csvHeader ?? c.name]} />
-      ))}
+    <div className="space-y-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span className="text-[14px] font-semibold text-foreground">
+          Columns <span className="font-normal tabular-nums text-gray-600">{cols.length}</span>
+        </span>
+        <label className="relative w-full md:w-[200px]">
+          <span className="sr-only">Filter columns</span>
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-600" aria-hidden />
+          <input
+            type="search"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={"Filter\u2026"}
+            className="h-11 w-full rounded-md border border-input bg-background pl-8 pr-2.5 text-[13px] outline-none focus:border-foreground md:h-8"
+          />
+        </label>
+      </div>
+      <div className="rounded-sm border border-[--hair-border] bg-card px-4">
+        {cols.map((c) => (
+          <Column key={c.name} c={c} note={notes[c.csvHeader ?? c.name]} hidden={!shown(c)} />
+        ))}
+        {visible === 0 && (
+          <p className="py-4 text-[13px] text-gray-600">No column matches {"\u201c"}{q}{"\u201d"}.</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -270,9 +303,7 @@ export function HowItLoads({
   instead?: ReactNode;
 }) {
   const d = table.ingestDataset;
-  const key = table.naturalKeyIntended ?? [];
-  const enforced =
-    key.length > 0 && key.every((k) => table.naturalKey.includes(k)) && table.naturalKey.length > 1;
+  const { key, enforced } = rowKey(table);
 
   return (
     <div className="space-y-3">
@@ -517,4 +548,34 @@ export function SuppliedAndComputed({ table }: { table: RefTable }) {
       )}
     </div>
   );
+}
+
+/**
+ * Which columns identify a row, for several uploaded tables at once — the
+ * table a guide shows before it says "same key updates, new key inserts".
+ *
+ * Read from the contract through `rowKey`, never typed: a guide that listed
+ * the keys by hand would be a second author of every natural key. Columns the
+ * server sets (the project, the plant) are named as the scope rather than as
+ * something the reader types.
+ */
+export function RowKeyTable({ tables, caption }: { tables: string[]; caption: string }) {
+  const rows = tables.map((name) => {
+    const t = refTable(name);
+    const { key, enforced } = rowKey(t);
+    const serverSet = t.ingestDataset?.serverSet ?? [];
+    const page = ALL_PAGES.find((p) => p.table === name);
+    return [
+      page ? <DocLink to={page.slug}>{page.title}</DocLink> : <span className="font-mono">{name}</span>,
+      key.length ? (
+        <>
+          <span className="font-mono">{key.filter((k) => !serverSet.includes(k)).join(" + ")}</span>
+          {!enforced && <span className="text-gray-600"> (not enforced yet)</span>}
+        </>
+      ) : (
+        <span className="text-gray-600">No row key declared</span>
+      ),
+    ];
+  });
+  return <DocTable caption={caption} head={["Dataset", "Row identified by"]} rows={rows} />;
 }

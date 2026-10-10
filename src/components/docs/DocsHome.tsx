@@ -1,191 +1,168 @@
-// First-reader paths and page metadata follow the registry and release settings.
+// The manual's front door (/docs) — task first (WP 5.2a redesign, §6.4).
+//
+// A reader arrives with a job, not a section number, so the page opens on
+// five tasks, then the four role paths §6.5 says first-time readers come with,
+// then the whole site map. Everything is filtered to the sections this reader
+// may open (released section by section from /admin/docs), so every card and
+// link here lands on a page rather than on "not available to you".
+//
+// Definition of done for the redesign: "How do I upload my BOM?" takes two
+// clicks — Upload data, then the BOM reference from the guide's links.
 
 import { Link } from "react-router-dom";
-import { ArrowRight, BookText, Compass, Rocket, ShieldCheck } from "lucide-react";
+import {
+  ArrowRight, Code2, FlaskConical, SlidersHorizontal, TrendingUp, Upload, type LucideIcon,
+} from "lucide-react";
 import { DOC_GROUPS, getPage } from "@/components/docs/registry";
+import { KIND_LABEL } from "@/components/docs/docKinds";
 import { useCapabilities } from "@/hooks/useCapabilities";
 
-const KICKER = "font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground";
-
+const TASKS: { slug: string; icon: LucideIcon; label: string; sub: string }[] = [
+  { slug: "uploading-data", icon: Upload, label: "Upload data", sub: "Get your CSVs into a project, check what changed, accept the rows." },
+  { slug: "how-policies-work", icon: SlidersHorizontal, label: "Set policies", sub: "Decide how the chain reorders, sources and produces." },
+  { slug: "simulation-lab", icon: FlaskConical, label: "Run a simulation", sub: "Run a scenario — with or without a disruption." },
+  { slug: "reading-your-results", icon: TrendingUp, label: "Read results", sub: "Check the run, then read service, cost and uncertainty." },
+  { slug: "getting-an-api-key", icon: Code2, label: "Use the API", sub: "Create a scoped key and make your first request." },
+];
 
 /** The four role paths §6.5 says every first-time reader arrives with. */
-const START_HERE = [
-  {
-    slug: "what-suresuite-is",
-    next: "reading-your-results",
-    fragment: "",
-    icon: Compass,
-    question: "Manager or researcher: assess the model",
-  },
-  {
-    slug: "how-suresuite-is-designed",
-    icon: BookText,
-    question: "Engineer: understand and run the project",
-    next: "how-suresuite-is-designed",
-    fragment: "engineer",
-  },
-  {
-    slug: "your-first-project",
-    next: "how-your-data-flows",
-    fragment: "",
-    icon: Rocket,
-    question: "Analyst: build your first comparison",
-  },
-  {
-    slug: "getting-an-api-key",
-    next: "system-boundary",
-    fragment: "",
-    icon: ShieldCheck,
-    question: "API developer: make your first request",
-  },
-] as const;
+const ROLES: { slug: string; label: string; fragment?: string }[] = [
+  { slug: "what-suresuite-is", label: "Manager or researcher" },
+  { slug: "your-first-project", label: "Analyst" },
+  { slug: "how-suresuite-is-designed", label: "Engineer", fragment: "engineer" },
+  { slug: "getting-an-api-key", label: "API developer" },
+];
+
+/**
+ * The three pages each section leads with on the front door. An editorial
+ * choice — what a newcomer to the section should open first — so it is named
+ * here; a section not listed shows its first three pages.
+ */
+const TOP_PAGES: Record<string, string[]> = {
+  overview: ["what-suresuite-is", "how-your-data-flows", "known-limits"],
+  "getting-started": ["your-first-project", "uploading-data", "projects"],
+  "input-tables": ["inbound-logistics", "bom-single-level", "materials"],
+  policies: ["how-policies-work", "policy-types", "when-a-value-is-missing"],
+  experiments: ["simulation-lab", "disruptions", "stress-tests"],
+  results: ["reading-your-results", "kpis-and-resilience-index", "per-item-time-series"],
+  reference: ["glossary", "all-tables", "field-index"],
+};
 
 export default function DocsHome() {
-  // Released section by section (/admin/docs): the front door lists only what
-  // this reader may open, so every card and link on it lands on a page.
   const { docs } = useCapabilities();
   const groups = DOC_GROUPS.filter((g) => docs.canReadSection(g.key));
   const visible = (slug: string) => {
     const page = getPage(slug);
-    return Boolean(page && docs.canReadSection(page.sectionKey));
+    return Boolean(page && page.status === "live" && docs.canReadSection(page.sectionKey));
   };
-  const firstPage = groups[0]?.pages.find((p) => p.status === "live");
-  const startHere = START_HERE.map(path => ({ ...path,
-    slug: visible(path.slug) ? path.slug : visible(path.next) ? path.next : "what-suresuite-is",
-  })).filter(({ slug }) => visible(slug));
-  const pages = groups.flatMap((g) => g.pages);
-  const liveCount = pages.filter((p) => p.status === "live").length;
+  const tasks = TASKS.filter((t) => visible(t.slug));
+  const roles = ROLES.filter((r) => visible(r.slug));
+  const pageCount = groups.reduce((n, g) => n + g.pages.length, 0);
+
   return (
-    <div className="space-y-12 md:space-y-16">
+    <div className="mx-auto max-w-[1040px] space-y-12">
       {/* Hero */}
       <header className="space-y-4">
-        <span className={KICKER}>Documentation</span>
-        <h1 className="max-w-3xl text-[length:clamp(26px,6vw,40px)] font-semibold leading-tight tracking-tight">
-          How SuReSuite works —{" "}
-          <span className="font-serif font-medium italic">written down.</span>
-        </h1>
-        <p className="max-w-2xl text-base leading-relaxed text-muted-foreground md:text-lg">
-          SuReSuite models your supply chain so you can test disruptions and compare the cost and service of different responses.
-        </p>
-        <p className="max-w-2xl text-sm font-medium leading-relaxed">
-          Model your chain → set policies → break it on purpose and compare.
-        </p>
-        <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-          A policy is a rule for running the chain, such as when to reorder or which supplier to use.
-          Start with the overview below; you need an approved account to work in a project.{" "}
-          <Link to="/auth" className="text-primary hover:underline">Sign in</Link> if you already have one.
-        </p>
-        <div className="flex flex-wrap items-center gap-3 pt-1">
-          {firstPage && (
-            <Link
-              to={visible("what-suresuite-is") ? "/docs/what-suresuite-is" : `/docs/${firstPage.slug}`}
-              className="group inline-flex h-11 items-center gap-2 rounded-sm bg-primary md:h-10 px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-            >
-              Start reading
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            </Link>
-          )}
-          {visible("all-tables") && (
-            <Link
-              to="/docs/all-tables"
-              className="inline-flex h-11 items-center rounded-sm border border-border md:h-10 px-4 text-sm font-medium transition-colors hover:bg-muted/60"
-            >
-              Jump to the reference
-            </Link>
-          )}
-          {visible("questions") && (
-            <Link
-              to="/docs/questions"
-              className="inline-flex h-11 items-center rounded-sm border border-border md:h-10 px-4 text-sm font-medium transition-colors hover:bg-muted/60"
-            >
-              Questions &amp; answers
-            </Link>
-          )}
+        <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--brand-red)]">
+          <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[var(--brand-red)]" />
+          Documentation
         </div>
+        <h1 className="text-[28px] font-semibold leading-[1.1] tracking-[-0.024em] md:text-[38px]">
+          What do you want <span className="font-serif font-medium italic">to do?</span>
+        </h1>
+        <p className="max-w-[60ch] text-[15px] leading-relaxed text-gray-600 md:text-[16px]">
+          SuReSuite models your supply chain so you can break it on purpose and compare the cost and
+          service of different responses. Pick a task {"—"} every guide starts with the steps.
+          You need an approved account to work in a project;{" "}
+          <Link to="/auth" className="docs-link">sign in</Link> if you already have one.
+        </p>
       </header>
 
-      {/* Start here */}
-      <section className={startHere.length === 0 ? "hidden" : "space-y-5"}>
-        <div className="space-y-2">
-          <span className={KICKER}>Start here</span>
-          <h2 className="text-xl font-semibold tracking-tight md:text-2xl">
-            {startHere.length === START_HERE.length ? "Choose your starting point" : "Where to begin"}
-          </h2>
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {startHere.map(({ slug, next, fragment, icon: Icon, question }) => {
-            const page = getPage(slug);
-            if (!page) return null;
-            return (
-              <div
-                key={question}
-                className="group rounded-sm border border-border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-muted/40"
-              >
-                <div className="flex items-center gap-2">
-                  <Icon className="h-4 w-4 shrink-0 text-primary" />
-                  <span className="text-sm font-semibold tracking-tight">{question}</span>
-                </div>
-                <Link to={`/docs/${slug}`} className="mt-2 block text-sm font-medium text-primary hover:underline">
-                  {page.title}
-                </Link>
-                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{page.summary}</p>
-                {visible(next) && (next !== slug || fragment) && (
-                  <Link to={`/docs/${next}${fragment ? `#${fragment}` : ""}`} className="mt-3 inline-flex min-h-11 items-center text-sm text-primary hover:underline md:min-h-0">
-                    {fragment ? "For engineers: developer setup" : getPage(next)?.title}
-                    <ArrowRight className="ml-1 h-3.5 w-3.5" />
-                  </Link>
-                )}
-                {!visible(next) && <p className="mt-3 text-xs text-muted-foreground">More task guides appear when their section is open to you.</p>}
-              </div>
-            );
-          })}
-        </div>
-      </section>
+      {/* Tasks */}
+      {tasks.length > 0 && (
+        <section aria-label="Tasks" className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3">
+          {tasks.map(({ slug, icon: Icon, label, sub }) => (
+            <Link
+              key={slug}
+              to={`/docs/${slug}`}
+              className="group flex min-h-[168px] flex-col rounded-lg border border-border bg-card p-4 shadow-xs transition-colors hover:bg-accent"
+            >
+              <span className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background">
+                <Icon className="h-[18px] w-[18px]" aria-hidden />
+              </span>
+              <span className="mt-3 text-[16px] font-semibold text-foreground">{label}</span>
+              <span className="mt-1 text-[13.5px] leading-snug text-gray-600">{sub}</span>
+              <span className="mt-auto flex items-center gap-1 pt-3 text-[12.5px] text-foreground">
+                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" aria-hidden />
+                {getPage(slug)?.title}
+              </span>
+            </Link>
+          ))}
+        </section>
+      )}
 
-      <p className="text-xs text-muted-foreground">
-        {liveCount} available guides across {groups.length} sections open to you.
-        {pages.length > liveCount && ` ${pages.length - liveCount} more guides are planned.`}
-      </p>
+      {/* Roles */}
+      {roles.length > 0 && (
+        <section aria-label="Start from your role" className="space-y-3">
+          <h2 className="text-[14px] font-semibold text-foreground">Or start from your role</h2>
+          <div className="flex flex-wrap gap-2">
+            {roles.map((r) => (
+              <Link
+                key={r.label}
+                to={`/docs/${r.slug}${r.fragment ? `#${r.fragment}` : ""}`}
+                className="inline-flex min-h-11 items-center gap-2 rounded-full border border-border px-4 text-[13.5px] text-foreground transition-colors hover:bg-accent md:min-h-10"
+              >
+                <span className="font-medium">{r.label}</span>
+                <span className="text-gray-600">{"→"} {getPage(r.slug)?.title}</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* The whole site map */}
-      <section className="space-y-5">
-        <div className="space-y-2">
-          <span className={KICKER}>Everything in the manual</span>
-          <h2 className="text-xl font-semibold tracking-tight md:text-2xl">
-            {groups.length} {groups.length === 1 ? "section" : "sections"}, and what each one answers
-          </h2>
-          <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-            Browse the sections open to you, including any released for public reading. Start with a task guide, then use the concepts and reference pages to understand the values you encounter.
-          </p>
+      <section aria-labelledby="browse" className="space-y-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 id="browse" className="text-[18px] font-semibold tracking-tight">Browse the manual</h2>
+          <span className="text-[13px] tabular-nums text-gray-600">
+            {pageCount} pages in {groups.length} {groups.length === 1 ? "section" : "sections"}
+          </span>
         </div>
-
-        <div className="border-t border-[--hair-rule]">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] gap-px overflow-hidden rounded-lg border border-border bg-border">
           {groups.map((g) => {
-            const written = g.pages.filter((p) => p.status === "live").length;
+            const top = (TOP_PAGES[g.key] ?? g.pages.slice(0, 3).map((p) => p.slug))
+              .map((s) => g.pages.find((p) => p.slug === s))
+              .filter((p): p is NonNullable<typeof p> => Boolean(p));
             const first = g.pages.find((p) => p.status === "live") ?? g.pages[0];
             return (
-              <div
-                key={g.group}
-                className="grid gap-2 border-b border-[--hair-rule] py-5 md:grid-cols-12 md:gap-6"
-              >
-                <span className={`${KICKER} tabular-nums md:col-span-1 md:pt-1`}>
+              <div key={g.key} className="flex flex-col bg-background p-4">
+                <span className="font-mono text-[11px] font-semibold tabular-nums text-[var(--brand-red)]">
                   {String(g.section).padStart(2, "0")}
                 </span>
-                <div className="md:col-span-8">
-                  <Link
-                    to={`/docs/${first.slug}`}
-                    className="text-base font-semibold tracking-tight hover:text-primary"
-                  >
-                    {g.group}
+                <Link to={`/docs/${first.slug}`} className="mt-1 text-[15px] font-semibold text-foreground hover:underline">
+                  {g.group}
+                </Link>
+                <p className="mt-1 text-[13.5px] leading-snug text-gray-600">{g.blurb}</p>
+                <ul className="mt-3 space-y-0.5">
+                  {top.map((p) => (
+                    <li key={p.slug}>
+                      <Link
+                        to={`/docs/${p.slug}`}
+                        className="flex min-h-11 items-center justify-between gap-3 text-[13.5px] text-foreground hover:underline md:min-h-7"
+                      >
+                        <span className="min-w-0">{p.title}</span>
+                        <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-gray-600">
+                          {KIND_LABEL[p.kind].short}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+                {g.pages.length > top.length && (
+                  <Link to={`/docs/${first.slug}`} className="mt-2 inline-flex min-h-11 items-center text-[12.5px] text-gray-600 hover:text-foreground md:min-h-6">
+                    + {g.pages.length - top.length} more
                   </Link>
-                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{g.blurb}</p>
-                </div>
-                <div className="text-xs text-muted-foreground md:col-span-3 md:justify-self-end md:pt-1 md:text-right">
-                  <span className="tabular-nums">
-                    {written} of {g.pages.length}
-                  </span>{" "}
-                  written
-                </div>
+                )}
               </div>
             );
           })}

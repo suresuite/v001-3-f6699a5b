@@ -126,13 +126,12 @@ export function DocFigure({ id, fallback }: { id: string; fallback?: ReactNode }
   if (!slot.file || !FILES[slot.file]) {
     if (fallback) {
       return (
-        <figure id={`figure-${slot.id}`} className="scroll-mt-20 space-y-2">
-          <div className="overflow-x-auto rounded-sm border border-border bg-card p-4 shadow-xs">
+        <figure id={`figure-${slot.id}`} className="scroll-mt-20 space-y-3">
+          <FigureLabel title={slot.title} />
+          <div className="overflow-x-auto rounded-lg border border-border bg-card px-6 py-7">
             {fallback}
           </div>
-          <figcaption className="text-xs leading-relaxed text-muted-foreground">
-            {slot.caption}
-          </figcaption>
+          <figcaption className="text-[13.5px] leading-[1.6] text-gray-600">{slot.caption}</figcaption>
         </figure>
       );
     }
@@ -141,8 +140,9 @@ export function DocFigure({ id, fallback }: { id: string; fallback?: ReactNode }
 
   const inline = SVG_SOURCE[slot.file];
   return (
-    <figure id={`figure-${slot.id}`} className="scroll-mt-20 space-y-2">
-      <div className="overflow-x-auto rounded-sm border border-border bg-card p-4 shadow-xs">
+    <figure id={`figure-${slot.id}`} className="scroll-mt-20 space-y-3">
+      <FigureLabel title={slot.title} />
+      <div className="overflow-x-auto rounded-lg border border-border bg-card px-6 py-7">
         {inline ? (
           // `role="img"` + `aria-label` on the WRAPPER, because an inlined
           // drawing has no `alt`. The slot's alt text is what a screen reader
@@ -173,10 +173,22 @@ export function DocFigure({ id, fallback }: { id: string; fallback?: ReactNode }
           />
         )}
       </div>
-      <figcaption className="text-xs leading-relaxed text-muted-foreground">
-        {slot.caption}
-      </figcaption>
+      <figcaption className="text-[13.5px] leading-[1.6] text-gray-600">{slot.caption}</figcaption>
     </figure>
+  );
+}
+
+/**
+ * "Figure N" on the left, the slot's title on the right. N is a CSS counter
+ * (`.docs-label-figure` in index.css), so figures number themselves from 1 on
+ * every page, in reading order, without the manifest or a body counting.
+ */
+function FigureLabel({ title }: { title: string }) {
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+      <span className="docs-label docs-label-figure" aria-hidden />
+      <span className="text-[13px] font-semibold text-foreground">{title}</span>
+    </div>
   );
 }
 

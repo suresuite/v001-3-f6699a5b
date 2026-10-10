@@ -12,7 +12,8 @@
 import { describe, expect, it } from "vitest";
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
-import { ALL_PAGES, DEFAULT_SLUG, DOC_GROUPS, getPage, prevNext, searchPages } from "../registry";
+import { ALL_PAGES, DEFAULT_SLUG, DOC_GROUPS, getPage, prevNext, searchPages, searchSections } from "../registry";
+import { DOCS_INDEX } from "../generated/docsIndex.generated";
 import { DOC_BODIES } from "../bodies";
 import { LEGACY_SLUGS } from "../legacySlugs";
 import introspected from "../../../../build/schema.introspected.json";
@@ -35,6 +36,20 @@ describe("the site map", () => {
     for (const g of DOC_GROUPS) {
       expect(g.blurb.length, `section ${g.section} (${g.group})`).toBeGreaterThan(10);
     }
+  });
+
+  it("gives every page a template kind — the page renders by it (WP 5.2a redesign)", () => {
+    const kinds = new Set(["guide", "concept", "reference", "troubleshooting", "overview"]);
+    for (const p of ALL_PAGES) expect(kinds.has(p.kind), `${p.slug} has kind ${p.kind}`).toBe(true);
+  });
+
+  it("says who every section is written for", () => {
+    for (const g of DOC_GROUPS) expect(g.audience.length, g.key).toBeGreaterThan(3);
+  });
+
+  it("types no reading time unless it overrides the computed one for a reason", () => {
+    // The computed figure lives in the generated index; a typed one goes stale.
+    expect(ALL_PAGES.filter((p) => p.minutes !== undefined).map((p) => p.slug)).toEqual([]);
   });
 
   it("has no duplicate slug", () => {
@@ -287,6 +302,7 @@ describe("first-reader search", () => {
     ["tour", "your-first-project"],
     ["laws", "how-suresuite-is-designed"],
     ["tiers", "how-suresuite-is-designed"],
+    ["how do i upload my bom", "uploading-data"],
   ])("%s leads to %s", (query, slug) => {
     expect(searchPages(query)[0]?.slug).toBe(slug);
   });
@@ -313,5 +329,19 @@ describe("first-reader search", () => {
     expect(visible.map(p => p.slug)).not.toContain("your-first-project");
     expect(visible.every(p => p.sectionKey === "overview")).toBe(true);
     expect(searchPages("tiers", key => key === "overview")[0]?.slug).toBe("how-suresuite-is-designed");
+  });
+});
+
+describe("search inside pages", () => {
+  it("finds a section heading and names its page and anchor", () => {
+    const sections = Object.fromEntries(Object.entries(DOCS_INDEX).map(([k, v]) => [k, v.sections]));
+    const hits = searchSections("uploading same file", sections);
+    expect(hits[0]).toMatchObject({ id: "uploading-twice", page: { slug: "uploading-data" } });
+  });
+
+  it("never offers a heading in a section closed to this reader", () => {
+    const sections = Object.fromEntries(Object.entries(DOCS_INDEX).map(([k, v]) => [k, v.sections]));
+    const hits = searchSections("uploading same file", sections, (key) => key === "overview");
+    expect(hits).toEqual([]);
   });
 });
