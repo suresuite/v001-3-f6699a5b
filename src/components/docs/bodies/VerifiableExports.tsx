@@ -1,36 +1,16 @@
-// §6.3 section 12 — the three workbooks (A4).
+// §6.3 section 12 — the three workbooks (A4), as the app produces them today.
+//
+// Corrected in the WP 5.2a manual pass. This page described a "policy
+// snapshot" with a provenance row under every value; since §4 D289 a policy
+// version's Export is the ENGINE-INPUT workbook (`engineInputWorkbook.ts`) —
+// what the run actually receives, through the mapper. And the run-results
+// workbook has carried the reproducibility record (A5) as its own sheet since
+// WP 6.3, which this page said was owed. Sheet names are the builders'
+// (`engineInputWorkbook.ts`, `verifiableExports.ts`).
 
-import { PageTitle, Section, P, Key, Callout, Term, DocLink, AppLink, Provenance } from "@/components/docs/prose";
-
-const WORKBOOKS = [
-  {
-    name: "Policy snapshot",
-    what: "The saved policy version: every family, every override, every cell.",
-    stamp: "the policy fingerprint",
-    checkable:
-      "Under every value row sits a provenance row grading the cell — set (differs from the schema default), equal to the schema default, override, or inherited. So a reader can tell a decision you made from a default you never touched.",
-    honest:
-      "Storage cannot distinguish “never touched” from “deliberately set to the default value”, and the export says so rather than picking one.",
-  },
-  {
-    name: "Dataset",
-    what: "The exact canonical rows the dataset fingerprint was computed over, one sheet per table the engine reads.",
-    stamp: "the dataset fingerprint",
-    checkable:
-      "Not “the rows as they are now” — the rows as they were when the version was frozen, taken from the snapshot itself. Someone can recompute the fingerprint from the sheets and get the same value.",
-    honest:
-      "A sheet the fingerprint does not cover would be a sheet a reader would wrongly believe was verified, so the workbook carries the snapshot and not a fresh query.",
-  },
-  {
-    name: "Run results",
-    what: "Per-run metadata, aggregate KPIs with confidence intervals, one row per seed, and a weeks-by-seeds sheet per stored series.",
-    stamp: "the run's own provenance",
-    checkable:
-      "The per-seed sheet is what makes the confidence interval checkable: a reader can recompute the spread rather than taking the summary on trust.",
-    honest:
-      "A single aggregate number with no seeds behind it is not a result anyone can argue with, which is why the seeds ship.",
-  },
-];
+import {
+  PageTitle, InShort, Section, P, Key, Callout, Steps, DocTable, Term, DocLink, AppLink, Provenance,
+} from "@/components/docs/prose";
 
 export default function VerifiableExports() {
   return (
@@ -38,6 +18,11 @@ export default function VerifiableExports() {
       <PageTitle lead="Three workbooks that let someone check your model without access to this software.">
         Verifiable exports
       </PageTitle>
+      <InShort items={[
+        <>Three files answer three questions: what the engine received, what data it was computed from, and what came out.</>,
+        <>Each carries the fingerprint that ties it to the others, so a reviewer can check they belong together.</>,
+        <>All three are on <strong>/policies › Version history</strong>, and need the Export right on the project.</>,
+      ]} />
 
       <Section id="the-idea" title="What makes an export verifiable">
         <Key>
@@ -48,54 +33,56 @@ export default function VerifiableExports() {
           the fingerprint tying the two together, is something a reviewer can check — by recomputing
           the fingerprint, by reading the inputs, or by rerunning the model elsewhere.
         </P>
-        <P>
-          That is the whole difference, and it is why there are three files rather than one: they
-          answer <em>what did you decide</em>, <em>what did you decide it on</em>, and{" "}
-          <em>what came out</em>.
-        </P>
+      </Section>
+
+      <Section id="where" title="Where to get them">
+        <Steps steps={[
+          { title: "Open Version history", where: "/policies", body: <>On <AppLink to="/policies">/policies</AppLink>, open <strong>Version history</strong>. Exports work on saved <DocLink to="policy-versions-and-presets">policy versions</DocLink> — an export of unsaved edits would carry a fingerprint over something nobody could return to.</> },
+          { title: "Export a version", where: "Version history", body: <>A saved version's <strong>Export</strong> downloads <Term>simulation-input-…xlsx</Term>.</> },
+          { title: "Export the dataset and a run", where: "Verifiable exports", body: <>Below the versions: <strong>Export dataset (graph_hash-stamped)</strong> downloads <Term>dataset-…xlsx</Term>; pick a completed run and choose <strong>Export results</strong> for <Term>run-results-…xlsx</Term>.</>, check: "three files whose fingerprints match: the dataset hash in the dataset file is the one the run results and the simulation input name." },
+        ]} />
+        <P>The buttons are disabled without the project's Export right, with the reason beside them — see <DocLink to="project-access">Project access</DocLink>.</P>
       </Section>
 
       <Section id="the-three" title="The three workbooks">
-        <div className="space-y-3">
-          {WORKBOOKS.map((w) => (
-            <div key={w.name} id={w.name.toLowerCase().replace(/\s+/g, "-")} className="scroll-mt-20 rounded-sm border border-border bg-card p-4 shadow-xs">
-              <div className="text-sm font-semibold text-foreground">{w.name}</div>
-              <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{w.what}</p>
-              <p className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">
-                <span className="text-foreground">Stamped with:</span> {w.stamp}
-              </p>
-              <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
-                <span className="text-foreground">What makes it checkable:</span> {w.checkable}
-              </p>
-              <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
-                <span className="text-foreground">And what it admits:</span> {w.honest}
-              </p>
-            </div>
-          ))}
-        </div>
+        {/* The old per-workbook anchors, kept so existing deep links still land here. */}
+        <span id="policy-snapshot" /><span id="dataset" /><span id="run-results" />
+        <DocTable
+          caption="What each file holds, sheet by sheet."
+          head={["File", "Sheets", "Answers"]}
+          rows={[
+            [
+              "Simulation input",
+              "Read me (versions, hashes and a hash re-check) · one sheet per network list · Policies · Settings · Disruptions · Where values came from · Mapping notes · Field guide · Policy as saved · Policy JSON (hashed)",
+              "What the engine receives from this policy version and its dataset version — through the same mapping a run uses, not the stored settings alone",
+            ],
+            [
+              "Dataset",
+              "suppliers · materials · products · inbound_logistics · bom_single_level · outbound_logistics · customers · the deep-tier sheets · _provenance · _meta",
+              "The exact accepted rows the dataset fingerprint was computed over, taken from the frozen snapshot rather than as they are now",
+            ],
+            [
+              "Run results",
+              "run_meta · aggregate_kpis · replication_kpis · one series_… sheet per weekly measure · reproducibility",
+              "What came out: the run's identity, KPIs with intervals, every seed's KPIs, the weekly traces and the reproducibility record",
+            ],
+          ]}
+        />
       </Section>
 
-      <Callout tone="limit" title="Three files, not yet one record">
-        <p>
-          Each workbook carries its own stamp. What does not exist yet is the single record that
-          binds all four things together — dataset, policy set, scenario and engine version — as one
-          artifact you can hand over.{" "}
-          <DocLink to="reproducibility-record">Reproducibility record</DocLink> is that page, and it
-          says plainly that the record is owed rather than shipped.
-        </p>
-        <p>
-          In the meantime, exporting all three of these for the same run is the closest thing, and
-          the fingerprints are what let a reader confirm they belong together.
-        </p>
-      </Callout>
-
-      <Section id="where" title="Where to get them">
-        <P>
-          From the policy screen at <AppLink to="/policies">/policies</AppLink>, against a saved{" "}
-          <DocLink to="policy-versions-and-presets">policy version</DocLink>. A version is required
-          rather than optional: an export of unsaved decisions would carry a fingerprint over
-          something nobody could return to.
-        </P>
+      <Section id="what-makes-each-checkable" title="What makes each one checkable">
+        <DocTable
+          caption="The check a reviewer can make, and what each file admits about itself."
+          head={["File", "A reviewer can", "It says plainly"]}
+          rows={[
+            ["Simulation input", "Recompute the policy hash from the Policy JSON sheet, and read every value with its source and every substitution the mapping made", "Where an empty cell has a meaning (no capacity limit, start at the target), in the Field guide"],
+            ["Dataset", "Recompute the dataset fingerprint from the sheets, and trace each row to its file, line, uploader and date in _provenance", "Which rows cannot be traced — _provenance lists every row, with a traced column, rather than only the traced ones"],
+            ["Run results", "Recompute each KPI's interval from the per-seed rows rather than trusting the summary", "Which bindings are missing, and why, in the reproducibility sheet's verdict"],
+          ]}
+        />
+        <Callout tone="note" title="The reproducibility record is in the run-results file">
+          <p>The <Term>reproducibility</Term> sheet binds the run to its dataset, policy, scenario, seed and engine build, plus any analysis behind a network figure and the known limits. If the record could not be assembled, the sheet is still there and says so. <DocLink to="reproducibility-record">Reproducibility record</DocLink> explains every line.</p>
+        </Callout>
       </Section>
 
       <Section id="related" title="Related">

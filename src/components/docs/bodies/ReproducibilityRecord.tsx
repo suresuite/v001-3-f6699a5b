@@ -1,40 +1,80 @@
 // §6.3 section 12 — the reproducibility record (A5).
 //
-// ── THE MOST HONEST PAGE IN THE MANUAL, AND IT HAS TO BE ──────────────────
+// What ships, read from the code that builds it. The record is
+// `lib/trust/reproducibilityRecord.ts` (WP 6.3) and reaches a user as the
+// `reproducibility` sheet of the run-results workbook; since WP 10.4 a new run
+// row carries its own binding (`result-binding`, I8, MET for every run
+// dispatched since). The bindings list and the verdicts below are produced by
+// `bindingsOf` and `buildReproducibilityRecord` from illustrative inputs.
 //
-// Two invariants are NOT met here and the page says so in the reader's words:
+// What is still NOT met is history (§4 D88): derived rows written before
+// provenance existed carry no input hash and cannot be back-filled. The page
+// says that as plainly as it says what works.
 //
-//   input-hash (I5)     every derived row carries the input hash it came from.
-//                       The dual-write is shipped and correct; what is missing
-//                       is that nobody has run an analysis since, so every
-//                       derived row that exists predates provenance (§4 D88).
-//   result-binding (I8) every result binds dataset + policy + scenario +
-//                       engine version. The record itself is owed by WP 6.3.
-//
-// So the page cannot describe a working feature, and describing it as though it
-// worked would be the exact failure §5.3 T3 exists to prevent — in the manual's
-// own page about reproducibility. It describes what is there, what is not, and
-// what a reader can do today instead.
+// (Corrected in the WP 5.2a manual pass: this page used to say the record was
+// owed and did not exist. It had shipped two phases earlier.)
 
-import { PageTitle, Section, P, Key, Callout, Term, DocLink, Provenance } from "@/components/docs/prose";
+import { bindingsOf, buildReproducibilityRecord, type ReproducibilityRecordInput } from "@/lib/trust/reproducibilityRecord";
+import {
+  PageTitle, InShort, Section, P, Key, Callout, Steps, DocTable, Term, DocLink, AppLink, Provenance, Prose,
+} from "@/components/docs/prose";
 import { refTable, computedColumns } from "@/components/docs/tableFacts";
 
 const CARRIES_PROVENANCE = ["network_nodes", "node_list", "network_summary", "supply_chain_data"];
 
+/** A run dispatched today: every binding present. Illustrative values. */
+const BOUND: ReproducibilityRecordInput = {
+  projectId: "example", projectName: "Control-unit tutorial",
+  graphHash: "3f9a…c210", datasetVersionId: "dv-…", hashSchemaVersion: 3,
+  policyVersionId: "pv-…", policyHash: "a17e…09bb",
+  scenarioId: "sc-…", scenarioSeed: 42, disruptionSchedule: "[S-BOARD, 80%, week 16, 4 weeks]",
+  engineCodeVersion: "scsim-0.8.0+1a2b3c4d5e6f", browserEngineVersion: "scsim-0.8.0+1a2b3c4d5e6f",
+  scenarioHash: "77c0…1e2d", validatedModelId: "vm-…", engineId: "eng-…", runKey: "rk-…",
+  protocolOverrides: {}, exploratory: false,
+  simulationHash: "5be1…aa30", simulationVersionNo: 4,
+  levelVersions: { product: 4, process: 4, firm: 2 }, runKeyVersion: 2,
+  analyses: [], limits: [], measuredAt: "illustrative",
+};
+/** An older run: no seed or schedule stamped, no run binding. */
+const OLDER: ReproducibilityRecordInput = {
+  ...BOUND, scenarioSeed: null, scenarioSeedReason: "the scenario was edited after dispatch",
+  disruptionSchedule: null, scenarioHash: null, validatedModelId: null, engineId: null, runKey: null,
+  simulationHash: null, simulationVersionNo: null, levelVersions: null, runKeyVersion: null,
+};
+const STALE: ReproducibilityRecordInput = {
+  ...BOUND,
+  analyses: [{ kind: "centrality", runId: "ar-…", codeVersion: "x", inputHash: "old…", paramsHash: "p", finishedAt: null, inputHashIsCurrent: false }],
+};
+const UNHASHED: ReproducibilityRecordInput = {
+  ...BOUND,
+  analyses: [{ kind: "centrality", runId: null, codeVersion: null, inputHash: null, paramsHash: null, finishedAt: null, inputHashIsCurrent: null }],
+};
+
 export default function ReproducibilityRecord() {
   // Which tables carry the provenance columns is read from the contract's
-  // `computed_by` declarations, not asserted — a table that gained or lost them
-  // changes this page with no edit.
+  // `computed_by` declarations, not asserted.
   const withStamp = CARRIES_PROVENANCE.map((name) => {
     const t = refTable(name);
     return { table: name, stamped: computedColumns(t).some((c) => c.name === "computed_from_hash") };
   }).filter((x) => x.stamped);
+  const bindings = bindingsOf(BOUND);
+  const verdicts: [string, string][] = [
+    ["A run dispatched today, no network figures", buildReproducibilityRecord(BOUND).headline],
+    ["The same, with a centrality computed on an earlier dataset", buildReproducibilityRecord(STALE).headline],
+    ["The same, with a centrality that predates provenance", buildReproducibilityRecord(UNHASHED).headline],
+    ["An older run, dispatched before runs were stamped", buildReproducibilityRecord(OLDER).headline],
+  ];
 
   return (
     <>
-      <PageTitle lead="The stamp that lets someone else rerun exactly what you ran — and what is honestly in place today.">
+      <PageTitle lead="The stamp that lets someone else rerun exactly what you ran — what it binds, how to get it, and where it falls short.">
         Reproducibility record
       </PageTitle>
+      <InShort items={[
+        <>The record binds a result to its data, policies, scenario and engine build, so someone else can put the system back in that state.</>,
+        <>It ships as the <Term>reproducibility</Term> sheet of the run-results workbook, and every run dispatched today carries it.</>,
+        <>A binding that is missing is listed with the reason, and the verdict says <em>NOT reproducible</em> rather than staying quiet.</>,
+      ]} />
 
       <Section id="what-it-would-be" title="What a reproducibility record is">
         <Key>
@@ -44,85 +84,80 @@ export default function ReproducibilityRecord() {
         <P>
           With all four, a figure can be handed to somebody else and recreated. With any one
           missing, it cannot — a number reproduced against different data is a different number that
-          happens to look the same.
+          happens to look the same. The record adds two more: every analysis run behind a network
+          figure, and the known limits of all of it.
         </P>
       </Section>
 
-      <Callout tone="limit" title="This record does not exist yet, and this page will not pretend it does">
-        <p>
-          The single artifact binding all four is not built. It is the next substantial piece of
-          work in this area, and until it lands the honest statement is that{" "}
-          <strong>a result is reproducible in pieces rather than as a record</strong>.
-        </p>
-        <p>
-          What you can do today: export all three{" "}
-          <DocLink to="verifiable-exports">verifiable workbooks</DocLink> for the same run. Between
-          them they carry the dataset fingerprint, the policy fingerprint and the run's own
-          metadata, and a reader can confirm the three belong together. That is most of the record,
-          assembled by hand, with nothing checking that you assembled it completely.
-        </p>
-        <p>
-          <strong>One conclusion already has all four, and it is the exception worth knowing.</strong>{" "}
-          A <DocLink to="model-validation">model-validation card</DocLink> records the dataset, the
-          policy set, the scenario and the engine build it was reached under — each by identity and
-          by fingerprint — and names the run that was its evidence. So a validated model IS
-          reproducible today. What is missing is the same binding on an ordinary figure.
-        </p>
-      </Callout>
+      <Section id="get-it" title="Get the record for a run">
+        <Steps steps={[
+          { title: "Export the run's results", where: "/policies › Version history", body: <>On <AppLink to="/policies">/policies</AppLink>, open <strong>Version history</strong>. Under <strong>Verifiable exports</strong>, pick the completed run and choose <strong>Export results</strong> — the <DocLink to="verifiable-exports">run-results workbook</DocLink>. It needs the Export right on the project.</> },
+          { title: "Open the reproducibility sheet", where: "run results workbook", body: <>It opens with a verdict, then one line per binding — its value, where it was read from, and, if it is missing, why.</>, check: "a verdict line, and no MISSING (required) binding." },
+          { title: "Keep it with the figure", where: "your report", body: "Send the workbook with the figure it supports. The record is what lets a reviewer check, and what lets you rerun it in two years." },
+        ]} />
+      </Section>
 
-      <Section id="the-stamps-that-do-exist" title="What is in place">
+      <Section id="bindings" title="What the record binds">
+        <DocTable
+          caption="Every binding in the record, as the record's own code lists them for a run dispatched today."
+          head={["Binds", "Level", "Read from"]}
+          rows={bindings.map((b) => [<Prose text={b.label} />, b.level, <Prose text={b.source} />])}
+        />
+        <P>A <strong>required</strong> binding missing makes the verdict <em>NOT reproducible</em>. A <strong>recommended</strong> one missing is listed but does not, so a run from before a binding existed is not made unreproducible by a column it could not have had.</P>
+      </Section>
+
+      <Section id="verdicts" title="The verdict line">
+        <DocTable
+          caption="What the record's first line says in four situations — produced by the record's own code."
+          head={["Situation", "Verdict"]}
+          rows={verdicts.map(([w, v]) => [w, <Prose text={v} />])}
+        />
+        <P>An analysis computed on an earlier dataset reproduces <em>itself</em> perfectly; it just doesn't describe the data loaded now. Re-run it on the current data if the figure should.</P>
+      </Section>
+
+      <Section id="the-stamps-that-do-exist" title="Computed rows and their stamp">
         <P>
-          Every computed row is <em>able</em> to say which version of your data it came from. The
-          columns exist on {withStamp.length} tables, the analyses that write them fill them in from
-          the run rather than from a parameter — so a row cannot name a world its run never saw —
-          and a check compares the stored values field by field against the run store.
+          Computed rows can also say which version of your data they came from. The columns exist on{" "}
+          {withStamp.length} tables, and the analyses that write them fill them in from the run rather
+          than from a parameter — so a row cannot name a world its run never saw.
         </P>
         <ul className="flex flex-wrap gap-1.5">
           {withStamp.map((x) => (
             <li key={x.table}>
-              <span className="rounded-sm border border-border bg-muted/50 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
-                {x.table}
-              </span>
+              <code className="docs-code">{x.table}</code>
             </li>
           ))}
         </ul>
         <P>
-          One table deliberately has no such column: the deep-tier edges, because every column of it
-          is uploaded. A provenance stamp no writer could fill would be a promise rather than a
-          fact.
+          The deep-tier edges deliberately have no such column, because every column of them is
+          uploaded: a stamp no writer could fill would be a promise rather than a fact.
         </P>
+        <Callout tone="warning" title="Rows written before provenance carry no stamp">
+          <p>
+            Derived rows written before the stamp existed have an empty <Term>computed_from_hash</Term>,
+            and <strong>they cannot be back-filled</strong>: inventing a hash would be fabricated
+            provenance, worse than an empty column, because empty is legible as “we do not know”.
+          </p>
+          <p>
+            Such a number is reported as <em>unknown</em> — neither current nor stale — and the{" "}
+            <DocLink to="data-trust-report">Data Trust Report</DocLink> counts them. Running the
+            analysis again is what stamps them.
+          </p>
+        </Callout>
       </Section>
 
-      <Callout tone="limit" title="And every derived row that exists today carries no stamp">
-        <p>
-          The mechanism is shipped and correct. What has not happened is that anybody has run an
-          analysis since it shipped — so the rows sitting in the database were all written before
-          provenance existed, and <Term>computed_from_hash</Term> is empty on every one of them.
-        </p>
-        <p>
-          <strong>They cannot be back-filled.</strong> A row written before the anchor existed has
-          no hash, and inventing one would be fabricated provenance — worse than an empty column,
-          because an empty column is legible as “we do not know” and a made-up hash is not.
-        </p>
-        <p>
-          The practical reading: a computed number in a project that has not been recomputed
-          recently is reported as <em>unknown</em> rather than as current or stale, and{" "}
-          <DocLink to="data-trust-report">Data Trust Report</DocLink> is where you see that count.
-          Running the analysis again is what fills it in.
-        </p>
-      </Callout>
-
-      <Section id="what-to-do" title="What to do if you need a defensible figure today">
+      <Section id="what-to-do" title="What to do for a defensible figure">
         <P>
-          Freeze a <DocLink to="dataset-versions">dataset version</DocLink> and save a{" "}
-          <DocLink to="policy-versions-and-presets">policy version</DocLink> before the run, not
-          after. Both are fingerprinted at the moment you take them, and a run that names them can
-          be pointed at later; a run against unfrozen data cannot, however carefully it was recorded
-          elsewhere.
+          Run from a <DocLink to="model-validation">Validated Model</DocLink>: it fixes the{" "}
+          <DocLink to="dataset-versions">dataset version</DocLink> and{" "}
+          <DocLink to="policy-versions-and-presets">policy version</DocLink> the run reads, and the
+          run binds both. Avoid exploratory runs for anything you will quote — they are badged as
+          unvalidated in the record too.
         </P>
         <P>
-          Then export the three workbooks for that run and keep them together. It is assembly by
-          hand, and it works.
+          If the figure is a network measure, re-run its analysis on the current data first, so the
+          verdict does not carry an unstamped or earlier-dataset result. Then export the workbook and
+          keep it with the figure.
         </P>
       </Section>
 
@@ -136,7 +171,7 @@ export default function ReproducibilityRecord() {
         </P>
       </Section>
 
-      <Provenance from="the provenance columns the contract declares on each derived table, and the analyses that write them" />
+      <Provenance from="lib/trust/reproducibilityRecord.ts and the provenance columns the contract declares on each derived table" />
     </>
   );
 }

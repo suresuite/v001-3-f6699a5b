@@ -1,6 +1,14 @@
 // §6.3 section 12 — getting everything out, and getting it removed.
 
-import { PageTitle, Section, P, Key, Callout, Term, DocLink, AppLink, Provenance } from "@/components/docs/prose";
+import { PageTitle, InShort, Section, P, Key, Callout, Steps, DocTable, Code, Term, DocLink, AppLink, Provenance } from "@/components/docs/prose";
+import { deletionConfirmMessage } from "@/lib/projects/projectDeletion";
+import { DATASET_DELETE_TARGETS, type DatasetTab } from "@/lib/projects/datasetDeletion";
+
+/** The Data viewer's tab names — the reader's word for each dataset. */
+const TAB_LABEL: Record<DatasetTab, string> = {
+  bom: "BOM", inbound: "Inbound", outbound: "Outbound", forecast: "Forecast",
+  nodeList: "Node List", deepNodes: "Deep Nodes", deepEdges: "Deep Edges", deepSummary: "Deep Summary",
+};
 import { DocFigure } from "@/components/docs/DocFigure";
 import { COUNTS } from "@/components/docs/generated/dataModel.generated";
 import { PROJECT_DELETION } from "@/components/docs/generated/policy.generated";
@@ -12,6 +20,11 @@ export default function ExportingAndDeleting() {
       <PageTitle lead="Taking your data out, and having it removed.">
         Exporting and deleting your data
       </PageTitle>
+      <InShort items={[
+        <>Take your model out as three ordinary spreadsheets: what the engine received, the data, and the results.</>,
+        <>Deleting a project is one all-or-nothing step: either everything listed goes, or nothing does and you are told why.</>,
+        <>You can also delete one dataset — the BOM, a logistics file, the forecast or a deep-tier file — and keep the rest.</>,
+      ]} />
 
       <Section id="the-commitment" title="The commitment">
         <Key>
@@ -51,7 +64,30 @@ export default function ExportingAndDeleting() {
         </p>
       </Callout>
 
-      <Section id="deleting" title="Deleting a project">
+      <Section id="delete-a-project" title="Delete a project">
+        <Steps steps={[
+          { title: "Find the project", where: "/project-manager", body: <>In <AppLink to="/project-manager">Project Manager</AppLink>, open the project card's menu. <strong>Delete project</strong> appears only for those the database lets delete it: the project's creator, an app admin, or an Admin or Owner of its organization — working in that organization.</> },
+          { title: "Read the confirmation, then confirm", where: "Delete project", body: <>It says exactly what goes, what stays and what is detached. For a project called Control-unit tutorial:<div className="mt-2"><Code>{deletionConfirmMessage("Control-unit tutorial")}</Code></div></> },
+          { title: "Read the answer", where: "Project Manager", body: <>The deletion runs as one transaction. Either <strong>Project “…” deleted.</strong>, or <strong>Could not delete “…”: reason. Nothing was deleted.</strong> If no answer arrives at all, the list reloads: if the project is still there, nothing was deleted and you can try again.</>, check: "the project gone from the list, and a confirmation naming it." },
+        ]} />
+      </Section>
+
+      <Section id="delete-a-dataset" title="Delete one dataset, keep the project">
+        <P>Open the project's data viewer, pick the dataset's tab and use its delete control. The confirmation counts what will go and ends with “This cannot be undone.” Network metrics computed from that data become stale until the analysis runs again.</P>
+        <DocTable
+          caption="What each dataset's delete does — read from the data viewer's own rules."
+          head={["Tab", "Removes", "Also know"]}
+          rows={(Object.keys(DATASET_DELETE_TARGETS) as DatasetTab[]).map((tab) => {
+            const t = DATASET_DELETE_TARGETS[tab];
+            return [TAB_LABEL[tab], t.clears ? `Clears the uploaded fields of the project's ${t.noun}` : `All the project's ${t.noun}`, t.note ?? "—"];
+          })}
+        />
+        <Callout tone="warning" title="The button can appear for someone the database will refuse">
+          <p>The database lets the project's creator, an app admin, or an Admin or Owner of its organization delete a dataset. The data viewer also shows the control to anyone who can edit input data — an Editor, for instance — and their delete is refused with <Term>forbidden</Term>. Nothing is deleted in that case; ask the project's owner.</p>
+        </Callout>
+      </Section>
+
+      <Section id="deleting" title="What a project deletion reaches">
         <DocFigure id="delete-reach" />
         <Key>
           Two mechanisms do it, and knowing which is which tells you what is actually gone.

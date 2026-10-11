@@ -14,10 +14,12 @@
 // badge every run carries. So this page was telling readers that the one place
 // `result-binding` already holds does not hold.
 //
-// The page's underlying point survives and is narrower: the binding exists HERE,
-// per validation card, and not as a general property of every result. That is
-// what the Reproducibility record page is owed for, and the two pages now say
-// the same thing as each other.
+// The page's underlying point then was narrower: the binding existed HERE, per
+// validation card, and not as a general property of every result. That stopped
+// being true too — the reproducibility record shipped in WP 6.3 and every run
+// row binds its versions since WP 10.4 — so the WP 5.2a manual pass says so,
+// and the "not described in the contract" callout now renders only while the
+// generated coverage still lists the table as undescribed.
 //
 // The card was also described as "a record rather than a computation", which
 // leaves out what it is FOR: it adopts a warm-up length and a replication count
@@ -206,30 +208,38 @@ export default function ModelValidation() {
         </P>
       </Section>
 
-      <Callout tone="limit" title="The binding is on this card, not on every result">
+      <Callout tone="note" title="Every run binds the same four now">
         <p>
-          A validation names its dataset, policy set, scenario and engine. An ordinary{" "}
-          <DocLink to="reading-your-results">run's results</DocLink> do not yet leave the system as
-          one artifact carrying the same four — that is the reproducibility record, and it is owed.
+          A validation names its dataset, policy set, scenario and engine build. Today an
+          ordinary run does too: it records the Validated Model it follows, its versions and
+          fingerprints, its seed and schedule, and its RunKey, and the run-results workbook carries
+          them as a <DocLink to="reproducibility-record">reproducibility record</DocLink>.
         </p>
         <p>
-          So the honest reading is: <strong>a validated model is reproducible; an arbitrary figure
-          is not yet.</strong>{" "}
-          <DocLink to="reproducibility-record">Reproducibility record</DocLink> says exactly what is
-          in place and what is missing.
+          What a validation adds is the <strong>evidence</strong> — the verdict, its basis and the
+          run that supports it. A run older than that binding is listed in its record with what it
+          lacks and why.
         </p>
       </Callout>
 
-      <Callout tone="limit" title="This table is not yet described in the contract">
-        <p>
-          <Term>model_validations</Term> has no per-column description
-          {owing ? `, and is deferred to WP ${owing.wp}` : ""}. So this page has no column reference
-          to link you to, and will not invent one. What it does state — the four bound components,
-          the verdicts, the bases, the statuses and the warm-up methods — is read from the table's
-          own CHECK constraints and columns, which is a weaker source than a sidecar and the one
-          that exists.
-        </p>
-      </Callout>
+      {owing ? (
+        <Callout tone="limit" title="This table is not yet described in the contract">
+          <p>
+            <Term>model_validations</Term> has no per-column description, and is deferred to WP{" "}
+            {owing.wp}. So this page has no column reference to link you to, and will not invent
+            one. What it does state — the four bound components, the verdicts, the bases, the
+            statuses and the warm-up methods — is read from the table's own CHECK constraints and
+            columns, which is a weaker source than a sidecar and the one that exists.
+          </p>
+        </Callout>
+      ) : (
+        <P>
+          Every column of the card is described in the data contract:{" "}
+          <DocLink to="all-tables#model_validations">model_validations</DocLink> and{" "}
+          <DocLink to="all-tables#model_validation_evidence">model_validation_evidence</DocLink> in
+          the full table reference.
+        </P>
+      )}
 
       <Section id="related" title="Related">
         <P>

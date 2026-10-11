@@ -1756,12 +1756,16 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
         "title": "What makes an export verifiable"
       },
       {
+        "id": "where",
+        "title": "Where to get them"
+      },
+      {
         "id": "the-three",
         "title": "The three workbooks"
       },
       {
-        "id": "where",
-        "title": "Where to get them"
+        "id": "what-makes-each-checkable",
+        "title": "What makes each one checkable"
       },
       {
         "id": "related",
@@ -1770,19 +1774,31 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
     ]
   },
   "reproducibility-record": {
-    "minutes": 3,
+    "minutes": 5,
     "sections": [
       {
         "id": "what-it-would-be",
         "title": "What a reproducibility record is"
       },
       {
+        "id": "get-it",
+        "title": "Get the record for a run"
+      },
+      {
+        "id": "bindings",
+        "title": "What the record binds"
+      },
+      {
+        "id": "verdicts",
+        "title": "The verdict line"
+      },
+      {
         "id": "the-stamps-that-do-exist",
-        "title": "What is in place"
+        "title": "Computed rows and their stamp"
       },
       {
         "id": "what-to-do",
-        "title": "What to do if you need a defensible figure today"
+        "title": "What to do for a defensible figure"
       },
       {
         "id": "related",
@@ -1816,7 +1832,7 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
     ]
   },
   "exporting-and-deleting": {
-    "minutes": 4,
+    "minutes": 6,
     "sections": [
       {
         "id": "the-commitment",
@@ -1827,8 +1843,16 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
         "title": "Getting it out"
       },
       {
+        "id": "delete-a-project",
+        "title": "Delete a project"
+      },
+      {
+        "id": "delete-a-dataset",
+        "title": "Delete one dataset, keep the project"
+      },
+      {
         "id": "deleting",
-        "title": "Deleting a project"
+        "title": "What a project deletion reaches"
       },
       {
         "id": "related",
