@@ -24522,6 +24522,60 @@ restyled); the handoff's added visuals were taken only where hand-written explan
 and verification severities are facts with generated or code owners and need rendering from
 them; and the Q&A page's group headings are still `h3`, so they are absent from "On this page".
 
+### WP 5.2a redesign, content pass — the thin pages, rewritten from their code · 2026-10-11 · no migration
+
+**Owner-requested**: "enrich the content of the documentation, there are many places written with
+poor and not enough details to be useful."
+
+Preconditions held? **Partly.** Pages were ranked by rendered word count; the thinnest
+task-critical ones were rewritten (Simulation Lab, Experiments & comparison, Seeds/replications,
+the three network lenses, How planning works, Where a number came from, Project access, Performance
+& caching, Verifiable exports, Reproducibility record, Exporting & deleting, Model validation, Roles
+& capabilities). The rule held throughout: **a fact with a code owner is rendered from that code,
+not retyped.** Tables on these pages are produced by `runGateState`, `comparabilityFailures`,
+`pairedDifference`, `capacityVerdict`, `projectRightRefusal`, `buildValueChain`, `bindingsOf` /
+`buildReproducibilityRecord`, `deletionConfirmMessage`, `DATASET_DELETE_TARGETS`, the engine
+registry's run-window and disruption rules (with the mapper's own examples), the KPI catalog and the
+generated project-role seed. Worked examples that are not computed in the browser (How planning
+works) are the design's and are pinned by engine tests (golden #7, `test_planned_production.py`).
+
+To make that possible, three modules gained a node-safe leaf so a docs body can import them
+without the Supabase client: `src/lib/sim/scenarioDefaults.ts` (`SCENARIO_ENGINE_DEFAULTS`,
+`KPI_OPTIONS`), `src/lib/auth/projectRightsText.ts` (labels and refusal sentences), and
+`VALUE_CHAIN_REMEDY` exported from `valueChain.ts`. Every original export is re-exported where it
+was. **The move broke two source-reading gates, which is the lesson worth keeping**:
+`chains.mjs` parsed `SCENARIO_ENGINE_DEFAULTS` and `KPI_OPTIONS` out of their old files, and the
+scenarios sidecar cited `useScenarios.tsx:109` for a read the move shifted to `:95` (R12 caught it).
+Both fixed in the same branch; the contract was regenerated (version stamp only).
+
+Exit checks passed? **Partial, every red on the base too.** `npm test` 1 790 of 1 796 (the six
+`manualExample.test.ts` hashes); `contract:check` holds with its two existing warnings; typecheck
+15 of 15 held; `audit:ui` and `check:docs` clean; eslint at the base's count, none in the files
+written.
+
+Discovered — three pages were **wrong**, corrected, and said so in their own headers:
+1. *Reproducibility record* said the record "does not exist yet". It shipped in WP 6.3 (the
+   run-results workbook's `reproducibility` sheet) and every run binds its versions since WP 10.4.
+2. *Verifiable exports* described a policy-snapshot workbook with provenance rows. Since §4 D289 a
+   version's Export is the engine-input workbook.
+3. *Model validation*'s "not described in the contract" callout rendered unconditionally;
+   `model_validations` has a sidecar. It now renders only while the generated coverage says so.
+
+Discovered — **not fixed, reported** (each is product code, outside a docs package):
+- The /policies **Verifiable exports** panel's own copy still says a version's Export is "the
+  policy snapshot (with per-cell provenance and its policy_hash)" — the pre-D289 description.
+- The data viewer offers **Delete <dataset>** to anyone with Edit Input Data (`mayDelete`), but
+  `delete_project_dataset` admits only the creator, an app admin or an organization Admin/Owner, so
+  an Editor's delete is refused `forbidden`. The page states the database's rule and the mismatch.
+- `grant_project_delegation` is executable by `service_role` only and nothing in the app calls it:
+  the subtractive, expiring delegation rules are enforced and **unreachable**. The page says so and
+  points at a membership with an end date instead.
+- `+10 reps` (§4 D267) is still offered on a done run; the page warns that it adds nothing.
+
+Gap check: the remaining pages keep their text; the next thinnest are Interactive network space,
+Data Trust Report, Request log and Projects. The value-chain and reproducibility examples use
+illustrative inputs, labelled as such on the page — their labels and verdicts are the code's.
+
 ## 17. Sequencing
 
 | Phase | WPs | Focus | Blocks | Status |
