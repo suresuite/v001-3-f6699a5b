@@ -178,10 +178,13 @@ export default function AdminAudit({ isCollapsed, setIsCollapsed }: Props) {
   const { sorted, SortTH } = useTableSort(filtered, sortGetters);
   const openEntry = rows.find((r) => r.id === openEntryId) ?? null;
 
+  // The two summary panels are about people: who is using it and what they do.
+  // Entries with no actor (service writes, API-key calls, failed sign-ins) are still
+  // recorded and still listed in the log below — they are just not a "person".
   const people = (data?.by_actor ?? []).filter((a) => a.actor_user_id);
-  const unattributed = (data?.by_actor ?? []).find((a) => !a.actor_user_id);
+  const peopleActions = (data?.by_action ?? []).filter((a) => a.people > 0);
   const signIns = people.reduce((s, a) => s + a.sign_ins, 0);
-  const dataWrites = (data?.by_actor ?? []).reduce((s, a) => s + a.data_writes, 0);
+  const dataWrites = people.reduce((s, a) => s + a.data_writes, 0);
   const failed = (data?.failed_sign_ins ?? []).reduce((s, f) => s + f.n, 0);
   const rangeLabel = RANGES.find((r) => r.value === range)?.label.toLowerCase() ?? '';
 
@@ -196,7 +199,7 @@ export default function AdminAudit({ isCollapsed, setIsCollapsed }: Props) {
     { k: 'Entries', v: data ? fmtInt(data.total) : '—', sub: rangeLabel },
     { k: 'People active', v: data ? fmtInt(people.length) : '—', sub: 'with at least one entry' },
     { k: 'Sign-ins', v: data ? fmtInt(signIns) : '—', sub: failed ? `${fmtInt(failed)} failed` : 'no failed attempts' },
-    { k: 'Data changes', v: data ? fmtInt(dataWrites) : '—', sub: 'write statements' },
+    { k: 'Data changes', v: data ? fmtInt(dataWrites) : '—', sub: 'write statements by people' },
   ];
 
   const integrity = (
@@ -329,14 +332,14 @@ export default function AdminAudit({ isCollapsed, setIsCollapsed }: Props) {
                       <th className={TH}>Last active</th>
                     </tr></thead>
                     <tbody>
-                      {loading ? <LoadingRow colSpan={6} /> : (data?.by_actor ?? []).length === 0 ? (
+                      {loading ? <LoadingRow colSpan={6} /> : people.length === 0 ? (
                         <EmptyRow colSpan={6} message={`Nobody did anything recorded in the ${rangeLabel}.`} />
-                      ) : (data?.by_actor ?? []).map((a) => (
-                        <tr key={a.actor_user_id ?? 'none'} className={ROW_HOVER}>
+                      ) : people.map((a) => (
+                        <tr key={a.actor_user_id} className={ROW_HOVER}>
                           <td className={cn(TD, 'sticky left-0 bg-white')}>
                             <div className="text-[13px]">{actorLabel(a)}</div>
                             <div className="text-[11px] text-muted-foreground">
-                              {a.actor_user_id ? [a.actor_email, a.actor_org].filter(Boolean).join(' · ') : 'service writes and failed sign-ins'}
+                              {[a.actor_email, a.actor_org].filter(Boolean).join(' · ')}
                             </div>
                           </td>
                           <td className={cn(TD, 'text-right tabular-nums text-[13px]')}>{fmtInt(a.sign_ins)}</td>
@@ -363,9 +366,9 @@ export default function AdminAudit({ isCollapsed, setIsCollapsed }: Props) {
                       <th className={TH}>Last</th>
                     </tr></thead>
                     <tbody>
-                      {loading ? <LoadingRow colSpan={5} /> : (data?.by_action ?? []).length === 0 ? (
+                      {loading ? <LoadingRow colSpan={5} /> : peopleActions.length === 0 ? (
                         <EmptyRow colSpan={5} message="Nothing recorded." />
-                      ) : (data?.by_action ?? []).map((a) => (
+                      ) : peopleActions.map((a) => (
                         <tr key={`${a.plane}:${a.action}:${a.target_type}`} className={ROW_HOVER}>
                           <td className={cn(TD, 'sticky left-0 bg-white font-mono text-[11.5px]')}>
                             <span className={PLANE_TONE[a.plane]}>{a.plane}</span> {a.action}
@@ -381,14 +384,6 @@ export default function AdminAudit({ isCollapsed, setIsCollapsed }: Props) {
                 </div>
               </div>
             </div>
-
-            {unattributed && unattributed.total > 0 && (
-              <p className="text-[11.5px] text-muted-foreground">
-                {fmtInt(unattributed.total)} entries name no actor: writes made by a service with no user behind
-                it, API-key calls, and failed sign-ins (whoever typed the wrong password is not proven to be the
-                account holder, so the account is recorded as the target instead).
-              </p>
-            )}
 
             <div className={cn(SURFACE, 'overflow-hidden')}>
               <div className="overflow-x-auto">
