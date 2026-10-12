@@ -377,7 +377,6 @@ def calibrate_model(sess: Session, model: str, ctx: dict, frame: dict, seeds: di
     res["baseline"] = summarize(base_out)
     insp = sess.run(base_pol, {**frame, "seed": seeds["search"]}, inspection=True)
     res["baseline"]["_order_cv"] = order_cv(insp)
-    base_reps = base_out["replications"]
 
     # screening — one lever at a time, paired against the baseline's first `screen_reps` cells
     screen_frame = {**frame, "replications": screen_reps, "seed": seeds["search"]}
