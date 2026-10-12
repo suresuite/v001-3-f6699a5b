@@ -5,8 +5,9 @@
 # engine on your machine (laptop or Colab), check it gives the platform's numbers,
 # then run a sweep and a what-if that cost no quota.
 # **Time:** about 15 minutes. **You need:** a personal API key with `read:data`,
-# `read:policies`, `read:runs` and `write:runs` (and `write:policies` unless you set
-# `POLICY_VERSION_ID`). The engine is not handed out in demo mode.
+# `read:policies`, `read:runs` and `write:runs` (with `write:policies` it snapshots the
+# current policies; without, it uses `POLICY_VERSION_ID` or the newest saved version).
+# The engine is not handed out in demo mode.
 #
 # Nothing here writes to the platform. Edits are made on **local copies** only.
 
@@ -21,7 +22,8 @@
 # %% include: demo_data baseline
 
 # %%
-api = connect(BASE_URL, API_KEY, DEMO_DATA)
+api = connect(BASE_URL, API_KEY, DEMO_DATA, needs=["read:data", "read:policies", "read:runs", "write:runs"], mode=MODE)
+LIVE = api.live
 project = pick_project(api, PROJECT_ID)
 PID = project["id"]
 
@@ -44,7 +46,7 @@ SAFETY_DAYS = [7, 14, 28, 42]
 
 # %%
 data = dataset(api, PID)
-pol = policy(api, PID, POLICY_VERSION_ID or api.snapshot_policies(PID, "notebook 03")["id"])
+pol = policy(api, PID, baseline_policy_version(api, PID, POLICY_VERSION_ID, "notebook 03")["id"])
 print(data)
 print("policy version:", pol.label, "· policy_hash", (pol.policy_hash or "")[:12])
 data.tables["inbound"].head()

@@ -121,6 +121,7 @@ ss.simulate(ss.with_tables(data, suppliers=sup), pol)
 
 | Method | What it does |
 |---|---|
+| `api.key()` | Your key as the platform sees it now: the `scopes` it may use, `env`, `principal`, `project_ids` |
 | `api.projects()`, `api.scenarios(pid)`, `api.policy_versions(pid)` | List what you can see |
 | `api.freeze_dataset(pid, label)` · `api.snapshot_policies(pid, label)` | Freeze the current data / policies into a version (`write:data` / `write:policies`) |
 | `api.run_and_wait(pid, scenario_id, policy_version_id)` | Run on the platform and wait; repeating it returns the same run |

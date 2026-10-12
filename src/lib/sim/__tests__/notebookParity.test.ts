@@ -72,6 +72,14 @@ describe("offline demo answers in the gateway's shapes", () => {
     expect(pyTuple("RUN_BODY_FIELDS")).toEqual(zodKeys("RunCreateSchema"));
   });
 
+  it("GET /key answers with exactly the fields the notebooks' key check reads", () => {
+    const start = gateway.indexOf("const getKey: Handler");
+    expect(start, "getKey in the gateway").toBeGreaterThan(-1);
+    const body = gateway.slice(gateway.indexOf("body: {", start), gateway.indexOf("},\n  };", start));
+    const keys = [...body.matchAll(/^\s+([a-z_]+):/gm)].map((x) => x[1]).sort();
+    expect(pyTuple("KEY_FIELDS")).toEqual(keys);
+  });
+
   it("a finished run is `done`, as the worker writes it", () => {
     expect(read("sim-worker/sim_worker/worker.py")).toMatch(/"status": "done"/);
     expect(client).toMatch(/^TERMINAL = \("done", "failed", "cancelled"\)/m);
