@@ -96,7 +96,7 @@ that gap is defect D21. A dash means the column has no CSV origin.
 | `location_text` | — | `text` | — | — | The location string the source row carried. `geocode-locations` reads it to produce `latitude`/`longitude`. |
 | `longitude` | — | `numeric` | — | — | ANALYSIS OUTPUT — written by `geocode-locations` from `location_text`, NOT uploaded. It carries no provenance of its own: the geocoder is not yet a registered analysis kind, so `computed_from_hash` on this row describes the CRITICALITY columns only. Named for WP 4.4. |
 | `latitude` | — | `numeric` | — | — | ANALYSIS OUTPUT — see `longitude`. |
-| `is_critical_node` | — | `boolean` | — | — | ANALYSIS OUTPUT — whether this node is a NEXUS node: losing it alone puts at least the run's threshold (default 10 %) of finished-goods demand at risk. §4 D307 made this the live destination: one value per node, written by `analysis_apply_critical_nodes` from a `critical_nodes` run, and NULL on a node the latest run did not score. Before D307 the prediction was written onto `supply_chain_data` lane rows, which every rebuild deletes (D196). |
+| `is_critical_node` | — | `boolean` | — | — | ANALYSIS OUTPUT — whether this node is a NEXUS node: losing it alone puts at least the run's threshold (default 50 %) of finished-goods demand at risk, weighted by weekly volume. §4 D307 made this the live destination: one value per node, written by `analysis_apply_critical_nodes` from a `critical_nodes` run, and NULL on a node the latest run did not score. Before D307 the prediction was written onto `supply_chain_data` lane rows, which every rebuild deletes (D196). |
 | `critical_node_score` | — | `numeric` | — | — | ANALYSIS OUTPUT — the node's DEMAND AT RISK: the share of finished-goods demand (by weekly volume) that cannot be served if this node alone is lost, with no rerouting and no stock. In [0, 1]. Computed by `supabase/functions/_shared/criticalNodes.ts` (§4 D307). |
 | `prediction_timestamp` | — | `timestamp with time zone` | — | — | When the prediction columns were last written. Superseded by `computed_at`; both are set by `analysis_apply_critical_nodes`. |
 | `created_by` | — | `uuid` | — | — | The user who created the row, as the uploader asserted it. This application authenticates against `approved_users` rather than Supabase Auth, so the id is CLIENT-ASSERTED — a real constraint, not proof of identity (D28). |
@@ -273,7 +273,7 @@ ANALYSIS OUTPUT — see `longitude`.
 
 ### `is_critical_node`
 
-ANALYSIS OUTPUT — whether this node is a NEXUS node: losing it alone puts at least the run's threshold (default 10 %) of finished-goods demand at risk. §4 D307 made this the live destination: one value per node, written by `analysis_apply_critical_nodes` from a `critical_nodes` run, and NULL on a node the latest run did not score. Before D307 the prediction was written onto `supply_chain_data` lane rows, which every rebuild deletes (D196).
+ANALYSIS OUTPUT — whether this node is a NEXUS node: losing it alone puts at least the run's threshold (default 50 %) of finished-goods demand at risk, weighted by weekly volume. §4 D307 made this the live destination: one value per node, written by `analysis_apply_critical_nodes` from a `critical_nodes` run, and NULL on a node the latest run did not score. Before D307 the prediction was written onto `supply_chain_data` lane rows, which every rebuild deletes (D196).
 
 | | |
 |---|---|
@@ -473,6 +473,6 @@ Tiers upstream of the focal plant: 0 the plant itself, 1 a direct supplier, 2 an
 
 ---
 
-*Generated from data contract `4818369024a0`, engine `0.8.0`,
+*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
 sidecar `supabase/contract/node_list.contract.yaml`, table created by `20250829101944_b2ded57f-be29-4ae7-afff-38b3712e92e5.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

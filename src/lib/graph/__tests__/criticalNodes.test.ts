@@ -67,6 +67,10 @@ describe("the example project — the ground truth its own _about states", () =>
     expect(n.get("S1")!.sole_source_of).toEqual([]);
   });
 
+  it("at the default threshold all three suppliers are nexus — S1 and S3 exactly at 50 %", () => {
+    for (const id of ["S1", "S2", "S3"]) expect(n.get(id)!.is_critical, id).toBe(true);
+  });
+
   it("the critical path is nexus; the customer is a demand endpoint, never a supply point", () => {
     for (const id of ["P1", "M1", "M2", "S2"]) expect(n.get(id)!.score, id).toBe(1);
     expect(n.get("C1")!.score).toBe(0);
@@ -119,6 +123,9 @@ describe("the propagation rule", () => {
     ]);
     expect(n.get("S")!.score).toBe(0.3);
     expect(n.get("T")!.score).toBe(0.7);
+    // At the default 50 %, volume decides which of two identical chains is nexus.
+    expect(n.get("S")!.is_critical).toBe(false);
+    expect(n.get("T")!.is_critical).toBe(true);
   });
 
   it("is absolute, not a quota: a diversified material has no nexus supplier", () => {
@@ -188,6 +195,23 @@ describe("substitutions are stated, never silent (§5 T2)", () => {
 });
 
 describe("threshold and betweenness", () => {
+  it("the default is 50 % of finished-goods demand (owner decision, 2026-10-12)", () => {
+    expect(DEFAULT_NEXUS_THRESHOLD).toBe(0.5);
+    expect(scoreCriticalNodes([]).threshold).toBe(0.5);
+  });
+
+  it("decides on the stored score, so a node shown at 50 % is nexus at 50 %", () => {
+    // 1/12 + 4/12 + 1/12 sums to 0.49999999999999994 in floating point.
+    const rows: LaneRow[] = [
+      inbound("X", "M", 1), bom("M", "P1"), bom("M", "P2"), bom("M", "P3"),
+      outbound("P1", "C", 1), outbound("P2", "C", 4), outbound("P3", "C", 1),
+      inbound("Y", "N", 1), bom("N", "P4"), outbound("P4", "C", 6),
+    ];
+    const x = byId(rows).get("X")!;
+    expect(x.score).toBe(0.5);
+    expect(x.is_critical).toBe(true);
+  });
+
   it("accepts (0, 1] and falls back to the default otherwise", () => {
     expect(resolveThreshold(0.25)).toBe(0.25);
     expect(resolveThreshold("0.5")).toBe(0.5);

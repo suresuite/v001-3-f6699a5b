@@ -15,6 +15,7 @@ import {
   MobileRow,
   MobileStatGrid,
 } from '@/components/mobile';
+import { DEFAULT_NEXUS_THRESHOLD } from '../../supabase/functions/_shared/criticalNodes';
 
 /** One ranked node, as `get_critical_node_stats` returns it (§4 D307). */
 interface NexusNode {
@@ -154,7 +155,7 @@ export default function MLPrediction({ skin = false }: MLPredictionProps) {
   const stale = hasRun && stats?.is_current === false;
 
   const ruleCopy =
-    `Nexus = losing the node alone puts at least ${pct(stats?.threshold ?? 0.1)} of ` +
+    `Nexus = losing the node alone puts at least ${pct(stats?.threshold ?? DEFAULT_NEXUS_THRESHOLD)} of ` +
     `finished-goods demand at risk (${stats?.demand_basis === 'equal_per_product'
       ? 'every product weighted equally — no outbound volume was uploaded'
       : 'weighted by weekly volume'}).`;
