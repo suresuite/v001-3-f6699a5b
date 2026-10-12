@@ -37,6 +37,13 @@ def test_error_envelope_becomes_a_typed_exception(lib):
     assert (e.value.status, e.value.code, e.value.request_id) == (403, "missing_scope", "req-1")
 
 
+def test_missing_scope_says_how_to_get_it(lib):
+    api = client(lib, err(403, "missing_scope", "this key does not have the write:data scope"))
+    with pytest.raises(lib["SuReSuiteError"]) as e:
+        api.post("/projects/p/datasets:freeze")
+    assert "write:data" in str(e.value) and "/developer" in str(e.value)
+
+
 def test_rate_limited_is_retried(lib):
     api = client(lib, err(429, "rate_limited", headers={"Retry-After": "2"}), (200, {}, {"data": [], "next_cursor": None}))
     assert api.get("/projects") == {"data": [], "next_cursor": None}

@@ -23,8 +23,11 @@ api = connect(BASE_URL, API_KEY, DEMO_DATA)
 project = pick_project(api, PROJECT_ID)
 PID = project["id"]
 base = baseline_scenario(api, PID, SCENARIO_ID)
-version = (next(v for v in api.policy_versions(PID) if v["id"] == POLICY_VERSION_ID)
+version = (next((v for v in api.policy_versions(PID) if v["id"] == POLICY_VERSION_ID), None)
            if POLICY_VERSION_ID else api.snapshot_policies(PID, "notebook baseline"))
+if version is None:
+    raise SystemExit(f"POLICY_VERSION_ID {POLICY_VERSION_ID} is not a policy version of project {PID} "
+                     "— set it to \"\" in the CONFIG cell to snapshot the current policies")
 
 # %% [markdown]
 # ## Try changing

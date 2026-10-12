@@ -10,6 +10,10 @@
 # - **local Jupyter:** `pip install jupyterlab requests pandas matplotlib pyarrow openpyxl`,
 #   then `export SURESUITE_API_KEY="sk_test_…"` before `jupyter lab`.
 #
+# The key needs the scopes `read:data`, `read:policies`, `read:runs` and `write:runs`
+# to run on the platform — plus `write:policies` when the project has no saved policy
+# version yet, and `write:data` to freeze a dataset checkpoint (optional).
+#
 # Never paste a key into a cell. Run the cells in order (Runtime → Run all works too).
 
 # %% include: config
@@ -37,14 +41,24 @@ PID = project["id"]
 # ## 2 · Freeze the input data and the policies
 # A run always uses a frozen copy of the data and of the policies, so its result
 # can be reproduced. Freezing twice without changes returns the same version.
+# The run records the data it read by itself; freezing the data here only names
+# that checkpoint, so a key without `write:data` skips it.
 # **Expect:** a dataset version and a policy version, each with a hash.
 
 # %%
-frozen = api.freeze_dataset(PID, "notebook checkpoint")
-VERSION = (next(v for v in api.policy_versions(PID) if v["id"] == POLICY_VERSION_ID)
+VERSION = (next((v for v in api.policy_versions(PID) if v["id"] == POLICY_VERSION_ID), None)
            if POLICY_VERSION_ID else api.snapshot_policies(PID, "notebook baseline"))
-print("dataset version", frozen["id"], "· graph_hash", frozen["graph_hash"][:12])
+if VERSION is None:
+    raise SystemExit(f"POLICY_VERSION_ID {POLICY_VERSION_ID} is not a policy version of project {PID} "
+                     "— set it to \"\" in the CONFIG cell to snapshot the current policies")
 print("policy version ", VERSION["id"], "· policy_hash", VERSION["policy_hash"][:12])
+try:
+    frozen = api.freeze_dataset(PID, "notebook checkpoint")
+    print("dataset version", frozen["id"], "· graph_hash", frozen["graph_hash"][:12])
+except SuReSuiteError as e:
+    if e.code != "missing_scope":
+        raise
+    print("dataset not frozen here (this key has no write:data scope) — the run records the data it reads")
 
 # %% [markdown]
 # ## 3 · Choose a baseline scenario

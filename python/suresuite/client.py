@@ -47,7 +47,11 @@ class SuReSuiteError(RuntimeError):
     """The API's error envelope {"error": {"code", "message", "details"}} as an exception."""
 
     def __init__(self, status, code, message, details=None, request_id=None):
-        super().__init__(f"[{status} {code}] {message}")
+        hint = ""
+        if code == "missing_scope":  # a key's scopes are fixed when it is created
+            hint = (" — create a key that has this scope on the app's /developer page"
+                    " (Create API key), then set SURESUITE_API_KEY to it and run all cells again")
+        super().__init__(f"[{status} {code}] {message}{hint}")
         self.status, self.code, self.message = status, code, message
         self.details, self.request_id = details, request_id
 
