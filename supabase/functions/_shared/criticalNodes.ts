@@ -31,16 +31,19 @@
 //   outbound  product → customer    DEMAND: the product's weekly demand is the
 //                                   weight its loss carries.
 //
-// A node is NEXUS when its demand at risk is at least the threshold (default
-// 10 % of finished-goods demand). That is an absolute property, not a quota: a
-// well-diversified network can have none, and a single-product chain is nexus
-// along its whole critical path, which is a true statement about it.
+// A node is NEXUS when losing it alone puts at least the threshold of
+// finished-goods demand at risk, weighted by weekly volume — by default 50 %
+// (owner decision, 2026-10-12; it was 10 %). That is an absolute property, not a
+// quota: a well-diversified network can have none, and a single-product chain is
+// nexus along its whole critical path, which is a true statement about it. The
+// test is made on the STORED (4 dp) score, so a node shown at 50 % is never
+// reported as below a 50 % threshold by floating-point residue.
 //
 // This module reads no node TYPE. A node's role is authored once, on
 // `node_list.echelon` (§4 D127), and the edge kind is a fact about the EDGE.
 
 export const CRITICAL_NODES_METHOD = "demand_at_risk" as const;
-export const DEFAULT_NEXUS_THRESHOLD = 0.1;
+export const DEFAULT_NEXUS_THRESHOLD = 0.5;
 
 /** A share at or above this is a sole source (floating-point slack on 1.0). */
 const SOLE_SOURCE_SHARE = 0.999;
@@ -316,10 +319,11 @@ export function scoreCriticalNodes(
 
   const scored: NodeScore[] = ids.map((id) => {
     const { dar, affected } = risk.get(id)!;
+    const score = Math.round(dar * 10000) / 10000;
     return {
       node_id: id,
-      score: Math.round(dar * 10000) / 10000,
-      is_critical: dar > 0 && dar >= threshold,
+      score,
+      is_critical: dar > 0 && score >= threshold,
       rank: rankOf.get(id) ?? null,
       products_affected: affected,
       sole_source_of: (soleSourceOf.get(id) ?? []).sort(),

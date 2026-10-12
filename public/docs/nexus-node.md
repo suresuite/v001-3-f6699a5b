@@ -6,7 +6,7 @@ A **nexus node** is a point in your supply network whose loss, on its own, would
 
 Each node's score is its **demand at risk**: the share of finished-goods demand you could not serve if that node alone were lost and nothing were rerouted, rebalanced or drawn from stock.
 
-A node is **nexus** when its demand at risk is at least the threshold, which is **10% of finished-goods demand** by default. This is an absolute test, not a quota:
+A node is **nexus** when losing it alone puts at least **50% of finished-goods demand** at risk, weighted by weekly volume. 50% is the default threshold. This is an absolute test, not a quota:
 
 - A well-diversified network can have no nexus nodes at all.
 - A single-product chain is nexus all along its critical path.
@@ -25,6 +25,8 @@ The score is computed from your project's lane graph: the inbound, BOM and outbo
 
 - Losing **S2** puts **100%** of demand at risk.
 - Losing **S1** or **S3** puts **50%** at risk each.
+
+All three suppliers are nexus: S2 is well above the threshold, and S1 and S3 are exactly at it.
 
 ## What the panel shows
 
