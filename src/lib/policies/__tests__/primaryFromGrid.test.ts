@@ -76,3 +76,34 @@ describe("primary supplier — verifier agrees with the grid", () => {
     );
   });
 });
+
+describe("a sub-assembly made in-house needs no primary supplier (D308)", () => {
+  /** The "(made in-house)" line `useStageRows` builds for a BOM intermediate (D175). */
+  const inHouse = (material: string): StageRow =>
+    ({
+      key: `(made in-house)::${material}`,
+      supplier_id: "(made in-house)",
+      material_id: material,
+      __in_house: true,
+      __supplier_count: 0,
+      __lane_count: 0,
+    }) as unknown as StageRow;
+
+  it("an intermediate is not asked for a primary supplier", () => {
+    // AA-ver3's shape: 65 of these each blocked the run with
+    // "has no primary supplier — select one", which the grid offers no way to do.
+    const ids = run([inHouse("E1.061.000.11-SA"), lane("S001", "M0001", 1, true)]);
+    expect(ids).not.toContain("s-noprim-E1.061.000.11-SA");
+    expect(ids).toEqual([]);
+  });
+
+  it("its leaves are still graded — an unsourced leaf still blocks", () => {
+    const unassigned = {
+      key: "(unassigned supplier)::E2.010.000.00",
+      supplier_id: "(unassigned supplier)",
+      material_id: "E2.010.000.00",
+      __needs_supplier: true,
+    } as unknown as StageRow;
+    expect(run([inHouse("E1.061.000.11-SA"), unassigned])).toEqual(["s-nosup-E2.010.000.00"]);
+  });
+});

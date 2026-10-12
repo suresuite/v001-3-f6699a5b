@@ -123,10 +123,21 @@ export function verifyProjectPolicies(input: VerifyInput): VerifyResult {
       hint: "Upload inbound logistics in Data Manager.",
     });
   }
-  // Exactly one primary supplier per material; every material sourced.
+  // Exactly one primary supplier per BOUGHT material; every material sourced.
+  //
+  // §4 D308 — a "(made in-house)" line is a sub-assembly (D175): made, not
+  // bought, so there is no supplier to be primary. Grading it here demanded
+  // "select a primary supplier" for every intermediate — 65 run-blockers on
+  // `Project AA - ver3` that no action on the grid could clear, because the
+  // grid (rightly) offers no supplier for them. The engine flattens the BOM
+  // through intermediates (`_flatten_multi_level_bom`), so only their leaves
+  // need a source, and those are graded as their own lines.
+  const boughtRows = supplierRows.filter(
+    (r) => !(r as Record<string, unknown>).__in_house && r.supplier_id !== "(made in-house)",
+  );
   const primariesByMat = new Map<string, number>();
   const materialsMissingSupplier = new Set<string>();
-  for (const r of supplierRows) {
+  for (const r of boughtRows) {
     const mat = String(r.material_id ?? "");
     if ((r as Record<string, unknown>).__needs_supplier || r.supplier_id === "(unassigned supplier)") {
       if (mat) materialsMissingSupplier.add(mat);
@@ -154,7 +165,7 @@ export function verifyProjectPolicies(input: VerifyInput): VerifyResult {
       });
     }
   }
-  const mats = new Set(supplierRows.map((r) => String(r.material_id ?? "")));
+  const mats = new Set(boughtRows.map((r) => String(r.material_id ?? "")));
   for (const m of mats) {
     if (materialsMissingSupplier.has(m)) continue;
     if (!primariesByMat.has(m) && m !== "(no material data)" && m !== "") {
