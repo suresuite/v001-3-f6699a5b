@@ -14161,7 +14161,7 @@ export const REFERENCE_TABLES: RefTable[] = [
         "csvHeader": null,
         "required": false,
         "validate": null,
-        "meaning": "ANALYSIS OUTPUT — whether this node is a NEXUS node: losing it alone puts at least the run's threshold (default 10 %) of finished-goods demand at risk. §4 D307 made this the live destination: one value per node, written by `analysis_apply_critical_nodes` from a `critical_nodes` run, and NULL on a node the latest run did not score. Before D307 the prediction was written onto `supply_chain_data` lane rows, which every rebuild deletes (D196).",
+        "meaning": "ANALYSIS OUTPUT — whether this node is a NEXUS node: losing it alone puts at least the run's threshold (default 50 %) of finished-goods demand at risk, weighted by weekly volume. §4 D307 made this the live destination: one value per node, written by `analysis_apply_critical_nodes` from a `critical_nodes` run, and NULL on a node the latest run did not score. Before D307 the prediction was written onto `supply_chain_data` lane rows, which every rebuild deletes (D196).",
         "primaryKey": false,
         "unique": false,
         "references": null,
