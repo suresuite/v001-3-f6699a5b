@@ -26,6 +26,15 @@
 //   node scripts/seed_project_tron_ver2.mjs --dry-run
 //   USER_ID=<uuid> USER_EMAIL=<email> node scripts/seed_project_tron_ver2.mjs
 //
+// The dataset is data, not code: DATASET=<path under the repo> seeds another
+// dataset of the same shape through the same lifecycle (default
+// scripts/tron_ver2/dataset.json). scripts/seed_project_accurate_tron.mjs is the
+// ACCURATE_Tron entry point. A dataset may also carry `policy_overrides`
+// (bulk_upsert_policy_overrides rows) and `project.policy_label`.
+// EXPECT_ORG=<organization> makes the final visibility check also require that
+// the project landed in that organization — a seed under the wrong identity
+// fails instead of quietly creating the project somewhere else.
+//
 // A LIVE run needs BOTH USER_ID and USER_EMAIL (the approved_users identity
 // the project must belong to — organization scoping hides it otherwise; see
 // seed_example_project.mjs for the auth model).
@@ -45,15 +54,18 @@ if (!SUPABASE_URL || !ANON_KEY) {
 }
 
 const DRY_RUN = process.argv.includes("--dry-run");
+const DATASET = process.env.DATASET || "scripts/tron_ver2/dataset.json";
+const EXPECT_ORG = process.env.EXPECT_ORG || null;
 const USER_ID = process.env.USER_ID || null;
 const USER_EMAIL = process.env.USER_EMAIL || null;
 const USER_NAME = process.env.USER_NAME || "TRON Seed";
 const BATCH = 250; // rows per bulk RPC call (560-material masters → 3 calls)
 
 const ds = JSON.parse(
-  readFileSync(join(repoRoot, "scripts/tron_ver2/dataset.json"), "utf8"),
+  readFileSync(join(repoRoot, DATASET), "utf8"),
 );
-const PROJECT = ds.project; // { name, plant_name, supply_chain_model, bom_level }
+const PROJECT = ds.project; // { name, plant_name, supply_chain_model, bom_level, policy_label? }
+const OVERRIDES = ds.policy_overrides ?? []; // [{ scope, target_key, family, patch }]
 
 // ── Local validation (mirrors the §8.1 gate's structural hard blocks) ───────
 const FULFILLMENT_MODES = new Set(["mto", "mts"]);
@@ -95,6 +107,11 @@ function validate() {
   }
   for (const o of ds.outbound)
     if (!productIds.has(o.product_id)) errors.push(`outbound: unknown product ${o.product_id}`);
+  const lanes = new Set(ds.inbound.map((a) => `${a.supplier_id}::${a.material_id}`));
+  for (const o of OVERRIDES) {
+    if (o.scope !== "node" || !o.family || !o.patch) errors.push(`override: malformed ${JSON.stringify(o)}`);
+    else if (!lanes.has(o.target_key)) errors.push(`override: no inbound lane ${o.target_key}`);
+  }
   return errors;
 }
 
@@ -181,12 +198,13 @@ const arcRows = (rows, projectId) =>
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
-  console.log(`Project TRON - ver2 seed — ${DRY_RUN ? "DRY RUN" : "LIVE"}`);
+  console.log(`${PROJECT.name} seed — ${DRY_RUN ? "DRY RUN" : "LIVE"} (${DATASET})`);
   console.log(`  ${SUPABASE_URL}`);
   console.log(
     `  dataset: ${ds.suppliers.length} suppliers · ${ds.materials.length} materials · ` +
     `${ds.products.length} products · ${ds.bom.length} bom · ${ds.inbound.length} inbound · ` +
-    `${ds.outbound.length} outbound · ${ds.scenarios.length} scenarios`,
+    `${ds.outbound.length} outbound · ${ds.scenarios.length} scenarios · ` +
+    `${OVERRIDES.length} policy override(s)`,
   );
 
   const errors = validate();
@@ -311,6 +329,20 @@ async function main() {
     first = false;
   }
 
+  // 5b) Per supplier × material overrides the dataset carries (e.g. a primary
+  //     supplier the engine's cheapest-lane rule would not pick) — the same RPC
+  //     the /policies grid saves through. Upsert on (project, scope, key, family).
+  if (OVERRIDES.length) {
+    console.log("── saving policy overrides");
+    const rows = OVERRIDES.map(({ scope, target_key, family, patch }) => ({ scope, target_key, family, patch }));
+    for (let i = 0; i < rows.length; i += BATCH) {
+      await rpc("bulk_upsert_policy_overrides", {
+        p_project_id: projectId, p_rows: rows.slice(i, i + BATCH), _actor_user_id: USER_ID,
+      });
+    }
+    console.log(`  ${rows.length} override(s)`);
+  }
+
   // 6) Immutable policy version — only when the live tables differ from the
   //    latest saved snapshot (keeps re-runs from stacking identical versions).
   console.log("── snapshotting policy version");
@@ -325,7 +357,7 @@ async function main() {
   } else {
     versionId = await rpc("snapshot_policy", {
       p_project_id: projectId,
-      p_label: "TRON ver2 baseline (WSC 2026)",
+      p_label: PROJECT.policy_label ?? "TRON ver2 baseline (WSC 2026)",
       p_user_id: USER_ID,
       p_user_email: USER_EMAIL,
       p_user_name: USER_NAME,
@@ -383,7 +415,13 @@ async function main() {
     appendFileSync(process.env.GITHUB_OUTPUT,
       `project_id=${projectId}\npolicy_version_id=${versionId}\n`);
   }
-  if (!datasetComplete || !seen) process.exit(1);
+  const orgOk = !EXPECT_ORG || (seen && seen.organization === EXPECT_ORG);
+  if (EXPECT_ORG) {
+    if (orgOk) console.log(`✓ project is in organization "${EXPECT_ORG}"`);
+    else console.error(`✗ project is in organization "${seen?.organization ?? "(not visible)"}", ` +
+      `expected "${EXPECT_ORG}" — seed under a user of that organization`);
+  }
+  if (!datasetComplete || !seen || !orgOk) process.exit(1);
 }
 
 main().catch((err) => {
