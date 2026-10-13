@@ -370,7 +370,8 @@ type Handler = (ctx: Ctx) => Promise<HandlerResult>;
 interface Route {
   method: string;
   pattern: RegExp;
-  scope: string;
+  /** null = any valid key may call it (only `GET /key`, which describes the caller's own key). */
+  scope: string | null;
   handler: Handler;
 }
 
@@ -1040,6 +1041,24 @@ const getPolicyVersion: Handler = async (ctx) => {
   return { status: 200, body: data };
 };
 
+/** The calling key as the gateway sees it NOW: the scopes it may use (a personal
+ *  key whose owner does not manage keys is cut to the read scopes, whatever it was
+ *  created with) and the projects it is restricted to. Lets a client say what is
+ *  missing before it starts, rather than failing partway through. */
+const getKey: Handler = async (ctx) => {
+  const p = ctx.principal;
+  return {
+    status: 200,
+    body: {
+      key_prefix: p.keyPrefix,
+      env: p.env,
+      principal: p.actorUserId ? "personal" : "org",
+      scopes: p.scopes,
+      project_ids: p.projectIds,
+    },
+  };
+};
+
 // ── Phase 12 · WP 12.4 — the engine, for a key's own machine ───────────────
 //
 // Short-lived signed URLs to the engine wheels in the PRIVATE `engine` bucket,
@@ -1106,6 +1125,7 @@ const routes: Route[] = [
   { method: "POST", pattern: new RegExp(`^/runs/(${UUID}):add-reps$`), scope: "write:runs", handler: addRunReps },
   { method: "GET", pattern: new RegExp(`^/runs/(${UUID})/validation$`), scope: "read:runs", handler: getRunValidation },
   { method: "GET", pattern: new RegExp(`^/engine$`), scope: "read:data", handler: getEngine },
+  { method: "GET", pattern: new RegExp(`^/key$`), scope: null, handler: getKey },
   { method: "GET", pattern: new RegExp(`^/keys$`), scope: "admin:keys", handler: listKeys },
   { method: "POST", pattern: new RegExp(`^/keys/(${UUID}):revoke$`), scope: "admin:keys", handler: revokeKey },
 ];
@@ -1197,7 +1217,7 @@ Deno.serve(async (req) => {
     scopeUsed = route.scope;
 
     // [4] scope (tenancy is checked inside each handler against its ids)
-    requireScope(principal, route.scope);
+    if (route.scope) requireScope(principal, route.scope);
 
     // [5] rate limits
     const limits = await loadLimits(principal);

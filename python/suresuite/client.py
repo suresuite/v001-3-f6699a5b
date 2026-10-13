@@ -2,7 +2,8 @@
 # The `suresuite` Python package's client (python/suresuite/client.py), inlined
 # into each notebook by scripts/notebooks/build-notebooks.mjs. Run this cell;
 # you do not need to read it. It defines:
-#   connect()                      the API client (live, or the offline demo)
+#   connect()                      the API client (live, or the offline demo), checked
+#                                  against the scopes the notebook needs
 #   api.run_and_wait(...)          dispatch a simulation run and poll it to the end
 #   kpi_table / replications_frame / paired_compare / assert_disruption_applied
 #   editing_policies(...)          edit policies and ALWAYS put them back
@@ -41,15 +42,28 @@ T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8:
        18: 2.101, 19: 2.093, 20: 2.086, 21: 2.08, 22: 2.074, 23: 2.069, 24: 2.064, 25: 2.06,
        26: 2.056, 27: 2.052, 28: 2.048, 29: 2.045, 30: 2.042}
 _MONEY = {"symbol": "€"}  # replaced by the engine's declared unit when the catalog is read
+KEY_FIELDS = ("key_prefix", "env", "principal", "scopes", "project_ids")  # GET /key, as the gateway answers it
 
 
 class SuReSuiteError(RuntimeError):
     """The API's error envelope {"error": {"code", "message", "details"}} as an exception."""
 
     def __init__(self, status, code, message, details=None, request_id=None):
-        super().__init__(f"[{status} {code}] {message}")
+        hint = ""
+        if code == "missing_scope":  # a key's scopes are fixed when it is created
+            hint = (" — create a key that has this scope on the app's /developer page"
+                    " (Create API key), then set SURESUITE_API_KEY to it and run all cells again")
+        super().__init__(f"[{status} {code}] {message}{hint}")
         self.status, self.code, self.message = status, code, message
         self.details, self.request_id = details, request_id
+
+
+class Stop(Exception):
+    """A notebook cannot go on, and says why and what to do. In Jupyter and Colab it
+    shows as that one message rather than a traceback (`%tb` still has the trace)."""
+
+    def _render_traceback_(self):
+        return [f"Stopped: {self}"]
 
 
 # ── transports: how a request reaches the platform ──────────────────────────
@@ -134,6 +148,17 @@ class SuReSuite:
             cursor = page.get("next_cursor")
             if not cursor:
                 return rows
+
+    # ── the key itself ──
+    def key(self):
+        """The calling key as the platform sees it now: `scopes`, `env`, `principal`
+        and `project_ids`. None from a gateway that predates `GET /key`."""
+        try:
+            return self.get("/key")
+        except SuReSuiteError as e:
+            if e.code == "route_not_found":
+                return None
+            raise
 
     # ── projects and input data ──
     def projects(self):
@@ -221,15 +246,20 @@ class SuReSuite:
     def cancel(self, run_id):
         return self.post(f"/runs/{run_id}:cancel")
 
-    def series(self, run_id):
+    def series(self, run_id, expired_ok=False):
         """Every weekly series of a run as ONE long table:
-        rep_index · model_rep · event_rep · week · one column per series."""
+        rep_index · model_rep · event_rep · week · one column per series.
+        `expired_ok=True` returns None (and says so) for a run whose series have expired."""
         page = self.get(f"/runs/{run_id}/replications", include="time_series", limit=100)
         where = page.get("series") or {}
         if where.get("location") == "object" and where.get("url"):
             blob = self.t.fetch(where["url"])  # live: Parquet bytes; demo: a column table
             return pd.read_parquet(io.BytesIO(blob)) if isinstance(blob, (bytes, bytearray)) else pd.DataFrame(blob)
         if where.get("location") == "expired":
+            if expired_ok:
+                print(f"run {run_id}: its weekly series have expired (the KPIs above are kept) — dispatch it again "
+                      "with force_rerun=True to compute them")
+                return None
             raise SuReSuiteError(410, "series_expired",
                                  "this run's weekly series have expired; re-run its RunKey to reproduce them",
                                  where)
@@ -340,13 +370,14 @@ def kpi_table(run, kpis=None):
     keys = [k for k in (kpis or _order(agg)) if k in agg]
     return pd.DataFrame([{"kpi": k, "measure": kpi_label(k), "mean": fmt_kpi(k, agg[k]),
                           "± 95% CI": fmt_kpi(k, ci.get(k)) if ci.get(k) is not None else "—",
-                          "value": agg[k]} for k in keys]).set_index("kpi")
+                          "value": agg[k]} for k in keys],
+                        columns=["kpi", "measure", "mean", "± 95% CI", "value"]).set_index("kpi")
 
 
 def replications_frame(replications):
     """One row per replication: rep_index, model_rep, event_rep and every KPI."""
-    return pd.DataFrame([{"rep_index": r["rep_index"], **(r.get("kpis") or {})} for r in replications]
-                        ).set_index("rep_index").sort_index()
+    rows = [{"rep_index": r["rep_index"], **(r.get("kpis") or {})} for r in replications]
+    return pd.DataFrame(rows, columns=None if rows else ["rep_index"]).set_index("rep_index").sort_index()
 
 
 def capacity_binding(run):
@@ -433,7 +464,10 @@ def pick_project(api, project_id=""):
     """The configured project, or the first one this key can see."""
     projects = api.projects()
     if not projects:
-        raise SystemExit("this key can see no projects — check its organization and project restriction on /developer")
+        raise Stop("this key can see no projects — check its organization and project restriction on /developer")
+    if project_id and project_id not in {p["id"] for p in projects}:
+        raise Stop(f"PROJECT_ID {project_id} is not a project this key can see — set PROJECT_ID = \"\" in the "
+                   "CONFIG cell to use the first one, or download the notebook again from /developer")
     project = api.project(project_id) if project_id else projects[0]
     print(f"project: {project['name']}  ({project['id']})")
     return project
@@ -445,7 +479,10 @@ def baseline_scenario(api, project_id, scenario_id=""):
     seed 42, common random numbers on)."""
     scenarios = api.scenarios(project_id)
     if scenario_id:
-        sc = next(s for s in scenarios if s["id"] == scenario_id)
+        sc = next((s for s in scenarios if s["id"] == scenario_id), None)
+        if sc is None:
+            raise Stop(f"SCENARIO_ID {scenario_id} is not a scenario of project {project_id} — set "
+                       "SCENARIO_ID = \"\" in the CONFIG cell to pick or create a baseline")
     else:
         sc = next((s for s in scenarios if not s.get("disruption_schedule")), None)
         if sc is None:
@@ -460,6 +497,40 @@ def baseline_scenario(api, project_id, scenario_id=""):
     print(f"scenario: {sc['name']}  ({sc['id']}) — {sc['horizon_days']} days, {sc['replications']} replications, "
           f"seed {sc['seed']}, CRN {'on' if sc.get('crn') else 'off'}")
     return sc
+
+
+def baseline_policy_version(api, project_id, version_id="", label="notebook baseline"):
+    """The configured policy version, else a snapshot of the current policies (an
+    unchanged configuration returns the version that already holds it), else — for a
+    key without `write:policies` — the newest saved version, and it says so."""
+    versions = api.policy_versions(project_id)
+    if version_id:
+        v = next((v for v in versions if v["id"] == version_id), None)
+        if v is None:
+            raise Stop(f"POLICY_VERSION_ID {version_id} is not a policy version of project {project_id} — set "
+                       "POLICY_VERSION_ID = \"\" in the CONFIG cell to use the current policies")
+        return v
+    try:
+        return api.snapshot_policies(project_id, label)
+    except SuReSuiteError as e:
+        if e.code != "missing_scope":
+            raise
+    if not versions:
+        raise Stop("this project has no saved policy version and this key cannot save one (no write:policies) "
+                   "— save one in the app (/policies → Save version) and run again")
+    newest = max(versions, key=lambda v: v.get("created_at") or "")
+    print(f"note: this key cannot snapshot policies (no write:policies), so the newest saved version is used: "
+          f"{newest.get('label') or 'unlabelled'} — it may differ from the policies as they are now")
+    return newest
+
+
+def require_done(run):
+    """Stop here, with the reason, unless the run finished."""
+    if run["status"] != "done":
+        raise Stop(f"run {run['id']} ended {run['status']}"
+                   + (f": {run.get('error_message')}" if run.get("error_message") else "")
+                   + " — nothing below has results to read")
+    return run
 
 
 def stress_scenario(api, project_id, base, events, name):
@@ -574,9 +645,12 @@ def plot_series(series_by_label, column, title=None, window=None, warmup_week=No
     replication. `series_by_label` is {label: api.series(run_id)}; `window` is a
     (start_week, end_week) disruption window to shade."""
     _need_plt()
+    if not any(df is not None for df in series_by_label.values()):
+        print("no weekly series to plot")
+        return
     fig, ax = plt.subplots(figsize=(8, 3.4))
     for i, (label, df) in enumerate(series_by_label.items()):
-        if column not in df:
+        if df is None or column not in df:
             continue
         g = df.groupby("week")[column]
         color = PALETTE[i % len(PALETTE)]
@@ -688,6 +762,10 @@ class DemoTransport:
             if m.group(1) != self.pid:
                 return self._err(404, "project_not_found", "project not found")
             return self._project(method, m.group(2) or "", body, headers)
+        if p == "/key" and method == "GET":
+            return self._ok({"key_prefix": "demo", "env": "test", "principal": "personal",
+                             "scopes": [f"{a}:{b}" for b in ("data", "policies", "runs") for a in ("read", "write")],
+                             "project_ids": None})
         if p == "/engine" and method == "GET":
             return self._err(403, "demo_no_engine",
                              "the offline demo cannot hand out the engine — it comes with an API key "
@@ -874,10 +952,38 @@ class DemoTransport:
         return self._err(404, "route_not_found", f"no route for {method} /runs/…{sub}")
 
 
-def connect(base_url, api_key=None, demo_data=None):
-    """A live client when you have a key, otherwise the offline demo."""
-    if api_key:
-        return SuReSuite(HttpTransport(base_url, api_key), live=True)
+def _demo(demo_data):
     if isinstance(demo_data, str):  # the notebook embeds it compressed (raw deflate + base64)
         demo_data = json.loads(zlib.decompress(base64.b64decode(demo_data), -15))
     return SuReSuite(DemoTransport(demo_data), live=False)
+
+
+def connect(base_url, api_key=None, demo_data=None, needs=(), mode="auto"):
+    """A live client when you have a key, otherwise the offline demo.
+
+    `needs` are the scopes the caller will use. A live key is checked against them
+    BEFORE anything runs: one the platform would refuse partway through stops here
+    and says what is missing — or, in `mode="auto"` with demo data at hand, says so
+    and continues as the offline demo, so a notebook never breaks halfway."""
+    if not api_key:
+        return _demo(demo_data)
+    api = SuReSuite(HttpTransport(base_url, api_key), live=True)
+    if not needs:
+        return api
+    info = api.key()
+    if info is None:  # a gateway without GET /key: nothing to check against
+        return api
+    missing = [s for s in needs if s not in (info.get("scopes") or [])]
+    if not missing:
+        return api
+    why = (f"this key ({info.get('principal')} key sk_{info.get('env')}_{info.get('key_prefix')}…) cannot use "
+           f"{', '.join(missing)}, which this notebook needs. Create a key on the app's /developer page with "
+           f"{', '.join(needs)}, then set SURESUITE_API_KEY to it and run all cells again.")
+    if info.get("principal") == "personal" and not any(s.startswith("write:") for s in info.get("scopes") or []):
+        why += (" A personal key is read-only unless its owner is an organization admin or a modeler — "
+                "ask one of them for the role or for a key.")
+    if mode == "live" or demo_data is None:
+        raise Stop(why)
+    print(f"{why}\n\nUntil then this notebook runs in DEMO mode on the example project, so every cell "
+          "still works.")
+    return _demo(demo_data)

@@ -192,6 +192,7 @@ const ENDPOINTS: [string, string, string][] = [
   ['POST /projects/{id}/runs', 'write:runs', 'Dispatch a run (Idempotency-Key supported)'],
   ['GET /runs/{id} · /replications · /validation', 'read:runs', 'Status, KPIs, per-rep rows, credibility badge'],
   ['POST /runs/{id}:cancel · :add-reps', 'write:runs', 'Cancel or extend an in-flight run'],
+  ['GET /key', 'any key', 'The calling key: the scopes it may use now, its projects'],
   ['GET /keys · POST /keys/{id}:revoke', 'admin:keys', 'Key inventory / kill switch over the API'],
 ];
 

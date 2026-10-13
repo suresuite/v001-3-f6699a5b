@@ -4,7 +4,8 @@
 # **You will:** change one policy (safety stock), run the old version A and the new
 # version B side by side, and see whether B is really better.
 # **Time:** about 15 minutes. **You need:** nothing for demo mode; with a key, a
-# project you may edit (use a sandbox if others work on it).
+# project you may edit (use a sandbox if others work on it) and the scopes `read:data`,
+# `read:policies`, `write:policies`, `read:runs` and `write:runs`.
 #
 # Your policies are edited inside a protected block and **always put back**
 # afterwards, even if a run fails.
@@ -18,7 +19,9 @@
 # %% include: demo_data baseline safety_stock_28d s2_outage s2_outage_safety_stock_28d s2_outage_safety_stock_7d s2_outage_safety_stock_14d s2_outage_safety_stock_42d
 
 # %%
-api = connect(BASE_URL, API_KEY, DEMO_DATA)
+api = connect(BASE_URL, API_KEY, DEMO_DATA,
+              needs=["read:data", "read:policies", "write:policies", "read:runs", "write:runs"], mode=MODE)
+LIVE = api.live
 project = pick_project(api, PROJECT_ID)
 PID = project["id"]
 base = baseline_scenario(api, PID, SCENARIO_ID)

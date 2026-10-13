@@ -326,6 +326,7 @@ REST resources that map 1:1 onto operations that already exist. Async operations
 | `GET /v1/runs/{run_id}/validation` | read:runs | `model_validations` / mapping report (§9.5) | credibility badge: validated/stale/unvalidated |
 | `POST /v1/projects/{id}/experiments` *(Phase 4)* | write:experiments | experiment machinery (§9.1) | comparison / DOE / stress / portfolio |
 | `POST /v1/webhooks` · `GET/DELETE …` | admin:keys | `api_webhooks` (§9) | signed callbacks |
+| `GET /v1/key` | any valid key | the authenticated principal (§5.3) | the caller's own key: effective scopes, env, principal, project restriction — lets a client say what is missing before it starts |
 | `GET /v1/keys` · `POST …` · `POST …:rotate/revoke` | admin:keys | key RPCs (§5.2) | secret shown once |
 
 Conventions: cursor pagination (`5–10` items/page, matching the GitHub-MCP guidance the repo already follows), consistent error envelope `{error:{code,message,details}}`, ISO-8601 timestamps, and `X-Request-Id` echoed for support.

@@ -19,12 +19,12 @@
 # %% include: demo_data baseline plant_shutdown s2_outage s1_outage s2_capacity_cut_60
 
 # %%
-api = connect(BASE_URL, API_KEY, DEMO_DATA)
+api = connect(BASE_URL, API_KEY, DEMO_DATA, needs=["read:data", "read:policies", "read:runs", "write:runs"], mode=MODE)
+LIVE = api.live
 project = pick_project(api, PROJECT_ID)
 PID = project["id"]
 base = baseline_scenario(api, PID, SCENARIO_ID)
-version = (next(v for v in api.policy_versions(PID) if v["id"] == POLICY_VERSION_ID)
-           if POLICY_VERSION_ID else api.snapshot_policies(PID, "notebook baseline"))
+version = baseline_policy_version(api, PID, POLICY_VERSION_ID)
 
 # %% [markdown]
 # ## Try changing
@@ -100,8 +100,8 @@ for name, run in stress_runs.items():
 # %%
 for name, run in stress_runs.items():
     window = effective_window(scenarios[name]["disruption_schedule"][0], run)
-    plot_series({"baseline": api.series(baseline_run["id"]), name: api.series(run["id"])}, "fill_rate",
-                title=f"Weekly fill rate — {name}", window=window)
+    weekly = {"baseline": api.series(baseline_run["id"], expired_ok=True), name: api.series(run["id"], expired_ok=True)}
+    plot_series(weekly, "fill_rate", title=f"Weekly fill rate — {name}", window=window)
 
 # %% [markdown]
 # ## Next

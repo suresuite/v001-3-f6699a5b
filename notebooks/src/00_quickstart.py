@@ -10,6 +10,11 @@
 # - **local Jupyter:** `pip install jupyterlab requests pandas matplotlib pyarrow openpyxl`,
 #   then `export SURESUITE_API_KEY="sk_test_…"` before `jupyter lab`.
 #
+# The key needs the scopes `read:data`, `read:policies`, `read:runs` and `write:runs`.
+# `write:policies` and `write:data` are used when the key has them. The next code cell
+# checks the key first: one that cannot run this notebook says what it is missing,
+# and the notebook carries on in demo mode.
+#
 # Never paste a key into a cell. Run the cells in order (Runtime → Run all works too).
 
 # %% include: config
@@ -21,7 +26,8 @@
 # %% include: demo_data baseline
 
 # %%
-api = connect(BASE_URL, API_KEY, DEMO_DATA)
+api = connect(BASE_URL, API_KEY, DEMO_DATA, needs=["read:data", "read:policies", "read:runs", "write:runs"], mode=MODE)
+LIVE = api.live
 
 # %% [markdown]
 # ## 1 · Pick a project
@@ -37,14 +43,20 @@ PID = project["id"]
 # ## 2 · Freeze the input data and the policies
 # A run always uses a frozen copy of the data and of the policies, so its result
 # can be reproduced. Freezing twice without changes returns the same version.
-# **Expect:** a dataset version and a policy version, each with a hash.
+# The run records the data it read by itself; freezing the data here only names
+# that checkpoint, so a key without `write:data` skips it.
+# **Expect:** a policy version and a dataset version, each with a hash.
 
 # %%
-frozen = api.freeze_dataset(PID, "notebook checkpoint")
-VERSION = (next(v for v in api.policy_versions(PID) if v["id"] == POLICY_VERSION_ID)
-           if POLICY_VERSION_ID else api.snapshot_policies(PID, "notebook baseline"))
-print("dataset version", frozen["id"], "· graph_hash", frozen["graph_hash"][:12])
+VERSION = baseline_policy_version(api, PID, POLICY_VERSION_ID)
 print("policy version ", VERSION["id"], "· policy_hash", VERSION["policy_hash"][:12])
+try:
+    frozen = api.freeze_dataset(PID, "notebook checkpoint")
+    print("dataset version", frozen["id"], "· graph_hash", frozen["graph_hash"][:12])
+except SuReSuiteError as e:
+    if e.code != "missing_scope":
+        raise
+    print("dataset not frozen here (this key has no write:data scope) — the run records the data it reads")
 
 # %% [markdown]
 # ## 3 · Choose a baseline scenario
@@ -62,7 +74,7 @@ scenario = baseline_scenario(api, PID, SCENARIO_ID)
 # **Expect:** `→ done` and the number of replications.
 
 # %%
-run = api.run_and_wait(PID, scenario["id"], VERSION["id"])
+run = require_done(api.run_and_wait(PID, scenario["id"], VERSION["id"]))
 
 # %% [markdown]
 # ## 5 · Read the results
@@ -80,10 +92,11 @@ reps[[c for c in ("fill_rate", "revenue", "lost_sales_value", "avg_on_hand_value
 
 # %% [markdown]
 # **Expect:** a chart of material on hand per week — the line is the average, the
-# band the range across replications.
+# band the range across replications. A run reused from an earlier identical one may
+# have no weekly series left; the cell then says so instead.
 
 # %%
-weekly = api.series(run["id"])
+weekly = api.series(run["id"], expired_ok=True)
 plot_series({"baseline": weekly}, "on_hand_units", title="Material on hand (units), weekly")
 
 # %% [markdown]
