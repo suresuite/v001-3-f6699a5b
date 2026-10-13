@@ -129,9 +129,13 @@ export default function SimulationLab({ isCollapsed, setIsCollapsed }: Props) {
   useEffect(() => {
     const paramId = searchParams.get("scenario_id");
     if (paramId) return;
-    if (!selectedId && scenarios.length > 0) setSelectedId(scenarios[0].id);
+    // Open on a scenario the reader can edit: the validated baseline is usually
+    // the oldest row and is read-only here (§4 D227), so it is chosen only when
+    // it is the only scenario. A `?model=` link still selects it explicitly.
+    const first = scenarios.find((s) => !isValidationBaseline(s)) ?? scenarios[0];
+    if (!selectedId && first) setSelectedId(first.id);
     if (selectedId && !scenarios.find((s) => s.id === selectedId)) {
-      setSelectedId(scenarios[0]?.id ?? null);
+      setSelectedId(first?.id ?? null);
     }
   }, [scenarios, selectedId, searchParams]);
 
@@ -627,12 +631,30 @@ export default function SimulationLab({ isCollapsed, setIsCollapsed }: Props) {
     </div>
   ) : null;
   // The Settings pane is LOCKED to the model's protocol until "Advanced" is open
-  // (the recovery pane — the experiment's own events — never is).
-  const settingsLockReason =
-    readOnlyReason ??
-    (usingModel && !advanced
-      ? "Locked to the model — unlock in Advanced."
-      : null);
+  // (the recovery pane — the experiment's own events — never is). The lock
+  // carries its own way out, ON this pane: unlocking the protocol here is what
+  // lets a reader set replications and warm-up, and the change is then listed
+  // as a deviation on the model card and recorded on the run.
+  const settingsLock: {
+    reason: string | null;
+    action: { label: string; onClick: () => void } | null;
+    validateLink: boolean;
+  } = readOnlyReason
+    ? {
+        reason: readOnlyReason,
+        action: canRunSimulations ? { label: "New scenario from it", onClick: () => createScenario() } : null,
+        validateLink: true,
+      }
+    : usingModel && !advanced
+      ? {
+          reason:
+            "Replications, warm-up and the run window follow the Validated Model's protocol. " +
+            "Unlock to change them — each change is recorded on the run as a deviation from the model.",
+          action: { label: "Unlock settings", onClick: () => setAdvanced(true) },
+          validateLink: false,
+        }
+      : { reason: null, action: null, validateLink: false };
+  const settingsLockReason = settingsLock.reason;
   const evidenceModelOf = useMemo(
     () =>
       Object.fromEntries(
@@ -800,6 +822,8 @@ export default function SimulationLab({ isCollapsed, setIsCollapsed }: Props) {
           runsByScenario={runsByScenario}
           compareModelId={usingModel ? chosenModel?.id ?? null : null}
           settingsLockReason={settingsLockReason}
+          settingsLockAction={settingsLock.action}
+          settingsValidateLink={settingsLock.validateLink}
           modelStep={modelStep}
           trainingSet={trainingSet}
           runEstimate={runSize ? runSize.short + (runSize.refusal ? ` · Over capacity: ${runSize.refusal}` : "") : null}
@@ -942,7 +966,11 @@ export default function SimulationLab({ isCollapsed, setIsCollapsed }: Props) {
                     No scenario selected
                   </div>
                 ) : pane === "setup" ? (
-                  <ReadOnlyFrame reason={settingsLockReason}>
+                  <ReadOnlyFrame
+                    reason={settingsLockReason}
+                    action={settingsLock.action}
+                    validateLink={settingsLock.validateLink}
+                  >
                     <ScenarioSetupForm
                       scenario={selected}
                       projectId={projectId}
