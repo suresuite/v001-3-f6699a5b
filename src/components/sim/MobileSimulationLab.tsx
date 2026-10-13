@@ -85,7 +85,7 @@ import { ExperimentLibraryBox, ScenarioList } from "./ScenarioRail";
 import { StressTestDrawer, type StressTestPreset } from "./StressTestCard";
 import { SurrogateCard } from "./SurrogateCard";
 import type { TrainingTotals } from "@/lib/sim/surrogateTraining";
-import { ReadOnlyFrame } from "./ReadOnlyFrame";
+import { ReadOnlyFrame, type ReadOnlyAction } from "./ReadOnlyFrame";
 import { RESPONSE_LABELS, type RecoveryConfig, type RecoveryResponseKey } from "@/lib/sim/recoveryScore";
 import { kpiDisplay } from "@/lib/sim/kpiDisplay";
 import { useTimeUnit, UNIT_LABEL_PLURAL } from "@/hooks/useTimeUnit";
@@ -186,6 +186,10 @@ export interface MobileSimulationLabProps {
   /** WP 10.5 — the settings are locked to the Validated Model's protocol until
    *  "Advanced" is open; the disruption schedule never is. */
   settingsLockReason?: string | null;
+  /** the lock's way out, on this page (unlock the protocol / new scenario) */
+  settingsLockAction?: ReadOnlyAction | null;
+  /** whether the lock is /policies' to lift (the baseline) */
+  settingsValidateLink?: boolean;
   findingsSource: "pre-run check" | "gate rejection";
   supplierIds: string[];
   latestRun: SimulationRun | null;
@@ -251,6 +255,8 @@ export function MobileSimulationLab(props: MobileSimulationLabProps) {
     capacity,
     readOnlyReason = null,
     settingsLockReason = null,
+    settingsLockAction = null,
+    settingsValidateLink = true,
     findingsSource,
     supplierIds,
     latestRun,
@@ -956,7 +962,11 @@ export function MobileSimulationLab(props: MobileSimulationLabProps) {
         <>
           <MobileSheet open={sheet === "scenario"} title="Scenario" onClose={close}>
             <div className="p-3.5">
-              <ReadOnlyFrame reason={settingsLockReason ?? readOnlyReason}>
+              <ReadOnlyFrame
+                reason={settingsLockReason ?? readOnlyReason}
+                action={settingsLockAction}
+                validateLink={settingsValidateLink}
+              >
                 <ScenarioSetupForm
                   section="identity"
                   scenario={selected}
@@ -969,7 +979,11 @@ export function MobileSimulationLab(props: MobileSimulationLabProps) {
 
           <MobileSheet open={sheet === "runWindow"} title="Run window" onClose={close}>
             <div className="p-3.5">
-              <ReadOnlyFrame reason={settingsLockReason ?? readOnlyReason}>
+              <ReadOnlyFrame
+                reason={settingsLockReason ?? readOnlyReason}
+                action={settingsLockAction}
+                validateLink={settingsValidateLink}
+              >
                 <ScenarioSetupForm
                   section="runWindow"
                   scenario={selected}
@@ -982,7 +996,11 @@ export function MobileSimulationLab(props: MobileSimulationLabProps) {
 
           <MobileSheet open={sheet === "precision"} title="Precision" onClose={close}>
             <div className="p-3.5">
-              <ReadOnlyFrame reason={settingsLockReason ?? readOnlyReason}>
+              <ReadOnlyFrame
+                reason={settingsLockReason ?? readOnlyReason}
+                action={settingsLockAction}
+                validateLink={settingsValidateLink}
+              >
                 <ScenarioSetupForm
                   section="precision"
                   scenario={selected}
@@ -995,7 +1013,11 @@ export function MobileSimulationLab(props: MobileSimulationLabProps) {
 
           <MobileSheet open={sheet === "objective"} title="Objective" onClose={close}>
             <div className="p-3.5">
-              <ReadOnlyFrame reason={settingsLockReason ?? readOnlyReason}>
+              <ReadOnlyFrame
+                reason={settingsLockReason ?? readOnlyReason}
+                action={settingsLockAction}
+                validateLink={settingsValidateLink}
+              >
                 <ScenarioSetupForm
                   section="objective"
                   scenario={selected}
