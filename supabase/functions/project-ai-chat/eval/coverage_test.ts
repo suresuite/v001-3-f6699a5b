@@ -2,7 +2,7 @@
 // §19.3, §19.7, §22.3; Phase H1). Drives the four new relation/detail tools
 // over stubbed project tables, the citation resolver, and the verifier
 // module directly (planted-fabrication / planted-unresolvable-citation /
-// clean corpora). cov-01 is the PINNED supplier-10 regression (§19.0).
+// clean corpora). cov-01 is the PINNED supplier-SUP-001 regression (§19.0).
 
 import { assert, assertEquals } from "./harness/asserts.ts";
 import { executeTool, coverageToolsEnabled, type ToolContext, type ToolEnvelope } from "../tools.ts";
@@ -55,7 +55,7 @@ function tableRows(env: ToolEnvelope): unknown[][] {
 const call = (name: string, args: Record<string, unknown>, envelope: ToolEnvelope): RecordedToolCall =>
   ({ name, args, envelope });
 
-// ── cov-01: the pinned supplier-10 regression ────────────────────────────────
+// ── cov-01: the pinned supplier-SUP-001 regression ────────────────────────────────
 
 Deno.test("cov-01: get_supplier_materials answers the incident question — grounded list, verbatim truncation note with the TRUE total", async () => {
   const fx = await loadCov("cov-01-supplier-materials");
@@ -63,20 +63,20 @@ Deno.test("cov-01: get_supplier_materials answers the incident question — grou
   const env = await executeTool("get_supplier_materials", fx.mocked_llm!.args!, ctx);
   assertEquals(env.kind, "table");
   assertEquals(env.meta.row_count, fx.expect.row_count);
-  assertEquals(env.meta.note, fx.expect.note); // "supplier 10 supplies 60 materials; showing top 50."
+  assertEquals(env.meta.note, fx.expect.note); // "supplier SUP-001 supplies 60 materials; showing top 50."
 
   // Truth recompute (the §19.7 three-way oracle): every returned material is
-  // one supplier 10 actually supplies; none of the incident ids appears.
+  // one supplier SUP-001 actually supplies; none of the incident ids appears.
   const truth = new Set(
     fx.project_snapshot.inbound_logistics
-      .filter((r) => String(r.supplier_id) === "10")
+      .filter((r) => String(r.supplier_id) === "SUP-001")
       .map((r) => String(r.material_id)),
   );
   assertEquals(truth.size, fx.expect.total_truth);
   const returned = tableRows(env).map((r) => String(r[0]));
-  for (const m of returned) assert(truth.has(m), `${m} not actually supplied by supplier 10`);
+  for (const m of returned) assert(truth.has(m), `${m} not actually supplied by supplier SUP-001`);
   for (const bad of fx.expect.forbidden_ids as string[]) {
-    assert(!returned.includes(bad), `incident id ${bad} leaked into supplier 10's list`);
+    assert(!returned.includes(bad), `incident id ${bad} leaked into supplier SUP-001's list`);
   }
   // All 60 are sole-sourced in this snapshot → every row flags Yes.
   for (const r of tableRows(env)) assertEquals(r[3], "Yes");
@@ -103,7 +103,7 @@ Deno.test("cov-01: the planted incident reply is caught by verifier layer 1; the
   }
 
   const grounded = await verifyReply({
-    reply: `Supplier 10 supplies 60 materials; the longest-lead ones include ${tableRows(env)[0][0]}.`,
+    reply: `Supplier SUP-001 supplies 60 materials; the longest-lead ones include ${tableRows(env)[0][0]}.`,
     calls, citations,
     userMessage: fx.utterance, projectId: PROJECT, db, toolCallRefs,
   });
@@ -111,10 +111,10 @@ Deno.test("cov-01: the planted incident reply is caught by verifier layer 1; the
 
   // §19.4 bounded refusal (count spoken, nothing enumerated) — with COUNT-only
   // grounding (no relation tool ran this turn).
-  const risk = await executeTool("get_supplier_risk", { supplier: "10" }, ctx);
+  const risk = await executeTool("get_supplier_risk", { supplier: "SUP-001" }, ctx);
   const refusal = await verifyReply({
     reply: fx.expect.bounded_refusal_reply,
-    calls: [call("get_supplier_risk", { supplier: "10" }, risk)],
+    calls: [call("get_supplier_risk", { supplier: "SUP-001" }, risk)],
     citations: [],
     userMessage: fx.utterance, projectId: PROJECT, db,
   });
@@ -323,7 +323,7 @@ Deno.test("cov-10: planted fabrication triggers the corrective retry; a correcte
   });
   assert(!bad.verified && bad.fallback && bad.retried);
   assert(bad.reply.startsWith(fx.expect.fallback_first_line_prefix), `fallback shape drifted: ${bad.reply}`);
-  assert(bad.reply.includes("supplier 10 supplies 60 materials"), "nearest_fact must carry the envelope's true count");
+  assert(bad.reply.includes("supplier SUP-001 supplies 60 materials"), "nearest_fact must carry the envelope's true count");
   for (const id of fx.expect.planted_reply.match(/00750\d+A/g) ?? []) {
     assert(!bad.reply.includes(id), `fabricated id ${id} leaked into the fallback`);
   }
@@ -556,23 +556,23 @@ Deno.test("get_entity_detail returns verbatim master fields (never imputed) and 
 Deno.test("§22.5 fallback template: verbatim shape, nearest_fact from envelopes, nearest_action optional", () => {
   const env: ToolEnvelope = {
     kind: "table",
-    data: { columns: ["Material"], rows: [["001409784A"]] },
-    meta: { tool: "get_supplier_materials", row_count: 1, note: "supplier 10 supplies 187 materials; showing top 1." },
+    data: { columns: ["Material"], rows: [["MAT-0033"]] },
+    meta: { tool: "get_supplier_materials", row_count: 1, note: "supplier SUP-001 supplies 187 materials; showing top 1." },
   };
   const withAll = buildFallbackReply({
-    userMessage: "what does supplier 10 supply?",
-    calls: [call("get_supplier_materials", { supplier: "10" }, env)],
+    userMessage: "what does supplier SUP-001 supply?",
+    calls: [call("get_supplier_materials", { supplier: "SUP-001" }, env)],
     nearestAction: "Fill 12 missing lead times — I'll draft the values",
   });
-  assertEquals(withAll.split("\n")[0], "I can't answer “what does supplier 10 supply?” with verified facts from this project's data yet.");
-  assertEquals(withAll.split("\n")[1], "What I can tell you: supplier 10 supplies 187 materials; showing top 1.");
+  assertEquals(withAll.split("\n")[0], "I can't answer “what does supplier SUP-001 supply?” with verified facts from this project's data yet.");
+  assertEquals(withAll.split("\n")[1], "What I can tell you: supplier SUP-001 supplies 187 materials; showing top 1.");
   assertEquals(withAll.split("\n")[2], "Want me to fill 12 missing lead times — I'll draft the values?");
 
   const bare = buildFallbackReply({ userMessage: "hello?", calls: [] });
   assertEquals(bare, "I can't answer “hello?” with verified facts from this project's data yet.");
 
-  const addendum = buildCorrectiveAddendum([{ class: "entity", token: "007507784A", detail: "x" }]);
-  assertEquals(addendum, "Your reply stated these ungrounded items: 007507784A. Remove or ground each, or refuse honestly.");
+  const addendum = buildCorrectiveAddendum([{ class: "entity", token: "MAT-0430", detail: "x" }]);
+  assertEquals(addendum, "Your reply stated these ungrounded items: MAT-0430. Remove or ground each, or refuse honestly.");
 });
 
 // ── the id lexicon is learned, never hardcoded (§20.7) ──────────────────────
@@ -595,10 +595,10 @@ Deno.test("the id lexicon is learned from THIS turn's envelopes — a differentl
   const vocab = buildGroundedVocabulary(calls, undefined, "materials?");
   assert(!vocab.idSignatures.has("9A") || true); // shape sets differ per project by construction
   const foreign = await verifyReply({
-    reply: "No id like 001409784A exists here.",
+    reply: "No id like 009999999Z exists here.",
     calls, citations: [], userMessage: "materials?", projectId: PROJECT,
   });
-  // "001409784A" carries a ≥3-significant-digit number, so the NUMBER rule
+  // "009999999Z" carries a ≥3-significant-digit number, so the NUMBER rule
   // still catches it — narrow extraction never means unchecked numerics.
   assert(!foreign.ok);
   assert(foreign.violations.every((v) => v.class === "number"), JSON.stringify(foreign.violations));

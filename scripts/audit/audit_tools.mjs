@@ -199,9 +199,9 @@ function getEntityDetail(materialId) {
   return m ? { cost: m.cost ?? null, moq: m.moq ?? null, holding: m.holding_cost_pct ?? null, dist: m.lead_time_dist ?? null } : null;
 }
 
-// ── THE INCIDENT: "what does supplier 10 supply?" ────────────────────────────
+// ── THE INCIDENT: "what does supplier SUP-001 supply?" ────────────────────────────
 const S = process.env.SUP ?? "10";
-const claimed = (process.env.CLAIMED ?? "007507784A,007507785A,007507786A,007507787A,007507788A").split(",");
+const claimed = (process.env.CLAIMED ?? "MAT-0430,MAT-0431,MAT-0432,MAT-0433,MAT-0434").split(",");
 
 const truthS = [...(truthMatBySupplier.get(S) ?? [])];
 const sr = getSupplierRisk({ supplier: S });
@@ -221,7 +221,7 @@ const smSet = new Set(sm.rows.map((r) => r.material));
 const smMatchesTruth = sm.total === truthS.length && truthS.every((m) => smSet.has(m)) && sm.rows.length === truthS.length;
 const smLeaks = claimed.filter((m) => smSet.has(m));
 
-const M = process.env.MAT ?? "001409784A";
+const M = process.env.MAT ?? "MAT-0033";
 const ms = getMaterialSuppliers({ material: M });
 const msTruth = [...(truthSupByMaterial.get(M) ?? [])];
 const msMatchesTruth = ms.rows.length === msTruth.length && msTruth.every((s) => ms.rows.some((r) => r.supplier === s));
@@ -256,7 +256,7 @@ const battery = [
   { q: `Which supplier is riskiest?`, intent: "I7 risk ranking", tool: "get_supplier_risk", grounded: "OK", note: "Sole-source-first ranking." },
   { q: `What products use material X?`, intent: "I5 material→product (BOM)", tool: "get_bom_relations", grounded: bomUpMatches && bomDownMatches ? "OK" : "GAP", note: `Traverses bom_multi_level both directions (higher_level_component_id walk, useStageRows parent/leaf logic).` },
   { q: `What's the lead time / price / MOQ for material X?`, intent: "I2 entity detail", tool: "get_entity_detail", grounded: detailMatches ? "OK" : "GAP", note: "Verbatim master values (cost/MOQ/holding/lead-time dist) — never imputed." },
-  { q: `What policy / safety stock is set for supplier 10?`, intent: "I8 policy read", tool: "get_policy_config", grounded: "OK", note: "Exposed §5 read (personaTools.ts); default-vs-override named; pinned by cov-06 + pc-* suite." },
+  { q: `What policy / safety stock is set for supplier SUP-001?`, intent: "I8 policy read", tool: "get_policy_config", grounded: "OK", note: "Exposed §5 read (personaTools.ts); default-vs-override named; pinned by cov-06 + pc-* suite." },
   { q: `Is my model validated / run-ready?`, intent: "I9 validation / data-completeness read", tool: "get_validation_status + get_data_completeness", grounded: "OK", note: "Exposed §5 reads; pinned by cov-07 + vv-*/ds-* suites." },
   { q: `What did my last simulation run show?`, intent: "I10 run results read", tool: "get_run_results", grounded: "OK", note: "Exposed §5 read; persisted rows only; pinned by cov-08 + vv-* suite." },
 ];
@@ -312,8 +312,8 @@ const topSpend = getProcurementSpend({ groupBy: "supplier", topN: 3 });
 const topRisk = getSupplierRisk({ topN: 3 });
 p(`- **get_supplier_risk** top-3 by sole-source exposure: ${topRisk.map((r)=>`${r.supplier} (${r.sole} sole / ${r.materials} mats)`).join("; ")}`);
 p(`- **get_procurement_spend** ranks by *${topSpend.rankBy}*; top-3 suppliers: ${topSpend.rows.map((r)=>`${r.key} (${r.spend})`).join("; ")}`);
-const mtest = getMaterialRisk({ material: "001409784A" })[0];
-p(`- **get_material_risk("001409784A")**: suppliers=${mtest?.suppliers}, single-source=${mtest?.single ? "Yes" : "No"} — truth suppliers=${(truthSupByMaterial.get("001409784A")?.size)}. ${mtest?.suppliers === truthSupByMaterial.get("001409784A")?.size ? "✅ match" : "❌ mismatch"}`);
+const mtest = getMaterialRisk({ material: "MAT-0033" })[0];
+p(`- **get_material_risk("MAT-0033")**: suppliers=${mtest?.suppliers}, single-source=${mtest?.single ? "Yes" : "No"} — truth suppliers=${(truthSupByMaterial.get("MAT-0033")?.size)}. ${mtest?.suppliers === truthSupByMaterial.get("MAT-0033")?.size ? "✅ match" : "❌ mismatch"}`);
 p("");
 p(`## 4. H1 relation/detail tools vs truth (ai-agents.md §19.3)`);
 p("");

@@ -26,14 +26,14 @@
 | Warm-up | auto (MSER-5 + Conway, most conservative) | PDF §1 uses exactly this procedure |
 | Holding cost | 20 % of material cost / yr | PDF Table 2 |
 
-Scenarios seeded: **TRON baseline (WSC 2026)** and **TRON supplier 965
+Scenarios seeded: **TRON baseline (WSC 2026)** and **TRON supplier SUP-096
 disruption** (8-week inbound delay at the paper's top-impact supplier).
 
 ## 2. Where everything lives
 
 | Artifact | Path |
 |---|---|
-| Dataset generator (workbook → JSON, rules R1–R10) | `scripts/tron_ver2/build_dataset.py` |
+| Dataset generator (workbook → JSON, rules R1–R11) | `scripts/tron_ver2/build_dataset.py <SC_data__MOR.xlsx> --id-map <id_map.csv>` |
 | Committed dataset | `scripts/tron_ver2/dataset.json` |
 | App-lifecycle seeder | `scripts/seed_project_tron_ver2.mjs` |
 | Git-native seed + verify workflow | `.github/workflows/seed-project.yml` + `.github/seed-request` |
@@ -64,7 +64,7 @@ disruption** (8-week inbound delay at the paper's top-impact supplier).
    (`build_project_data` → `from_project_data` → `compute_run_from_project`)
    *before* touching the deployed system: 30 reps × 156 weeks in ~4 s,
    steady-state fill rate 0.981, **zero warn-level mapping entries**; the
-   supplier-965 stress test dropped fill rate to 0.961 (+125 k€ lost sales,
+   supplier-SUP-096 stress test dropped fill rate to 0.961 (+125 k€ lost sales,
    TTR 8.5 wks) — the same magnitude as the paper's Fig. 3.
 6. **Seeded through the app's own lifecycle** (RPCs, not SQL) via the
    git-native workflow, then verified end-to-end on the deployed pipeline
@@ -75,17 +75,18 @@ disruption** (8-week inbound delay at the paper's top-impact supplier).
 
 | # | Assumption | Basis |
 |---|---|---|
-| R1 | Products `597-1557LC001-TEST` and `XPF0003892` excluded | test article; excluded from the reference snapshot (its demand history is extremely lumpy) |
+| R1 | Two products excluded (a test article and a lumpy-demand article; named in `build_dataset.py` by SHA-256 only) | test article; excluded from the reference snapshot (its demand history is extremely lumpy) |
 | R2 | Demand mode = median of **non-zero** weekly history | reproduces the snapshot's sampled means exactly |
 | R3 | Single sourcing: MOR-flagged arc wins, else lowest cost | the workbook *is* the "MOR" model; PDF supplier-selection rule = engine primary-source rule (min cost) |
 | R4 | Arcs with LT ≥ 100 wks dropped (workbook's 143-wk placeholder); their 6 materials removed from BOM+masters | matches the reference snapshot's material set exactly |
-| R4b | One lead time clamped 63 → 51 wks (`DA008634487`) | engine max lead time (52-wk visibility horizon) |
+| R4b | One lead time clamped 63 → 51 wks (`MAT-0575`) | engine max lead time (52-wk visibility horizon) |
 | R5 | Three zero-cost arcs floored at 0.0001 €/unit | engine rejects non-positive costs (would default to 1.0 with a warning) |
 | R6 | Three zero-rate BOM rows dropped; their materials stay in the masters | engine requires rate > 0; keeps the 560-material world of the snapshot |
 | R7 | `materials.moq` = selected arc's MOQ | MOQ is per-arc in the workbook, per-material in the master; only the selected arc is ordered from under single sourcing |
 | R8 | `production_capacity` = historical demand max per product | the PDF's fill-rate losses come from material availability; capacity must not bind below the demand peak |
 | R9 | One aggregate customer (`CUST-TRON`) per product | workbook has no customer dimension; engine's P-C.2 allocation is inert below 2 customers |
 | R10 | Supplier capacity unlimited, reliability 1.0 | the PDF models supplier disruption as lead-time delay, not capacity |
+| R11 | Every id is a pseudonym (`PRD-`/`MAT-`/`SUP-`), supplier names are `Supplier <id> (<country>)` | the source is real company data. Pseudonyms keep the real ids' sort order, so every run is the same run — the frozen digests (`sim-worker/tests/data/golden_runs.json`) and `docs/research/mrp-vs-reorder-point.md`'s numbers did not move. The map back to real ids is private (syn_effect_Dec25, git-ignored `data/private/`); `build_dataset.py --id-map` needs it |
 | — | `initial_on_hand` left NULL → engine warm-starts at S_m | snapshot's t=0 inventories are all non-zero (warm start); the engine's warm start is its deterministic equivalent |
 | — | Disruption start = week 12 (t_w + 2), not the paper's week 86 | this engine warm-starts, so steady state begins ≈ wk 10 (auto-detected) vs wk 85 in the paper's cold-start implementation; the paper's design is "1–3 weeks after steady-state onset", which is what week 12 expresses. KPIs are measured over [t_w, t_w + 52] — an event at wk 86 would fall outside the analysis window entirely |
 
@@ -213,7 +214,7 @@ was validated end-to-end on this project — seed-project run `29214265937`
 - **Verifiable-export source (W2)**: `snapshot_dataset`'s canonical rows ==
   the committed `scripts/tron_ver2/dataset.json` table-for-table
   (60/560/17/560/596/17) with an economics spot check
-  (material `001407706A` cost 0.0054), and `current_graph_hash` == the
+  (material `MAT-0001` cost 0.0054), and `current_graph_hash` == the
   snapshot's hash — a run stamped with that hash provably ran on this data.
 
 **Incident during validation — G16 observed live.** The first seed attempt

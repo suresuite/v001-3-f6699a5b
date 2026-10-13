@@ -63,7 +63,7 @@ CASES = {
                                                          "safety_stock_days": 0}},
          "overrides": []},
         {"horizon_days": 546, "replications": 2, "seed": 42, "crn": True, "warmup_mode": "auto",
-         "disruption_schedule": [{"target": "node:965", "start_week": 12, "duration_weeks": 8,
+         "disruption_schedule": [{"target": "node:SUP-096", "start_week": 12, "duration_weeks": 8,
                                   "magnitude_pct": 100}]},
     ),
 }

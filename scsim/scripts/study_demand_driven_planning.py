@@ -243,6 +243,11 @@ CASES = (
 )
 
 
+# The dataset's ids are pseudonyms (scripts/tron_ver2/build_dataset.py R11): this is
+# the PDF's top-impact supplier.
+OUTAGE_SUPPLIER = "SUP-096"
+
+
 def tron_section() -> list[str]:
     from scsim.io.project_map import from_project_data
     from sim_worker.local import project_data_from_snapshots
@@ -254,7 +259,7 @@ def tron_section() -> list[str]:
            f"settings with {SS_DAYS:g} days of safety stock. **Not stock-matched**: the average stock "
            "is reported beside each result so the comparison can be read for what it is.", ""]
     for case, title in (("stationary", "As uploaded"),
-                        ("outage", f"Supplier 965 blocked weeks {OUTAGE_START}–"
+                        ("outage", f"Supplier {OUTAGE_SUPPLIER} blocked weeks {OUTAGE_START}–"
                                    f"{OUTAGE_START + OUTAGE_WEEKS - 1}")):
         out += [f"### {title}", "", HEADER]
         runs = {}
@@ -265,7 +270,7 @@ def tron_section() -> list[str]:
                                                {"horizon_days": HORIZON * 7, "replications": 1,
                                                 "seed": 2026, "crn": True}, None)
             sc = from_project_data(data).scenario
-            events = ([DisruptionEvent(target_id="965", start=OUTAGE_START, duration=OUTAGE_WEEKS)]
+            events = ([DisruptionEvent(target_id=OUTAGE_SUPPLIER, start=OUTAGE_START, duration=OUTAGE_WEEKS)]
                       if case == "outage" else [])
             sc = sc.model_copy(update={"settings": _settings(), "events": events})
             runs[kind] = run_case(sc, REPS_TRON)

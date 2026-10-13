@@ -75,7 +75,7 @@ Paired, MRP at equal stock − min-max: Δ fill 0.008 ± 0.003 · Δ lost -74 ±
 
 Paired, MRP − min-max: Δ fill -0.003 ± 0.001 · Δ lost 302 ± 102 · Δ stock -124993 ± 6214.
 
-### Supplier 965 blocked weeks 50–57
+### Supplier SUP-096 blocked weeks 50–57
 
 | Policy | Fill rate | Lost units | Avg material stock (units) | Order CV | Weeks to recover (measured/reps) |
 |---|---|---|---|---|---|

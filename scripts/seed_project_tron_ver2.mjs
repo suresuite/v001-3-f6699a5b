@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Phase B0 / real-project onboarding / §8 — seed "Project TRON - ver2", the
 // WSC 2026 make-to-order supply chain (17 products × 560 materials × 60
-// suppliers, dataset built by scripts/tron_ver2/build_dataset.py from
+// suppliers, dataset built — de-identified, R11 — by scripts/tron_ver2/build_dataset.py from
 // SC_data__MOR.xlsx and cross-checked against the reference snapshot).
 //
 // Follows scripts/seed_example_project.mjs exactly — the same app lifecycle
@@ -15,7 +15,7 @@
 // …and then the policy/scenario surface the /policies + Simulation Lab pages use:
 //
 //   save_policy_defaults (per family) → snapshot_policy (immutable version)
-//   → scenarios rows (baseline + supplier-965 stress test) via anon REST.
+//   → scenarios rows (baseline + top-impact-supplier stress test) via anon REST.
 //
 // Idempotent: project is found by name for the modeler; masters upsert on
 // (project_id, id); arcs are cleared and re-inserted; policy families are

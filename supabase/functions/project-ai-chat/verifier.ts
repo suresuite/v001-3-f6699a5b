@@ -79,7 +79,7 @@ interface Vocabulary {
 }
 
 /** Shape signature: digit runs → '9', letter runs → 'A', separators kept.
- * "001409784A" → "9A" · "MAT-4" → "A-9" · "S1" → "A9". Signatures are
+ * "009999999Z" → "9A" · "MAT-4" → "A-9" · "S1" → "A9". Signatures are
  * learned only from tokens that mix digits with letters/separators — pure
  * numbers belong to the numeric-claim rule, not the id rule. */
 function signatureOf(token: string): string {
@@ -95,7 +95,7 @@ function isIdShapedCandidate(token: string): boolean {
   // belong to the numeric-claim rule, never the id rule.
   if (/^[\d.,]+$/.test(token)) return false;
   // English ordinals are prose, not ids ("18th" would otherwise collide with
-  // learned digit+letter signatures like 001409784A's).
+  // learned digit+letter signatures like 009999999Z's).
   if (/^\d+(st|nd|rd|th)$/i.test(token)) return false;
   // Multiplier notation is a QUANTITY, not an id: a BOM reply naturally reads
   // "Frame x2, Assembly x1", and signatureOf("x2") is "A9" — the very shape
