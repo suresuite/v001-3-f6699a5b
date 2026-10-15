@@ -710,9 +710,9 @@ export const PAGE_LEVEL_CHECK: Array<{ label: string; check: ColumnCheck }> = [
     check: {
       shows: "policy_defaults.fulfillment_strategy — decides nothing on the grid since the FG columns follow each row's own MTS / MTO",
       savedTo: "no control on /policies any more",
-      engine: "worker: products.fulfillment_mode → projects.supply_chain_model → MTO. Browser engine: this value",
+      engine: "worker AND browser engine: products.fulfillment_mode → projects.supply_chain_model → MTO (the browser engine reads the same column since D197's fix; this value is read by neither)",
       verdict: "differs",
-      note: "The policy value and projects.supply_chain_model disagree in 6 of 10 projects.",
+      note: "The policy value and projects.supply_chain_model disagree in 6 of 10 projects; the value is display only, so a disagreement no longer changes a run.",
       shouldBe: "one project default, the one the worker reads",
       refs: ["D197"],
     },

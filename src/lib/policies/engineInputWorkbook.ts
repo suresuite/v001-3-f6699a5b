@@ -374,7 +374,7 @@ export function buildEngineInputWorkbook(d: EngineInputExportData): XLSX.WorkBoo
     ["Simulation data hash", d.dataset.hash_inputs ?? "(not recorded — frozen before this hash existed)"],
     ["Why this dataset", d.datasetReason],
     ["Scenario", d.scenarioReason],
-    ["Project fulfillment default", d.projectModel ?? "(not set — make-to-order)"],
+    ["Project fulfillment default", d.projectModel ?? "(not set, or not readable by this account — make-to-order)"],
     ["Engine", `scsim ${d.engine.engine_version}`],
     // WP 15.1 · §4 D293 — the build by content, which two different 0.6.1s do not share.
     ["Engine build", d.engine.engine_build ?? "(not recorded — the engine predates build identity)"],

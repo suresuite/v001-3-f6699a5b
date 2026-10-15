@@ -58,6 +58,7 @@ import {
   type RailState,
 } from "@/components/sim/StageRail";
 import { supabase } from "@/integrations/supabase/client";
+import { readProjectFulfillmentModel } from "@/lib/sim/projectFulfillmentModel";
 import { useAuth } from "@/hooks/useAuth";
 import { useProjectRights } from "@/hooks/useProjectRights";
 import type { StageRow } from "@/hooks/useStageRows";
@@ -1006,13 +1007,20 @@ export function RunValidateStage({
     setLocalRun(preliminaryRun(runId, scenarioId, projectId!, scenario.replications));
     let result: EngineResult;
     try {
+      // The project's default MTS / MTO, read as the worker reads it
+      // (`projects.supply_chain_model`) — NOT the policy's `fulfillment_strategy`
+      // string, which made the same saved version run MTS here and MTO on the
+      // server whenever a product states no mode of its own (§4 D197).
+      const projectModel = await readProjectFulfillmentModel(
+        supabase as never, projectId, user ? { id: user.id, email: user.email } : null,
+      );
       result = await runInBrowser(
         {
           runId,
           projectId: projectId!,
           snapshot,
           scenario: { ...scenario, crn: true },
-          projectModel: fulfillmentStrategy,
+          projectModel,
           // The frozen version the run is stamped with; the page's tables only
           // for a run that has none (sim-command unreachable), and then said.
           dataset: frozen?.snapshot ?? engineDataset(),

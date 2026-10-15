@@ -727,7 +727,7 @@ export function usePolicies(projectId: string | null | undefined): UsePoliciesRe
               : "Loading the simulation engine in your browser (the first time takes ~20 s)…",
           { id: toastId },
         );
-      });
+      }, user ? { id: user.id, email: user.email } : null);
       const safe = name.replace(/[^a-z0-9._-]+/gi, "-").slice(0, 48);
       downloadWorkbook(wb, `simulation-input-${safe}.xlsx`);
       toast.success("Exported: exactly what the engine receives for this version", { id: toastId });
@@ -735,7 +735,7 @@ export function usePolicies(projectId: string | null | undefined): UsePoliciesRe
       console.error("exportVersion failed", err);
       toast.error(`Could not export this version: ${(err as Error)?.message ?? String(err)}`, { id: toastId });
     }
-  }, [canExport, rights, refused, projectId]);
+  }, [canExport, rights, refused, projectId, user]);
 
   // ONE answer for every page (§4 D242): the version whose content is live.
   const currentVersion = currentPolicyVersion(versions, currentHash);

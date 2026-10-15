@@ -13,6 +13,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { engineInputInBrowser, type LoadPhase } from "@/lib/sim/pyodideEngine";
+import { readProjectFulfillmentModel, type ReadingUser } from "@/lib/sim/projectFulfillmentModel";
 import {
   buildEngineInputWorkbook,
   sha256Hex,
@@ -82,6 +83,7 @@ export async function buildPolicyVersionEngineInput(
   projectId: string,
   version: ExportableVersion,
   onPhase?: (p: LoadPhase | "reading") => void,
+  user?: ReadingUser | null,
 ): Promise<XLSX.WorkBook> {
   onPhase?.("reading");
   const { snapshot, text, check } = await readPolicySnapshot(version);
@@ -142,9 +144,10 @@ export async function buildPolicyVersionEngineInput(
   }
 
   // `projects.supply_chain_model` — the worker reads exactly this as the run's
-  // MTS/MTO default (`_fetch_project_model`).
-  const { data: proj } = await sb.from("projects").select("supply_chain_model").eq("id", projectId).maybeSingle();
-  const projectModel = (proj?.supply_chain_model as string | null | undefined) ?? null;
+  // MTS/MTO default (`_fetch_project_model`), read here the way the grid reads it
+  // (`list_projects`), because a direct table select can return no row under this
+  // app's approved_users authentication and the file would print "not set".
+  const projectModel = await readProjectFulfillmentModel(sb, projectId, user);
 
   const engine = await engineInputInBrowser(
     { snapshot, scenario, projectModel, dataset: ds.snapshot },
