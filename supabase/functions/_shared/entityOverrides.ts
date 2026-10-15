@@ -119,7 +119,7 @@ function partition(s: string, last = false): [string, string] | null {
 
 /** Node-scope override rows in the mapper's visiting order: `sorted()` over
  *  `node:<target_key>`, i.e. code-point order of the target key. */
-function sortedNodeRows(overrides: readonly Row[]): Row[] {
+function sortNodeRows(overrides: readonly Row[]): Row[] {
   return overrides
     .filter((o) => String(o.scope ?? "node") === "node" && typeof o.target_key === "string")
     .slice()
@@ -128,6 +128,40 @@ function sortedNodeRows(overrides: readonly Row[]): Row[] {
       const y = String(b.target_key);
       return x < y ? -1 : x > y ? 1 : 0;
     });
+}
+
+/**
+ * `sortNodeRows` once per override LIST rather than once per lookup.
+ *
+ * The grid asks `entityOverride` for every master-backed cell of every row, and
+ * the list it asks about is the same array for the whole render. Sorting it per
+ * call made one render O(cells × n log n). The cache is keyed on the array's
+ * identity (a new list from state is a new key, so a save invalidates it) and
+ * guarded by its length, so a list grown in place is rebuilt rather than served
+ * stale. `byKey` groups the sorted rows by target key, in the same order, for
+ * the exact-key lookups (`row`, `lane`).
+ */
+interface SortedOverrides {
+  len: number;
+  rows: Row[];
+  byKey: Map<string, Row[]>;
+}
+const SORTED = new WeakMap<readonly Row[], SortedOverrides>();
+
+function sortedOverrides(overrides: readonly Row[]): SortedOverrides {
+  const hit = SORTED.get(overrides);
+  if (hit && hit.len === overrides.length) return hit;
+  const rows = sortNodeRows(overrides);
+  const byKey = new Map<string, Row[]>();
+  for (const o of rows) {
+    const k = String(o.target_key);
+    const bucket = byKey.get(k);
+    if (bucket) bucket.push(o);
+    else byKey.set(k, [o]);
+  }
+  const built = { len: overrides.length, rows, byKey };
+  SORTED.set(overrides, built);
+  return built;
 }
 
 export interface ResolvedOverride {
@@ -165,13 +199,12 @@ export function entityOverride(
     String(o.family ?? "") === decl.family && o.patch && typeof o.patch === "object"
       ? (o.patch as Row)
       : {};
-  const rows = sortedNodeRows(overrides);
+  const { rows, byKey } = sortedOverrides(overrides);
 
   if (decl.entity === "product") {
     const ids = productIds ?? new Set([entityId]);
     let found: { value: unknown; targetKey: string } | undefined;
-    for (const o of rows) {
-      if (o.target_key !== entityId) continue;
+    for (const o of byKey.get(entityId) ?? []) {
       const patch = patchOf(o);
       if (decl.key in patch) found = { value: patch[decl.key], targetKey: String(o.target_key) };
     }
@@ -194,8 +227,7 @@ export function entityOverride(
   // supplier × material LANE is read the same way: the arc loop looks up
   // `node:<supplier>::<material>` exactly, never split to an entity.
   if (decl.entity === "row" || decl.entity === "lane") {
-    for (const o of rows) {
-      if (String(o.target_key) !== entityId) continue;
+    for (const o of byKey.get(entityId) ?? []) {
       const v = patchOf(o)[decl.key];
       if (v === undefined || v === null || v === "") continue;
       return { value: v, targetKey: entityId, usable: isUsableOverride(v, decl.domain) };

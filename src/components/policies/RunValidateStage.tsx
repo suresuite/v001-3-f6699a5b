@@ -117,6 +117,7 @@ import type { PolicyBundle, FulfillmentStrategy } from "@/lib/policies/schemas";
 import type { OverrideRow } from "@/lib/policies/resolve";
 import { MappingWarningsCard } from "@/components/sim/RunProgressPanel";
 import { RunQueueConsole } from "@/components/sim/RunQueueConsole";
+import { usePolicyVersionLabels } from "@/hooks/usePolicyVersionLabels";
 import { FROZEN_CELL, FROZEN_CELL_ON_TINT } from '@/components/shared';
 import { useIsMobile } from '@/hooks/use-is-mobile';
 import { M, MobileChip, MobileGroup, MobilePanel, MobileRow } from '@/components/mobile';
@@ -386,6 +387,8 @@ export function RunValidateStage({
     if (localRun && !list.some((r) => r.id === localRun.id)) list.unshift(localRun);
     return list;
   }, [history, localRun]);
+  // The policy version's name per run, so the queue says which policy each row ran under.
+  const policyLabels = usePolicyVersionLabels(useMemo(() => jobs.map((j) => j.policy_version_id), [jobs]));
 
   // Which job the inspection dashboard below the queue shows. Null = the
   // latest run (default). "View" on a completed row selects it; its reps are
@@ -1801,6 +1804,7 @@ export function RunValidateStage({
                   activeRepsRunId={latestRun?.id ?? null}
                   selectedRunId={inspectedRun?.id ?? null}
                   credibility={runCredibility}
+                  policyLabels={policyLabels}
                   onCancel={cancelJob}
                   onCancelAllActive={cancelAllActive}
                   onView={onViewRun}

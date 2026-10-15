@@ -24,15 +24,40 @@ export function groupKeyFor(
   return null;
 }
 
-/** Does this line's primary-source group already have a primary picked? */
+/**
+ * The groups that already have a primary picked, found in ONE pass.
+ *
+ * `groupHasPrimary` on its own scans every row, so asking it for each of n rows
+ * is n². A caller that asks about many rows builds this once and passes it back;
+ * the answer is identical (a group is in the set exactly when some row of it
+ * resolves `primary_source === true`).
+ */
+export function primaryGroupKeys(
+  stage: StageKey,
+  rows: Record<string, unknown>[],
+  resolve: ResolveField,
+): Set<string> {
+  const out = new Set<string>();
+  for (const o of rows) {
+    const gk = groupKeyFor(stage, o);
+    if (gk && !out.has(gk) && resolve(o, "primary_source") === true) out.add(gk);
+  }
+  return out;
+}
+
+/** Does this line's primary-source group already have a primary picked?
+ *  `primaries` is `primaryGroupKeys(stage, rows, resolve)`; without it the rows
+ *  are scanned. */
 export function groupHasPrimary(
   stage: StageKey,
   r: Record<string, unknown>,
   rows: Record<string, unknown>[],
   resolve: ResolveField,
+  primaries?: ReadonlySet<string>,
 ): boolean {
   const gk = groupKeyFor(stage, r);
   if (!gk) return true;
+  if (primaries) return primaries.has(gk);
   return rows.some(
     (o) => groupKeyFor(stage, o) === gk && resolve(o, "primary_source") === true,
   );
@@ -51,12 +76,13 @@ export function lineNeedsInput(
   r: Record<string, unknown>,
   rows: Record<string, unknown>[],
   resolve: ResolveField,
+  primaries?: ReadonlySet<string>,
 ): boolean {
   if (r.__needs_supplier) return true;
   if (
     (stage === "supplier" || stage === "customer") &&
     Number(r.__lane_count ?? 0) > 1 &&
-    !groupHasPrimary(stage, r, rows, resolve)
+    !groupHasPrimary(stage, r, rows, resolve, primaries)
   ) {
     return true;
   }
@@ -82,5 +108,6 @@ export function stageNeedsCount(
   rows: Record<string, unknown>[],
   resolve: ResolveField,
 ): number {
-  return rows.filter((r) => lineNeedsInput(stage, r, rows, resolve)).length;
+  const primaries = primaryGroupKeys(stage, rows, resolve);
+  return rows.filter((r) => lineNeedsInput(stage, r, rows, resolve, primaries)).length;
 }

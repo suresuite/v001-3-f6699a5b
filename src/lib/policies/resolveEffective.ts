@@ -1,4 +1,4 @@
-import { effectivePolicy, type OverrideRow } from "./resolve";
+import { effectivePolicy, overridesForTarget, type OverrideRow } from "./resolve";
 import type { PolicyBundle, PolicyFamily } from "./schemas";
 import { GATE_FIELDS, type ColSpec, type ColSpecCtx } from "./columnSpecs";
 import { reducerLabel, type DerivedValue } from "./effectiveEconomics";
@@ -358,7 +358,7 @@ export function savedOverrideValue(
   family: PolicyFamily | undefined,
   families: readonly PolicyFamily[],
 ): unknown {
-  const forRow = overrides.filter((o) => o.target_key === rowKey);
+  const forRow = overridesForTarget(overrides, rowKey);
   const pick = (fam: PolicyFamily): unknown => {
     for (const o of forRow) {
       if (o.family !== fam) continue;
@@ -684,8 +684,8 @@ export function resolveCell(args: {
     : !edited &&
       !imputed &&
       !fromData &&
-      overrides.some(
-        (o) => o.target_key === rowKey && o.family === col.family && col.field in (o.patch ?? {}),
+      overridesForTarget(overrides, rowKey).some(
+        (o) => o.family === col.family && col.field in (o.patch ?? {}),
       );
   // A routing decision this stage derived from the uploaded volumes (primary
   // source, sourcing firm). Ranked BELOW a saved override: once the user (or

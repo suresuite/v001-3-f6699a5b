@@ -23,6 +23,42 @@ export interface OverrideRow {
 }
 
 /**
+ * The overrides that target ONE key, in list order — from an index built once
+ * per override LIST.
+ *
+ * Every cell of the grid asks "what is saved for this row?", and answering it
+ * with `overrides.some/filter(o => o.target_key === key)` made one render
+ * O(cells × overrides). The index is keyed on the array's identity, so a save
+ * (which replaces the list) rebuilds it, and guarded by length, so a list grown
+ * in place does too. Within a key the order is the list's own, which is the
+ * order `effectivePolicy` merges patches in.
+ */
+interface TargetIndex {
+  len: number;
+  byKey: Map<string, OverrideRow[]>;
+}
+const TARGET_INDEX = new WeakMap<readonly OverrideRow[], TargetIndex>();
+const NO_OVERRIDES: readonly OverrideRow[] = [];
+
+export function overridesForTarget(
+  overrides: readonly OverrideRow[],
+  targetKey: string,
+): readonly OverrideRow[] {
+  let idx = TARGET_INDEX.get(overrides);
+  if (!idx || idx.len !== overrides.length) {
+    const byKey = new Map<string, OverrideRow[]>();
+    for (const o of overrides) {
+      const bucket = byKey.get(o.target_key);
+      if (bucket) bucket.push(o);
+      else byKey.set(o.target_key, [o]);
+    }
+    idx = { len: overrides.length, byKey };
+    TARGET_INDEX.set(overrides, idx);
+  }
+  return idx.byKey.get(targetKey) ?? NO_OVERRIDES;
+}
+
+/**
  * Return the effective policy for a given node or edge by merging the project
  * default with all overrides that target it.
  */
@@ -33,8 +69,8 @@ export function effectivePolicy(
   targetKey: string,
 ): PolicyBundle {
   const out: PolicyBundle = { ...defaults };
-  for (const o of overrides) {
-    if (o.scope !== scope || o.target_key !== targetKey) continue;
+  for (const o of overridesForTarget(overrides, targetKey)) {
+    if (o.scope !== scope) continue;
     (out as unknown as Record<string, unknown>)[o.family] = mergePatch(
       (defaults as unknown as Record<string, unknown>)[o.family] as Record<string, unknown>,
       o.patch as Record<string, unknown>,
