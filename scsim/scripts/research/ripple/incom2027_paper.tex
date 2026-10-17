@@ -20,6 +20,8 @@
 \usepackage{amsmath,amssymb}
 \usepackage{booktabs}
 \usepackage{xcolor}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
 \graphicspath{{figures/}}
 
 \newcommand{\pilot}[1]{\textcolor{red}{#1}}   % pilot value: replace after the full run
@@ -76,84 +78,206 @@ We test three hypotheses. \textbf{H1}: network structure shapes cascades -- late
 \section{Product-integrated network generation}
 \label{sec:gen}
 
-\subsection{Two linked graphs}
-The \emph{item graph} is a multi-level BOM over item tiers $0,\dots,8$ (end products at tier 0, raw materials at tier 8). The \emph{firm graph} $G=(V,E)$ states who produces each item and who buys from whom; every node is a firm, and market demand enters at the tier-0 firms (OEMs). Firm $f$ produces a portfolio $I_f$ of items on one resource with capacity $C_f$. For each component $c$ needed by $f$, the \emph{sourcing group} $g=(f,c)$ has a set of alternative suppliers $S_g$.
+\subsection{Objects and notation}
+A network has tiers $k=0,\dots,8$; tier 0 holds end products and OEMs, tier 8 raw materials. It consists of two linked graphs.
+\begin{itemize}
+\item The \textbf{item graph} is a multi-level BOM. Item $i$ has tier $k(i)$ and a set of components $\mathrm{BOM}(i)=\{(c,a_{ic})\}$, where $a_{ic}\in\{1,2,3\}$ is the quantity of $c$ per unit of $i$. A \emph{regular} component lies one tier below its parent ($k(c)=k(i)+1$); a \emph{closure} component lies two tiers below. Items belong to product platforms $\pi(i)\in\{1,\dots,P\}$.
+\item The \textbf{firm graph} $G=(V,E)$ has one node per firm. Firm $f$ has tier $k(f)$, a platform $\pi(f)$, and a portfolio $I_f$ of items of its tier that it produces on \emph{one} shared resource. A link $(s,f)\in E$ means that $s$ supplies at least one item to $f$; links point along the material flow.
+\item A \textbf{sourcing group} $g=(f,c)$ is a component $c$ needed by firm $f$, with its set of alternative suppliers $S_g\subseteq\mathrm{Prod}(c)$, where $\mathrm{Prod}(c)$ are the firms producing $c$.
+\end{itemize}
+The AND/OR logic follows directly: $f$ can produce item $i$ only if \emph{every} group $g(f,c)$, $c\in\mathrm{BOM}(i)$, has stock (AND); a group can be replenished by \emph{any} supplier in $S_g$ (OR).
 
-\subsection{Generation pipeline}
-Each step has its own control, so every triad type can be varied independently (Table~\ref{tab:controls}).
-\begin{enumerate}
-\item \textbf{BOM.} Items are grouped into product platforms. Each item at tier $k$ draws $m$ components from tier $k+1$ by preferential attachment on use, biased towards its own platform; this controls component commonality (shared materials).
-\item \textbf{Closure.} If $i$ uses $j$ and $j$ uses $l$, $i$ also uses $l$ directly with probability $\tau$ (mixed-level BOM).
-\item \textbf{Firms.} Firms specialise in one platform; each item receives up to two additional producers (alternatives).
-\item \textbf{Sourcing}, tier by tier from the OEMs upwards. A firm that is a co-source of some buyer copies its sibling's supplier with probability $\kappa$ (a diamond) and otherwise diversifies away from it; else it copies its peers' most popular supplier with probability $\beta$ (shared supplier); else it chooses by preferential attachment with exponent $\alpha$. A second source is added with probability $\rho$. Every producer serves at least one buyer.
-\item \textbf{Directed sourcing.} A closure component is bought from the firm that supplies it to the buyer's own suppliers with probability $\tau_d$ (transitive triangle).
-\item \textbf{Quantities.} Market demand is exploded through the BOM and the sourcing shares (MRP logic) to item rates $x_{f,i}$ and component needs $n_g$; capacity is $C_f = \sum_i x_{f,i}/u_f$ for a target utilisation $u_f$; lead times grow upstream; base stocks are set as in Section~\ref{sec:des}.
-\end{enumerate}
-Edges connect adjacent tiers (closure edges skip one), so the longest raw-to-OEM path is exactly eight edges. A network is rejected unless it is acyclic, has depth eight, and every firm lies on a raw-to-OEM path.
+\subsection{Generation algorithm}
+Algorithm~\ref{alg:gen} generates one network from a family template (Table~\ref{tab:families}) and a factor vector $\boldsymbol{\vartheta}=(u,\rho,\alpha,\beta,\kappa,\tau,\tau_d,s,s^{FG},\delta)$. Every random choice uses one seeded generator, so a network is reproducible from its seed. Each step creates one structural feature, controlled by its own parameter (Table~\ref{tab:controls}).
+
+\begin{algorithm}[t]
+\caption{Product-integrated network generator}
+\label{alg:gen}
+\small
+\begin{algorithmic}[1]
+\Require template $(w_{0..8}, m_{\min}, m_{\max}, \alpha_b, \mu, p_{\min}, p_{\max}, q, P)$, factors $\boldsymbol{\vartheta}$, seed
+\State create $w_k$ items per tier; assign platforms (end items round-robin, others uniformly)
+\For{$k=0,\dots,7$; each item $i$ of tier $k$} \Comment{BOM}
+  \State draw $m_i\sim\mathcal{U}\{m_{\min},\dots,m_{\max}\}$ components $j$ of tier $k{+}1$ without replacement, with weight $(\mathrm{use}_j+1)^{\alpha_b}\cdot(1\text{ if }\pi(j)=\pi(i)\text{ else }\mu)$; $a_{ij}\sim\mathcal{U}\{1,2,3\}$
+\EndFor
+\State attach every item of tier $k\ge1$ that has no parent to a random same-platform item of tier $k{-}1$
+\State for every chain $i\to j\to l$ of regular components, add $l$ to $\mathrm{BOM}(i)$ with probability $\tau$ \Comment{closure}
+\For{each tier $k$ and platform} \Comment{firms}
+  \State partition the platform's items into portfolios of size $\mathcal{U}\{p_{\min},\dots,p_{\max}\}$, one firm each
+\EndFor
+\State for each item, twice: with probability $q$ add a further producer of the same tier (same platform w.p.\ 0.8)
+\For{$k=0,\dots,7$; firms $f$ of tier $k$ in random order; regular components $c$ of $f$} \Comment{sourcing}
+  \State $\Sigma\gets$ suppliers of $c$ already chosen by the co-sources of $f$
+  \State if $\Sigma\neq\emptyset$: w.p.\ $\kappa$ copy a supplier from $\Sigma$ (diamond); else exclude $\Sigma$ when alternatives exist
+  \State if none chosen: w.p.\ $\beta$ copy the most frequent supplier of $c$ among earlier buyers (shared supplier)
+  \State if none chosen: pick $s\in\mathrm{Prod}(c)$ with probability $\propto(\mathrm{buyers}(s)+1)^{\alpha}$ (hubs)
+  \State w.p.\ $\rho$ add a second, different producer by the same rule (dual sourcing)
+\EndFor
+\State after each tier: every producer of a tier-$(k{+}1)$ item joins some group of that item; record co-sources
+\For{each closure component $c$ of $f$} \Comment{directed sourcing}
+  \State w.p.\ $\tau_d$ buy $c$ from a firm that supplies it to $f$'s own suppliers; else by the hub rule
+\EndFor
+\State compute quantities, capacities, lead times and stock levels (Section~\ref{sec:quant})
+\State \textbf{reject} unless $G$ is acyclic, its longest path has 8 links, and every firm lies on a raw-to-OEM path
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Quantities and parameters}
+\label{sec:quant}
+\emph{Demand.} Each end item has market demand $d_i\sim\mathcal{U}[5,20]$ units/day, split equally among its producers. \emph{Rates} follow an MRP explosion, tier by tier from the OEMs: firm $f$ produces item $i$ at rate $x_{f,i}$; its need for component $c$ is $n_g=\sum_{i\in I_f}x_{f,i}\,a_{ic}$, split equally across $S_g$, so that supplier $s\in S_g$ adds $n_g/|S_g|$ to $x_{s,c}$. The throughput of $f$ is $x_f=\sum_i x_{f,i}$. \emph{Capacity} is $C_f=x_f/u_f$ units/day, with utilisation $u_f=u+\mathcal{U}[-0.05,0.05]$ clipped to $[0.3,0.97]$. \emph{Lead times} are integers $L_{sf}\sim\mathcal{U}\{2,\dots,3+k(s)\}$ days, longer upstream. \emph{Safety} days are firm-specific, $s_f=s\cdot\mathcal{U}[0.5,1.5]$ and $s^{FG}_f=s^{FG}\cdot\mathcal{U}[0.5,1.5]$. Lot sizes and stock levels are defined in Section~\ref{sec:des}.
 
 \begin{table}[t]
-\caption{Generator controls and the triads they create.}
-\label{tab:controls}
-\centering\small
-\begin{tabular}{lll}
+\caption{Family templates. $w$: items per tier T0--T8 (multiplied by a scale factor; at least 2); $m$: components per item; $\alpha_b$: preference for widely used components; $\mu$: cross-platform weight; $p$: items per firm; $q$: probability of each extra producer; $P$: platforms.}
+\label{tab:families}
+\centering\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lp{3.2cm}cccccc}
 \toprule
-Control & Mechanism & Triad \\
+Family & $w$ & $m$ & $\alpha_b$ & $\mu$ & $p$ & $q$ & $P$ \\
 \midrule
-$m$, platform mixing & BOM size, commonality & shared material \\
-$\alpha,\beta$ & hubs, copying peers & shared supplier \\
-$\rho$ & second source & co-suppliers (OR) \\
-$\kappa$ & copy sibling's supplier & diamond \\
-$\tau,\tau_d$ & closure, directed sourcing & transitive triangle \\
-$u$, buffers & capacity, stock & -- \\
+Pyramid & 8,14,20,26,32,38,44,50,56 & 2--4 & 1.0 & .15 & 1--2 & .35 & 4 \\
+Assembly & 6,14,24,34,42,48,52,54,56 & 3--6 & 1.5 & .10 & 1--3 & .30 & 3 \\
+Chokepoint & 8,14,20,26,\textbf{3},30,36,42,48 & 2--3 & 1.0 & .15 & 1--2 & .30 & 4 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Families and fingerprints}
-Three families vary the tier profile: \emph{pyramid}, \emph{complex assembly} (wide upstream, BOMs of 3--6 components) and \emph{chokepoint} (one tier with three items). Within each family the controls are sampled by Latin hypercube. Every network carries a fingerprint: size, degree statistics, assortativity, degree of commonality, platform modularity, dual-sourcing share, producer dominance, hidden concentration, and the triad census with $z$-scores against a tier-preserving random null that keeps the number of links between every pair of tiers.
+\begin{table}[t]
+\caption{Factors (Latin hypercube within each family), the mechanism each controls, and the triad it creates.}
+\label{tab:controls}
+\centering\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{llll}
+\toprule
+Factor & Range & Mechanism & Triad / effect \\
+\midrule
+$\alpha$ & 0--1.5 & hub preference & shared supplier \\
+$\beta$ & 0--0.8 & copy peers' supplier & shared supplier \\
+$\rho$ & 0--0.8 & second source & co-suppliers (OR) \\
+$\kappa$ & 0--0.9 & copy sibling's supplier & diamond \\
+$\tau$ & 0--0.06 & BOM closure & transitive triangle \\
+$\tau_d$ & 0--0.8 & directed sourcing & transitive triangle \\
+$u$ & 0.60--0.92 & utilisation & capacity slack \\
+$s$ & 1--8 d & component safety & buffer \\
+$s^{FG}$ & 1--5 d & finished-goods safety & buffer \\
+$\delta$ & 1--10 d & detection lag & rerouting speed \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Fingerprints}
+Each network is described by: number of firms and links; mean and maximum out-degree; degree assortativity; the degree of commonality \citep{Collier1981} (mean number of parents per non-end item); platform modularity; dual-sourcing share (groups with $|S_g|\ge2$); producer dominance (share of a component's buyers held by its most popular producer); hidden concentration (among inputs of dual-sourced components that have alternative producers, the share that both sources buy from the same firm); and the triad census of $G$ with $z$-scores against a tier-preserving random null with the same number of links between every pair of tiers \citep{Milo2002}. In the census, codes 021D, 021U, 021C and 030T are the shared supplier, co-suppliers, chain and transitive triangle.
 
 %% ----------------------------------------------------------------------------
-\section{Discrete-event simulation}
+\section{Discrete-event simulation and cascade definition}
 \label{sec:des}
 
-Time is continuous (days) and all firms follow the same rules.
+\subsection{State and policies}
+Time is continuous, in days. For each firm $f$ and item $i\in I_f$ the state holds finished goods $F_{f,i}$, work in progress $W_{f,i}$, a first-come-first-served queue of open orders, and the backlog $B_{f,i}$ (units ordered but not shipped). For each sourcing group $g$ it holds the on-hand stock $I_g$, the quantity on order $O_g$ and a rotation pointer over $S_g$. Each firm has one resource that is idle, busy or down. The policies are:
 \begin{itemize}
-\item \emph{Orders.} Market orders (one day of demand) arrive daily at OEMs; replenishment orders join the supplier's first-come-first-served queue for the item.
-\item \emph{Production.} If the resource is up and idle, the firm starts a lot of $Q_{f,i}=7x_{f,i}$ of the item with the largest finished-goods (FG) gap, among the items whose components are \emph{all} on hand:
-\begin{equation}
-\text{start}(i) \iff \mathrm{IP}^{FG}_{f,i} < S^{FG}_{f,i} \ \wedge\ \forall (c,a)\in \mathrm{BOM}(i):\ I_{g(f,c)} \ge a\,Q_{f,i},
-\end{equation}
-with $\mathrm{IP}^{FG}$ = FG + work in progress $-$ backlog. A lot occupies the shared resource for $Q_{f,i}/C_f$ days.
-\item \emph{Shipping.} While FG covers the head-of-queue order, it is shipped and arrives after the lane lead time.
-\item \emph{Replenishment.} When the inventory position of group $g$ falls below $S_g = n_g(L_g + 7 + 7 + s_f)$ -- lead time, order cycle, supplier lot cycle and $s_f$ safety days -- a lot of seven days of need is ordered from the next active source in rotation (OR).
-\item \emph{Disruption and rerouting.} A disrupted firm's resource is down for $D$ days (it may still ship from stock). After a detection lag $\delta$ its buyers order only from their alternative sources, whose capacity is unchanged; they return after recovery $+\delta$.
+\item \emph{Lots and orders.} A production lot of $i$ is $Q_{f,i}=7x_{f,i}$ (one week of output); a replenishment order of $g$ is $Q_g=7n_g$.
+\item \emph{Finished goods (make-to-stock).} The FG target is $S^{FG}_{f,i}=x_{f,i}(7+s^{FG}_f)$ and the FG position is $\mathrm{IP}^{FG}_{f,i}=F_{f,i}+W_{f,i}-B_{f,i}$.
+\item \emph{Components (base stock).} The target $S_g=n_g\,(L_g+7+7+s_f)$ covers the longest lead time $L_g=\max_{s\in S_g}L_{sf}$, the own order cycle, the supplier's lot cycle and $s_f$ safety days. The position is $I_g+O_g$.
 \end{itemize}
-Demand, lead times and processing times are deterministic, so one run per scenario is exact. Each network is warmed up once; the state is copied, and every disruption and the clean reference continue from the same snapshot.
 
-\textbf{Validation.} On every pilot network the clean run serves \pilot{100\%} of market demand with no backlog growth; runs are bit-identical when repeated; a zero-length outage changes nothing; units are conserved per firm and per component (error below \pilot{$10^{-4}$}); and hand-built AND and OR cases behave as expected (an AND buyer stops when one single-sourced component stops; an OR buyer with a spare-capacity alternative is protected while the alternative receives the rerouted orders).
-
-\subsection{Cascade labels}
-For firm $f$ with throughput $x_f$, let $B^{d}_f(t)$ and $B^{c}_f(t)$ be its unfilled orders in the disrupted and clean runs. The firm suffers a \textbf{service failure} if
+\subsection{Events}
+Events are processed in time order; at equal times, control events precede arrivals, then completions, market orders and sampling, then the order of creation.
+\begin{description}
+\item[Market order] (daily, at each OEM item): add an order of $x_{f,i}$ units to the queue; try to ship; try to produce.
+\item[Try to ship $(f,i)$:] while $F_{f,i}$ covers the order at the head of the queue, ship it in full; it reaches buyer $b$ after $L_{fb}$ days.
+\item[Try to produce $f$:] if the resource is idle and up, among the items with $\mathrm{IP}^{FG}_{f,i}<S^{FG}_{f,i}$, choose the one with the largest normalised gap $(S^{FG}_{f,i}-\mathrm{IP}^{FG}_{f,i})/x_{f,i}$ that can start:
 \begin{equation}
-\frac{B^{d}_f(t)-B^{c}_f(t)}{x_f} \ \ge\ \theta \quad \text{for } P \text{ consecutive days},
+\forall (c,a)\in\mathrm{BOM}(i):\quad I_{g(f,c)}\ \ge\ a\,Q_{f,i}\qquad\text{(AND)}.
 \end{equation}
-with $\theta = 1$ day and $P=3$. A firm that merely receives fewer orders is not hit; changes in orders received are recorded separately as \emph{order shocks}. We record the time to impact $\tau_f$ (first day of failure), severity (peak extra backlog, in days of output), the direction (downstream, upstream or lateral relative to the disrupted firm in $G$) and the \textbf{causal parent}: the supplier whose deliveries fell furthest behind before the failure (supply-caused) or, if none, the buyer whose orders rose most (overload-caused). Parents form the cascade tree.
+Consume the components, occupy the resource for $Q_{f,i}/C_f$ days, and check reorders.
+\item[Reorder $g$:] while $I_g+O_g<S_g$, order $Q_g$ from the next \emph{active} supplier of $S_g$ in rotation (OR); the order joins that supplier's queue at once.
+\item[Arrival / completion:] update stock, then try to produce (and, for completions, try to ship).
+\item[Disruption of $v$:] at $t_0$ the resource of $v$ goes down for $D$ days (\emph{production stop}: $v$ still ships from its finished goods); at $t_0+D$ it restarts.
+\item[Detection and rerouting:] at $t_0+\delta$ every buyer stops ordering from $v$ wherever it has another supplier in $S_g$; the alternatives' capacity is unchanged. Normal rotation resumes at $t_0+D+\delta$.
+\end{description}
+
+\subsection{Experimental protocol}
+All inputs are deterministic, so one run per scenario is exact. Each network starts with $F=S^{FG}$ and $I_g=S_g$, is warmed up for $W$ days, and its full state is copied. Every disruption scenario $(v,D)$ and the clean reference continue from that copy for $H$ days (the clean run receives the same number of no-op control events, so tie-breaking is identical). Both runs record, once per day, cumulative shipments, cumulative orders received and backlog per firm, and cumulative deliveries and orders per link. Because the two runs share the same past and are deterministic, \emph{every} difference between them is caused by the disruption.
+
+\subsection{Definition of the disruption cascade}
+\label{sec:cascade}
+Let $k=0,\dots,H-1$ index the days after $t_0$, and superscripts $d,c$ denote the disrupted and clean runs.
+
+\emph{Service failure.} The extra backlog of firm $f$, in days of its output, is
+\begin{equation}
+\Delta_f(k)=\big(B^{d}_f(k)-B^{c}_f(k)\big)/x_f .
+\end{equation}
+Firm $f$ \textbf{fails} if $\Delta_f(k)\ge\theta$ for $P$ consecutive days ($\theta=1$ day, $P=3$). Its \emph{time to impact} $\tau_f$ is the first day of the first such run; its \emph{severity} is $\sigma_f=\max_k\Delta_f(k)$ and its \emph{duration} the number of days with $\Delta_f(k)\ge\theta$. A firm that only receives fewer orders has a negative $\Delta_f$ and does not fail.
+
+\emph{Order shock.} With $R_f(k)$ the cumulative orders received, $f$ has an order shock if $|R^{c}_f(k)-R^{d}_f(k)|/x_f\ge\theta$ for $P$ consecutive days. Shocks carry the disruption upstream (fewer orders while $v$ is down, a surge when it restarts) and to alternative suppliers (rerouted orders).
+
+\emph{Direction and distance.} Relative to the disrupted firm $v$, a firm is \emph{downstream} if $f\in\mathrm{Desc}_G(v)$, \emph{upstream} if $f\in\mathrm{Anc}_G(v)$, and \emph{lateral} otherwise; its hop distance is the shortest-path length from $v$ in the undirected version of $G$.
+
+\emph{Causal parent.} For link $(s,f)$ let $r_{sf}=\sum_{g=(f,c):\,s\in S_g}n_g/|S_g|$ be its planned flow. The delivery deficit and the order surplus, in days of planned flow, are
+\begin{align}
+\Delta^{\mathrm{del}}_{sf}(k)&=\big(D^{c}_{sf}(k)-D^{d}_{sf}(k)\big)/r_{sf},\\
+\Delta^{\mathrm{ord}}_{fb}(k)&=\big(O^{d}_{fb}(k)-O^{c}_{fb}(k)\big)/r_{fb},
+\end{align}
+where $D_{sf}$ are cumulative deliveries from $s$ to $f$ and $O_{fb}$ cumulative orders placed by buyer $b$ with $f$. The parent of a failed firm $f\neq v$ is
+\begin{equation}
+p(f)=\begin{cases}
+\arg\max_{s\in\mathrm{pred}(f)}\,\max_{k\le\tau_f}\Delta^{\mathrm{del}}_{sf}(k) & \text{if}>0,\\[2pt]
+\arg\max_{b\in\mathrm{succ}(f)}\,\max_{k\le\tau_f}\Delta^{\mathrm{ord}}_{fb}(k) & \text{else, if}>0.
+\end{cases}
+\end{equation}
+In the first case the failure is \emph{supply-caused}: a supplier delivered too little. In the second it is \emph{overload-caused}: a buyer ordered more than planned, because it rerouted demand away from $v$ or because $v$ restarted and caught up.
+
+\emph{Cascade path and tree.} The \textbf{cascade path} of a failed firm $f$ is the parent chain $f\leftarrow p(f)\leftarrow p(p(f))\leftarrow\cdots$. It ends at the disrupted firm $v$, or at a \emph{transmitter}: a parent that did not fail itself but changed its orders in response to $v$, such as a buyer of $v$ that rerouted. The \textbf{cascade tree} of a scenario is $T(v)=\{(p(f),f): f \text{ failed}\}$. Supply links in $T(v)$ follow the material flow; overload links run against it. This is what separates lateral and upstream failures from the downstream shortage wave.
+
+\emph{Baselines from the network alone.} \textbf{Reachability} predicts failure for every downstream firm, with $\tau$ equal to the lead-time distance from $v$. The \textbf{cascade rule}, in the spirit of \citet{Zhao2019}, propagates a shortage wave $(a_f,\ell_f)$ (start, length) in topological order. For $v$, $a_v=c^{FG}_v$ and $\ell_v=D-c^{FG}_v$, with FG cover $c^{FG}_f=s^{FG}_f+3.5$. A group $g$ of $f$ loses supply only if \emph{all} its sources are hit (OR); its shortage then runs from $\max_s(a_s+L_{sf})$ to $\min_s(a_s+\ell_s+L_{sf})$ and is reduced by the buffer $b_f=s_f+3.5+c^{FG}_f$. Firm $f$ is hit by its earliest group whose remaining length is positive (AND). The rule has no capacity, no rerouting load and no order effects.
+
+\subsection{Validation}
+On every network the clean run serves \pilot{100\%} of market demand, and the network's total backlog does not grow between the two halves of the horizon. Repeated runs are bit-identical, and a zero-length outage changes nothing. Units are conserved per firm (produced $-$ shipped $=\Delta$FG) and per group (delivered $-$ consumed $=\Delta I_g$), with errors below \pilot{$10^{-4}$}. Two hand-built cases behave as expected: an AND buyer fails when one single-sourced component stops, and an OR buyer with a spare-capacity alternative is protected while the alternative receives the rerouted orders.
 
 %% ----------------------------------------------------------------------------
-\section{AND/OR-aware graph neural network}
+\section{GNN setting}
+\label{sec:gnn}
 
-Each scenario is a graph with firm nodes and sourcing-group nodes $g=(f,c)$, edges $s\to g$ for $s\in S_g$ and $g\to f$. Firm features are tier, utilisation, throughput, buffers, portfolio size, degrees, dual-sourcing share and lead times, plus the disruption signal (target flag, duration). A layer updates firm states $h$ as
+\emph{Task.} Given the network and a disruption $(v,D)$, predict for every firm $f\neq v$ whether it fails, its time to impact $\tau_f$ and its severity. Each scenario is one graph.
+
+\emph{Graph and features.} Nodes are firms and sourcing groups, with three kinds of edges: supplier $\to$ group ($s\in S_g$), group $\to$ buyer, and firm $\to$ firm ($E$).
+\begin{itemize}
+\item \emph{Firm features} (20): one-hot tier (9); $u_f$; $\log(1+x_f)/5$; FG cover $c^{FG}_f/10$; $|I_f|/4$; $\log(1{+}\text{out-degree})/3$ and $\log(1{+}\text{in-degree})/3$; the share of $f$'s groups that are dual-sourced; component cover $(s_f+3.5)/10$; mean inbound lead time$/10$; and the disruption signal (target flag, $D/D_{\max}$).
+\item \emph{Group features} (4): $|S_g|/2$; cover $(s_f+3.5)/10$; $L_g/10$; closure flag.
+\item \emph{Edge feature}: lead time$/10$.
+\end{itemize}
+No feature tells the model where $v$ is relative to $f$; that must be learned by message passing.
+
+\emph{AND/OR-aware layer.} All $\phi_j$ are two-layer MLPs (GELU, width $d_h$); $h$ are firm states. Group states are re-encoded in every layer from the group features $e_g$. For a group $g=(f,c)$, sums and maxima run over its suppliers $s\in S_g$:
 \begin{align}
-h_g &= \phi_g\Big(\textstyle\sum_{s\in S_g}\mu(h_s),\ \max_{s\in S_g}\mu(h_s),\ h_f,\ e_g\Big) && \text{(OR)}\\
-a_f &= \Big[\min_{g\in\mathcal{G}_f} h_g,\ \mathrm{mean}_{g\in\mathcal{G}_f} h_g\Big] && \text{(AND)}\\
-h_f' &= \mathrm{LN}\big(h_f + \phi_f(h_f, m^{\mathrm{in}}_f, m^{\mathrm{out}}_f, a_f, r_f)\big)
+\mu_{sg}&=\phi_1([h_s,L_{sf}]),\\
+h_g&=\phi_2\big([\textstyle\sum_{s}\mu_{sg},\ \max_{s}\mu_{sg},\ h_f,\ \phi_0(e_g)]\big),\label{eq:or}\\
+a_f&=\big[\min_{g\in\mathcal{G}_f}h_g,\ \mathrm{mean}_{g\in\mathcal{G}_f}h_g\big],\label{eq:and}\\
+\psi_{sg}&=\phi_3([h_g,h_s,L_{sf}]),\\
+r_s&=\big[\textstyle\sum_{g\ni s}\psi_{sg},\ \max_{g\ni s}\psi_{sg}\big],\label{eq:up}\\
+m^{\mathrm{in}}_f&=\mathrm{mean}_{(s,f)\in E}\ \phi_4([h_s,L_{sf}]),\\
+m^{\mathrm{out}}_f&=\mathrm{mean}_{(f,b)\in E}\ \phi_5([h_b,L_{fb}]),\\
+h_f&\leftarrow\mathrm{LN}\big(h_f+\phi_6([h_f,m^{\mathrm{in}}_f,m^{\mathrm{out}}_f,a_f,r_f])\big),
 \end{align}
-where $m^{\mathrm{in}}, m^{\mathrm{out}}$ are mean messages over firm-to-firm links in both directions and $r_f$ aggregates messages from the groups $f$ supplies (upstream effects). The \emph{generic GNN} is the same model without the group channels (GraphSAGE-style; \citealp{Hamilton2017}), so the comparison is an ablation of the product structure. Eight layers cover the network depth. Heads predict the failure probability, $\tau_f$ and severity; the loss combines weighted binary cross-entropy with Huber losses on $\tau_f$ (failed firms only) and severity.
+where $\mathcal{G}_f$ are the groups of $f$, $g\ni s$ the groups that $s$ supplies, and LN is layer normalisation. Eq.~(\ref{eq:or}) is the OR over alternative suppliers, Eq.~(\ref{eq:and}) the AND over the BOM, and Eq.~(\ref{eq:up}) carries effects against the material flow. The upstream channel is what lets the model see rerouting load and the restart surge. We use $K=8$ layers, the depth of the network.
+
+\emph{Heads and loss.} A two-layer MLP maps $h_f$ to a failure logit $z_f$, a time $\hat\tau_f=H\,\mathrm{sigmoid}(\cdot)$, where $H$ is the horizon, and a severity $\hat\sigma_f=\mathrm{softplus}(\cdot)$. The loss over non-target firms is
+\begin{multline}
+\mathcal{L}=\mathrm{BCE}_{w}(z,y)+2\,\mathrm{Huber}_{0.05}\big(\hat\tau/H,\tau/H\big)\big|_{y=1}\\
++0.5\,\mathrm{Huber}\big(\hat\sigma,\log(1+\sigma)\big),
+\end{multline}
+with positive-class weight $w=\min(20,(1-\bar y)/\bar y)$; the time term uses failed firms only.
+
+\emph{Training.} AdamW (learning rate $2\cdot10^{-3}$, weight decay $10^{-4}$), cosine schedule, batches of 16 scenarios, gradient clipping at 1, \pilot{25} epochs with $d_h=\pilot{64}$ in the pilot, and 80 epochs with $d_h=96$ in the full study. The checkpoint with the best validation AUPRC is kept, and the decision threshold for F1 is tuned on validation networks.
+
+\emph{Comparisons.} The \textbf{generic GNN} keeps only the firm-to-firm channels ($m^{\mathrm{in}},m^{\mathrm{out}}$), i.e.\ a GraphSAGE-style model \citep{Hamilton2017} with the same depth, width and training, so the comparison isolates the product structure. The \textbf{feature MLP} has no message passing but receives what the GNNs must infer: hop distance to $v$ and the direction (down, up, lateral). The two rules of Section~\ref{sec:cascade} complete the set.
+
+\emph{Splits and metrics.} Data are split \emph{by network}, never by scenario: within each family, 70/15/15\% of the training-scale networks for training, validation and test, plus larger networks used only for testing. We report AUPRC, F1, precision and recall for failures; the mean absolute error of $\tau$ on failures correctly predicted; and F1 by hop distance and by direction.
 
 %% ----------------------------------------------------------------------------
 \section{Experimental design}
 
-The pilot uses \pilot{33} networks (\pilot{11} per family): \pilot{24} at training scale (\pilot{80--110} firms), split by network into training, validation and test, and \pilot{9} larger networks (\pilot{156--204} firms) used only for testing. In every network, \pilot{two} firms per tier T1--T8 are disrupted for \pilot{21 and 56} days, giving \pilot{1\,056} scenarios and \pilot{121\,632} firm--scenario labels. Baselines are \emph{reachability} (failure = downstream of the target, $\tau$ = lead-time distance), a \emph{cascade rule} in the spirit of \citet{Zhao2019} (a shortage wave stops a buyer's supply only when all its sources are hit, stops a firm when any component stops, and is absorbed by stock buffers), and a feature MLP given the hop distance and direction to the target. \todo{Full study: 3 families $\times$ 230 networks, 4 targets per tier, durations 14/28/56/84 days, 5 training seeds.}
+The pilot uses \pilot{33} networks (\pilot{11} per family): \pilot{24} at training scale (\pilot{80--110} firms), split by network into training, validation and test, and \pilot{9} larger networks (\pilot{156--204} firms) used only for testing. In every network, \pilot{two} firms per tier T1--T8 are disrupted for \pilot{21 and 56} days, giving \pilot{1\,056} scenarios and \pilot{121\,632} firm--scenario labels. Warm-up is \pilot{$W=120$} days and the horizon \pilot{$H=160$} days after $t_0$. \todo{Full study: 3 families $\times$ 230 networks, 4 targets per tier, durations 14/28/56/84 days, $W=150$, $H=240$, 5 training seeds.}
 
 %% ----------------------------------------------------------------------------
 \section{Results}
