@@ -1,0 +1,12 @@
+# Exact environment used for the INCOM 2027 runs (Python 3.13.16, Linux x86_64).
+# NumPy's random streams and floating-point summation order can change between versions;
+# install these versions to reproduce the network and label digests bit for bit.
+numpy==2.5.3
+pandas==3.0.5
+networkx==3.7
+scikit-learn==1.9.1
+scipy==1.18.1
+matplotlib==3.11.2
+torch==2.14.1
+nbclient
+ipykernel
