@@ -1,0 +1,316 @@
+%% ============================================================================
+%% INCOM 2027 draft -- Learning disruption cascades in product-integrated
+%% supply networks.
+%%
+%% Template: IFAC conference class (ifacconf.cls + ifacconf.bst), available
+%% from the IFAC author kit. Place ifacconf.cls next to this file.
+%%
+%% NUMBERS IN RED (\pilot{...}) come from the notebook's MODE="quick" pilot
+%% (33 small networks, one training seed). Replace every one of them with the
+%% MODE="incom" results before submission. Figures in figures/ are exported
+%% from the same pilot run of incom2027_cascade.ipynb.
+%%
+%% REFERENCES were written from memory -- verify every entry (authors, year,
+%% volume, pages) before submission.
+%% ============================================================================
+\documentclass{ifacconf}
+
+\usepackage{graphicx}
+\usepackage{natbib}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\graphicspath{{figures/}}
+
+\newcommand{\pilot}[1]{\textcolor{red}{#1}}   % pilot value: replace after the full run
+\newcommand{\todo}[1]{\textcolor{red}{[#1]}}
+
+\begin{document}
+\begin{frontmatter}
+
+\title{Learning Disruption Cascades in Product-Integrated Multi-Tier Supply Networks with Graph Neural Networks}
+
+\author[First]{Phu Nguyen}
+\author[Second]{\todo{Co-author}}
+
+\address[First]{\todo{Affiliation, address} (e-mail: \todo{e-mail}).}
+\address[Second]{\todo{Affiliation, address} (e-mail: \todo{e-mail}).}
+
+\begin{abstract}
+When a firm deep in a supply network fails, the damage travels further than its customers: alternative suppliers are overloaded by rerouted orders, and suppliers are hit by the order surge when the failed firm restarts. We study these cascades on product-integrated multi-tier networks in which every node is a firm, products are linked by multi-level bills of materials, and the triads that shape propagation (shared suppliers, co-suppliers, transitive triangles, diamonds and shared materials) are generated under explicit control. A deterministic discrete-event simulation of every firm provides firm-level ground truth: whether a firm fails to serve its customers, when, how badly, and through which neighbour. In a pilot study, \pilot{80\%} of service failures are lateral or upstream and are therefore invisible to topology-based cascade rules, which reach an F1-score of \pilot{0.31}. A graph neural network whose message passing follows the AND logic of the bill of materials and the OR logic of multi-sourcing predicts firm failures on unseen and larger networks with an F1-score of \pilot{0.63}, ahead of a generic graph neural network (\pilot{0.55}), at a fraction of the simulation cost.
+\end{abstract}
+
+\begin{keyword}
+Supply chain risk, ripple effect, disruption propagation, discrete-event simulation, graph neural networks, multi-tier supply networks, bill of materials.
+\end{keyword}
+
+\end{frontmatter}
+
+%% ----------------------------------------------------------------------------
+\section{Introduction}
+
+A disruption at a single supplier can propagate through a supply network and degrade performance far from its origin -- the \emph{ripple effect} \citep{Ivanov2014,Dolgui2018}. Firms increasingly want to know, for a given disruption, \emph{which} firms will be hit, \emph{when}, and \emph{through which path}. Three features of real networks make that question hard.
+
+First, networks are \emph{product-integrated}: a firm can only produce when all components of its bill of materials (BOM) are available (an AND condition), while each component may be bought from alternative suppliers (an OR condition), and multi-product firms share one capacity across items. Second, local \emph{triads} -- shared suppliers, co-suppliers, transitive triangles and diamonds -- open propagation paths that do not follow the material flow \citep{ChoiWu2009,Ang2017}. A firm that dual-sources a component may still be fully exposed if both of its sources depend on the same tier-2 supplier. Third, propagation runs in several directions: shortages move downstream, but order changes move upstream \citep{Li2021}, and rerouted demand moves laterally to alternative suppliers.
+
+Topology-based measures and cascade rules \citep{Zhao2019,SimchiLevi2015} are fast but, by construction, follow the material flow; simulation captures the dynamics but is expensive to repeat for every disruption and every network. This paper asks whether a graph neural network (GNN) can learn the cascades a simulation produces and transfer to networks it has never seen. Our contributions are:
+\begin{enumerate}
+\item a generator of product-integrated multi-tier networks (depth eight) in which every triad type has its own control, with fingerprints and null-model triad statistics;
+\item a deterministic discrete-event simulation (DES) of every firm that yields exact firm-level cascade labels, including the causal parent of every failure;
+\item evidence that most service failures are lateral or upstream and that topology-based rules miss them; and
+\item an AND/OR-aware GNN that predicts who fails, and when, on unseen and larger networks.
+\end{enumerate}
+
+We test three hypotheses. \textbf{H1}: network structure shapes cascades -- lateral and upstream failures travel through shared suppliers and co-suppliers, and diamonds weaken the protection of dual sourcing. \textbf{H2}: topology-based cascade rules miss a substantial share of failures. \textbf{H3}: a product-aware GNN predicts failures on unseen networks better than rules and a generic GNN.
+
+%% ----------------------------------------------------------------------------
+\section{Related work}
+
+\emph{Ripple effect and propagation.} Simulation and optimisation models of the ripple effect are reviewed by \citet{Dolgui2018}. \citet{Zhao2019} use an agent-based model of cascading failures on an empirically grounded network to compare adaptation strategies; \citet{Li2021} separate forward and backward propagation. \citet{SimchiLevi2015} measure exposure with optimisation-based time-to-survive. These works evaluate given networks; they do not learn propagation that transfers to new ones.
+
+\emph{Network structure.} Buyer--supplier--supplier triads are theorised by \citet{ChoiWu2009}; \citet{Ang2017} show how hidden concentration in multi-tier networks (diamonds) changes optimal sourcing. Network motifs are quantified against null models \citep{Milo2002}, and component commonality by the degree of commonality index \citep{Collier1981}. Empirical production networks are heavy-tailed and disassortative \citep{Atalay2011}.
+
+\emph{Graph learning in supply chains.} GNNs have been used to predict hidden supplier links \citep{Kosasih2022}. Learning the outcome of disruption dynamics on unseen networks, with labels from a firm-level simulation, has received little attention.
+
+%% ----------------------------------------------------------------------------
+\section{Product-integrated network generation}
+\label{sec:gen}
+
+\subsection{Two linked graphs}
+The \emph{item graph} is a multi-level BOM over item tiers $0,\dots,8$ (end products at tier 0, raw materials at tier 8). The \emph{firm graph} $G=(V,E)$ states who produces each item and who buys from whom; every node is a firm, and market demand enters at the tier-0 firms (OEMs). Firm $f$ produces a portfolio $I_f$ of items on one resource with capacity $C_f$. For each component $c$ needed by $f$, the \emph{sourcing group} $g=(f,c)$ has a set of alternative suppliers $S_g$.
+
+\subsection{Generation pipeline}
+Each step has its own control, so every triad type can be varied independently (Table~\ref{tab:controls}).
+\begin{enumerate}
+\item \textbf{BOM.} Items are grouped into product platforms. Each item at tier $k$ draws $m$ components from tier $k+1$ by preferential attachment on use, biased towards its own platform; this controls component commonality (shared materials).
+\item \textbf{Closure.} If $i$ uses $j$ and $j$ uses $l$, $i$ also uses $l$ directly with probability $\tau$ (mixed-level BOM).
+\item \textbf{Firms.} Firms specialise in one platform; each item receives up to two additional producers (alternatives).
+\item \textbf{Sourcing}, tier by tier from the OEMs upwards. A firm that is a co-source of some buyer copies its sibling's supplier with probability $\kappa$ (a diamond) and otherwise diversifies away from it; else it copies its peers' most popular supplier with probability $\beta$ (shared supplier); else it chooses by preferential attachment with exponent $\alpha$. A second source is added with probability $\rho$. Every producer serves at least one buyer.
+\item \textbf{Directed sourcing.} A closure component is bought from the firm that supplies it to the buyer's own suppliers with probability $\tau_d$ (transitive triangle).
+\item \textbf{Quantities.} Market demand is exploded through the BOM and the sourcing shares (MRP logic) to item rates $x_{f,i}$ and component needs $n_g$; capacity is $C_f = \sum_i x_{f,i}/u_f$ for a target utilisation $u_f$; lead times grow upstream; base stocks are set as in Section~\ref{sec:des}.
+\end{enumerate}
+Edges connect adjacent tiers (closure edges skip one), so the longest raw-to-OEM path is exactly eight edges. A network is rejected unless it is acyclic, has depth eight, and every firm lies on a raw-to-OEM path.
+
+\begin{table}[t]
+\caption{Generator controls and the triads they create.}
+\label{tab:controls}
+\centering\small
+\begin{tabular}{lll}
+\toprule
+Control & Mechanism & Triad \\
+\midrule
+$m$, platform mixing & BOM size, commonality & shared material \\
+$\alpha,\beta$ & hubs, copying peers & shared supplier \\
+$\rho$ & second source & co-suppliers (OR) \\
+$\kappa$ & copy sibling's supplier & diamond \\
+$\tau,\tau_d$ & closure, directed sourcing & transitive triangle \\
+$u$, buffers & capacity, stock & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Families and fingerprints}
+Three families vary the tier profile: \emph{pyramid}, \emph{complex assembly} (wide upstream, BOMs of 3--6 components) and \emph{chokepoint} (one tier with three items). Within each family the controls are sampled by Latin hypercube. Every network carries a fingerprint: size, degree statistics, assortativity, degree of commonality, platform modularity, dual-sourcing share, producer dominance, hidden concentration, and the triad census with $z$-scores against a tier-preserving random null that keeps the number of links between every pair of tiers.
+
+%% ----------------------------------------------------------------------------
+\section{Discrete-event simulation}
+\label{sec:des}
+
+Time is continuous (days) and all firms follow the same rules.
+\begin{itemize}
+\item \emph{Orders.} Market orders (one day of demand) arrive daily at OEMs; replenishment orders join the supplier's first-come-first-served queue for the item.
+\item \emph{Production.} If the resource is up and idle, the firm starts a lot of $Q_{f,i}=7x_{f,i}$ of the item with the largest finished-goods (FG) gap, among the items whose components are \emph{all} on hand:
+\begin{equation}
+\text{start}(i) \iff \mathrm{IP}^{FG}_{f,i} < S^{FG}_{f,i} \ \wedge\ \forall (c,a)\in \mathrm{BOM}(i):\ I_{g(f,c)} \ge a\,Q_{f,i},
+\end{equation}
+with $\mathrm{IP}^{FG}$ = FG + work in progress $-$ backlog. A lot occupies the shared resource for $Q_{f,i}/C_f$ days.
+\item \emph{Shipping.} While FG covers the head-of-queue order, it is shipped and arrives after the lane lead time.
+\item \emph{Replenishment.} When the inventory position of group $g$ falls below $S_g = n_g(L_g + 7 + 7 + s_f)$ -- lead time, order cycle, supplier lot cycle and $s_f$ safety days -- a lot of seven days of need is ordered from the next active source in rotation (OR).
+\item \emph{Disruption and rerouting.} A disrupted firm's resource is down for $D$ days (it may still ship from stock). After a detection lag $\delta$ its buyers order only from their alternative sources, whose capacity is unchanged; they return after recovery $+\delta$.
+\end{itemize}
+Demand, lead times and processing times are deterministic, so one run per scenario is exact. Each network is warmed up once; the state is copied, and every disruption and the clean reference continue from the same snapshot.
+
+\textbf{Validation.} On every pilot network the clean run serves \pilot{100\%} of market demand with no backlog growth; runs are bit-identical when repeated; a zero-length outage changes nothing; units are conserved per firm and per component (error below \pilot{$10^{-4}$}); and hand-built AND and OR cases behave as expected (an AND buyer stops when one single-sourced component stops; an OR buyer with a spare-capacity alternative is protected while the alternative receives the rerouted orders).
+
+\subsection{Cascade labels}
+For firm $f$ with throughput $x_f$, let $B^{d}_f(t)$ and $B^{c}_f(t)$ be its unfilled orders in the disrupted and clean runs. The firm suffers a \textbf{service failure} if
+\begin{equation}
+\frac{B^{d}_f(t)-B^{c}_f(t)}{x_f} \ \ge\ \theta \quad \text{for } P \text{ consecutive days},
+\end{equation}
+with $\theta = 1$ day and $P=3$. A firm that merely receives fewer orders is not hit; changes in orders received are recorded separately as \emph{order shocks}. We record the time to impact $\tau_f$ (first day of failure), severity (peak extra backlog, in days of output), the direction (downstream, upstream or lateral relative to the disrupted firm in $G$) and the \textbf{causal parent}: the supplier whose deliveries fell furthest behind before the failure (supply-caused) or, if none, the buyer whose orders rose most (overload-caused). Parents form the cascade tree.
+
+%% ----------------------------------------------------------------------------
+\section{AND/OR-aware graph neural network}
+
+Each scenario is a graph with firm nodes and sourcing-group nodes $g=(f,c)$, edges $s\to g$ for $s\in S_g$ and $g\to f$. Firm features are tier, utilisation, throughput, buffers, portfolio size, degrees, dual-sourcing share and lead times, plus the disruption signal (target flag, duration). A layer updates firm states $h$ as
+\begin{align}
+h_g &= \phi_g\Big(\textstyle\sum_{s\in S_g}\mu(h_s),\ \max_{s\in S_g}\mu(h_s),\ h_f,\ e_g\Big) && \text{(OR)}\\
+a_f &= \Big[\min_{g\in\mathcal{G}_f} h_g,\ \mathrm{mean}_{g\in\mathcal{G}_f} h_g\Big] && \text{(AND)}\\
+h_f' &= \mathrm{LN}\big(h_f + \phi_f(h_f, m^{\mathrm{in}}_f, m^{\mathrm{out}}_f, a_f, r_f)\big)
+\end{align}
+where $m^{\mathrm{in}}, m^{\mathrm{out}}$ are mean messages over firm-to-firm links in both directions and $r_f$ aggregates messages from the groups $f$ supplies (upstream effects). The \emph{generic GNN} is the same model without the group channels (GraphSAGE-style; \citealp{Hamilton2017}), so the comparison is an ablation of the product structure. Eight layers cover the network depth. Heads predict the failure probability, $\tau_f$ and severity; the loss combines weighted binary cross-entropy with Huber losses on $\tau_f$ (failed firms only) and severity.
+
+%% ----------------------------------------------------------------------------
+\section{Experimental design}
+
+The pilot uses \pilot{33} networks (\pilot{11} per family): \pilot{24} at training scale (\pilot{80--110} firms), split by network into training, validation and test, and \pilot{9} larger networks (\pilot{156--204} firms) used only for testing. In every network, \pilot{two} firms per tier T1--T8 are disrupted for \pilot{21 and 56} days, giving \pilot{1\,056} scenarios and \pilot{121\,632} firm--scenario labels. Baselines are \emph{reachability} (failure = downstream of the target, $\tau$ = lead-time distance), a \emph{cascade rule} in the spirit of \citet{Zhao2019} (a shortage wave stops a buyer's supply only when all its sources are hit, stops a firm when any component stops, and is absorbed by stock buffers), and a feature MLP given the hop distance and direction to the target. \todo{Full study: 3 families $\times$ 230 networks, 4 targets per tier, durations 14/28/56/84 days, 5 training seeds.}
+
+%% ----------------------------------------------------------------------------
+\section{Results}
+
+\subsection{Generated networks}
+Fig.~\ref{fig:atlas} shows one network per family and Table~\ref{tab:fp} their fingerprints. All networks have depth eight. Relative to the tier-preserving null, shared-supplier triads ($z=\pilot{5.7}$--\pilot{10.0}) and transitive triangles ($z=\pilot{10.7}$--\pilot{12.7}) are strongly over-represented. The controls move the structure they target: Spearman correlations are \pilot{0.93} for $\rho\to$ dual-sourcing share, \pilot{0.75} for $\tau\to$ closure groups and \pilot{0.41} for $\kappa\to$ hidden concentration; $\beta$ acts more weakly on producer dominance (\pilot{0.35}).
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{fig_atlas.png}
+\caption{Network atlas: one pilot network per family, laid out by tier (raw materials left, OEMs right). Node size is throughput; red links are closure (tier-skipping) sourcing.}
+\label{fig:atlas}
+\end{figure*}
+
+\begin{table}[t]
+\caption{Mean fingerprint per family (pilot, training-scale and larger networks).}
+\label{tab:fp}
+\centering\small
+\begin{tabular}{lrrr}
+\toprule
+ & Pyramid & Assembly & Chokepoint \\
+\midrule
+Firms & \pilot{130} & \pilot{115} & \pilot{103} \\
+Links & \pilot{734} & \pilot{852} & \pilot{467} \\
+Max out-degree & \pilot{16.0} & \pilot{22.2} & \pilot{15.7} \\
+Assortativity & \pilot{$-0.01$} & \pilot{0.00} & \pilot{$-0.16$} \\
+Degree of commonality & \pilot{2.89} & \pilot{4.43} & \pilot{2.56} \\
+Dual-sourcing share & \pilot{0.25} & \pilot{0.20} & \pilot{0.23} \\
+Hidden concentration & \pilot{0.72} & \pilot{0.74} & \pilot{0.72} \\
+$z$ shared supplier & \pilot{10.0} & \pilot{7.8} & \pilot{5.7} \\
+$z$ transitive triangle & \pilot{10.7} & \pilot{12.7} & \pilot{11.0} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Anatomy of cascades (H1)}
+\pilot{22.2\%} of firm--scenario pairs suffer a service failure, but only \pilot{20\%} of failures are downstream of the disrupted firm (Fig.~\ref{fig:anatomy}). Downstream failures fade within about three hops (failure rate \pilot{0.38, 0.22, 0.05} at hops 1--3) as stock buffers absorb the shortage. Lateral failures reach up to \pilot{five} hops and are split between supply-caused and overload-caused parents (\pilot{2\,848} vs \pilot{1\,594}): alternative suppliers are overloaded by rerouted orders and pass the shortage to their other customers. Upstream, \pilot{31.5\%} of ancestors fail -- mostly through the recovery surge, when the disrupted firm restarts and orders a burst its suppliers cannot meet \citep{Li2021}. Fig.~\ref{fig:cascade} shows one cascade. Diamonds weaken dual sourcing: downstream firms exposed through a diamond fail in \pilot{11.6\%} ($\pm\pilot{2.7}$) of cases, more than firms with an independent alternative (\pilot{8.9\%} $\pm\pilot{1.2}$) but fewer than single-sourced firms (\pilot{15.7\%}). In the pilot, diamonds therefore \emph{erode} rather than cancel the protection of dual sourcing. \todo{Confirm with the full run.}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{fig_anatomy.png}
+\caption{Cascade anatomy (pilot). (a) Service-failure rate by hop distance and direction; dotted: order shocks travelling upstream. (b) Median time to impact. (c) Direction of failures by utilisation.}
+\label{fig:anatomy}
+\end{figure*}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{fig_cascade.png}
+\caption{One cascade: a tier-6 firm is down for 56 days. Left: extra unfilled orders per tier over time. Right: cascade tree from causal parents (blue downstream, green upstream, orange lateral, black the disrupted firm).}
+\label{fig:cascade}
+\end{figure*}
+
+\subsection{What topology-based rules miss (H2)}
+Both rules only predict downstream failures. The cascade rule recovers \pilot{94.6\%} of downstream failures but only \pilot{18.9\%} of all failures (precision \pilot{0.44}), and its timing error on correctly predicted failures is \pilot{26.6} days; reachability recovers all downstream failures with precision \pilot{0.15} and a timing error of \pilot{57.8} days.
+
+\subsection{GNN prediction (H3)}
+Table~\ref{tab:gnn} compares models on unseen networks at training scale and on larger unseen networks. The AND/OR-GNN has the highest AUPRC and F1 on both, and the smallest timing error. It leads in all three directions (Fig.~\ref{fig:gnn}b) and loses little on larger networks (Fig.~\ref{fig:gnn}c). One forward pass takes \pilot{20.5} ms against \pilot{135} ms for one DES run of the same network. At six or more hops the GNNs miss the few remaining failures (Fig.~\ref{fig:gnn}a); deeper message passing or virtual nodes are a natural next step.
+
+\begin{table}[t]
+\caption{Failure prediction on unseen networks (pilot, one seed). $\tau$: mean absolute error in days on correctly predicted failures.}
+\label{tab:gnn}
+\centering\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lccc|ccc}
+\toprule
+ & \multicolumn{3}{c|}{Test (same scale)} & \multicolumn{3}{c}{Larger networks} \\
+Model & AUPRC & F1 & $\tau$ & AUPRC & F1 & $\tau$ \\
+\midrule
+AND/OR-GNN & \pilot{.71} & \pilot{.63} & \pilot{18.4} & \pilot{.68} & \pilot{.63} & \pilot{22.8} \\
+Generic GNN & \pilot{.46} & \pilot{.55} & \pilot{20.6} & \pilot{.54} & \pilot{.57} & \pilot{25.1} \\
+Feature MLP & \pilot{.44} & \pilot{.44} & \pilot{23.2} & \pilot{.50} & \pilot{.48} & \pilot{25.4} \\
+Cascade rule & -- & \pilot{.31} & \pilot{21.4} & -- & \pilot{.24} & \pilot{30.0} \\
+Reachability & -- & \pilot{.18} & \pilot{51.8} & -- & \pilot{.15} & \pilot{61.9} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{fig_gnn.png}
+\caption{Failure prediction on test networks (pilot). (a) F1 by hop distance. (b) F1 by direction. (c) F1 on test vs larger networks.}
+\label{fig:gnn}
+\end{figure*}
+
+%% ----------------------------------------------------------------------------
+\section{Conclusion}
+
+On product-integrated multi-tier networks, most service failures caused by a disruption are not downstream of it: they reach alternative suppliers through rerouted orders and reach upstream suppliers through the recovery surge. Cascade rules that follow the material flow cannot see them. A GNN whose message passing mirrors the AND logic of the BOM and the OR logic of multi-sourcing learns these cascades from discrete-event ground truth and transfers to unseen and larger networks, at a small fraction of the simulation cost. Limitations: the pilot is small and uses one training seed; networks are synthetic; the model is deterministic, with a single disruption at a time; and far-hop failures remain hard to predict. Future work will run the full study, add real topologies and stochastic demand, and predict the causal parent -- the cascade path itself.
+
+%% ----------------------------------------------------------------------------
+\begin{ack}
+\todo{Funding acknowledgement, e.g. Horizon Europe project ACCURATE (GA 101138269), if applicable.}
+\end{ack}
+
+%% References: verify every entry before submission.
+\begin{thebibliography}{99}
+
+\bibitem[Ang et~al.(2017)]{Ang2017}
+Ang, E., Iancu, D.A., and Swinney, R. (2017).
+\newblock Disruption risk and optimal sourcing in multitier supply networks.
+\newblock \emph{Management Science}, 63(8), 2397--2419.
+
+\bibitem[Atalay et~al.(2011)]{Atalay2011}
+Atalay, E., Horta\c{c}su, A., Roberts, J., and Syverson, C. (2011).
+\newblock Network structure of production.
+\newblock \emph{Proceedings of the National Academy of Sciences}, 108(13), 5199--5202.
+
+\bibitem[Choi and Wu(2009)]{ChoiWu2009}
+Choi, T.Y. and Wu, Z. (2009).
+\newblock Triads in supply networks: theorizing buyer--supplier--supplier relationships.
+\newblock \emph{Journal of Supply Chain Management}, 45(1), 8--25.
+
+\bibitem[Collier(1981)]{Collier1981}
+Collier, D.A. (1981).
+\newblock The measurement and operating benefits of component part commonality.
+\newblock \emph{Decision Sciences}, 12(1), 85--96.
+
+\bibitem[Dolgui et~al.(2018)]{Dolgui2018}
+Dolgui, A., Ivanov, D., and Sokolov, B. (2018).
+\newblock Ripple effect in the supply chain: an analysis and recent literature.
+\newblock \emph{International Journal of Production Research}, 56(1--2), 414--430.
+
+\bibitem[Hamilton et~al.(2017)]{Hamilton2017}
+Hamilton, W.L., Ying, R., and Leskovec, J. (2017).
+\newblock Inductive representation learning on large graphs.
+\newblock In \emph{Advances in Neural Information Processing Systems 30}.
+
+\bibitem[Ivanov et~al.(2014)]{Ivanov2014}
+Ivanov, D., Sokolov, B., and Dolgui, A. (2014).
+\newblock The ripple effect in supply chains: trade-off `efficiency--flexibility--resilience' in disruption management.
+\newblock \emph{International Journal of Production Research}, 52(7), 2154--2172.
+
+\bibitem[Kosasih and Brintrup(2022)]{Kosasih2022}
+Kosasih, E.E. and Brintrup, A. (2022).
+\newblock A machine learning approach for predicting hidden links in supply chain with graph neural networks.
+\newblock \emph{International Journal of Production Research}, 60(17), 5380--5393.
+
+\bibitem[Li et~al.(2021)]{Li2021}
+Li, Y., Chen, K., Collignon, S., and Ivanov, D. (2021).
+\newblock Ripple effect in the supply chain network: forward and backward disruption propagation, network health and firm vulnerability.
+\newblock \emph{European Journal of Operational Research}, 291(3), 1117--1131.
+
+\bibitem[Milo et~al.(2002)]{Milo2002}
+Milo, R., Shen-Orr, S., Itzkovitz, S., Kashtan, N., Chklovskii, D., and Alon, U. (2002).
+\newblock Network motifs: simple building blocks of complex networks.
+\newblock \emph{Science}, 298(5594), 824--827.
+
+\bibitem[Simchi-Levi et~al.(2015)]{SimchiLevi2015}
+Simchi-Levi, D., Schmidt, W., Wei, Y., Zhang, P.Y., Combs, K., Ge, Y., Gusikhin, O., Sanders, M., and Zhang, D. (2015).
+\newblock Identifying risks and mitigating disruptions in the automotive supply chain.
+\newblock \emph{Interfaces}, 45(5), 375--390.
+
+\bibitem[Zhao et~al.(2019)]{Zhao2019}
+Zhao, K., Zuo, Z., and Blackhurst, J.V. (2019).
+\newblock Modelling supply chain adaptation for disruptions: an empirically grounded complex adaptive systems approach.
+\newblock \emph{Journal of Operations Management}, 65(2), 190--212.
+
+\end{thebibliography}
+
+\end{document}
