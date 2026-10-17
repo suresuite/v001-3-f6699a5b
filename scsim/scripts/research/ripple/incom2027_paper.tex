@@ -27,7 +27,7 @@
 
 \newcommand{\pilot}[1]{\textcolor{red}{#1}}   % pilot value: replace after the full run
 \newcommand{\todo}[1]{\textcolor{red}{[#1]}}
-\newcommand{\nbcommit}{96f8ce7d4e06}           % commit of the executed notebook
+\newcommand{\nbcommit}{c06c2f6064da}           % commit of the executed notebook
 \newcommand{\netdigest}{\seqsplit{59909c87b96ba5f0bea045587b511f4e50c461982d1088a82eb4c07470125571}}       % pilot network digest (SHA-256)
 \newcommand{\labeldigest}{\seqsplit{f4f87991e2450fcaba3774c17f898da5ff7dec33e016fa59b60ca089e52be15f}}   % pilot label digest (SHA-256)
 
@@ -233,7 +233,7 @@ p(f)=\begin{cases}
 \end{equation}
 In the first case the failure is \emph{supply-caused}: a supplier delivered too little. In the second it is \emph{overload-caused}: a buyer ordered more than planned, because it rerouted demand away from $v$ or because $v$ restarted and caught up.
 
-\emph{Cascade path and tree.} The \textbf{cascade path} of a failed firm $f$ is the parent chain $f\leftarrow p(f)\leftarrow p(p(f))\leftarrow\cdots$. It ends at the disrupted firm $v$, or at a \emph{transmitter}: a parent that did not fail itself but changed its orders in response to $v$, such as a buyer of $v$ that rerouted. The \textbf{cascade tree} of a scenario is $T(v)=\{(p(f),f): f \text{ failed}\}$. Supply links in $T(v)$ follow the material flow; overload links run against it. This is what separates lateral and upstream failures from the downstream shortage wave.
+\emph{Cascade path and tree.} The \textbf{cascade path} of a failed firm $f$ is the parent chain $f\leftarrow p(f)\leftarrow p(p(f))\leftarrow\cdots$. It ends at the disrupted firm $v$, or at a \emph{transmitter}: a parent that did not fail itself but changed its orders in response to $v$, such as a buyer of $v$ that rerouted. The \textbf{cascade tree} of a scenario is $T(v)=\{(p(f),f): f \text{ failed}\}$. Supply links in $T(v)$ follow the material flow; overload links run against it. This is what separates lateral and upstream failures from the downstream shortage wave. Fig.~\ref{fig:propagation} illustrates these definitions on one scenario.
 
 \emph{Baselines from the network alone.} \textbf{Reachability} predicts failure for every downstream firm, with $\tau$ equal to the lead-time distance from $v$. The \textbf{cascade rule}, in the spirit of \citet{Zhao2019}, propagates a shortage wave $(a_f,\ell_f)$ (start, length) in topological order. For $v$, $a_v=c^{FG}_v$ and $\ell_v=D-c^{FG}_v$, with FG cover $c^{FG}_f=s^{FG}_f+3.5$. A group $g$ of $f$ loses supply only if \emph{all} its sources are hit (OR); its shortage then runs from $\max_s(a_s+L_{sf})$ to $\min_s(a_s+\ell_s+L_{sf})$ and is reduced by the buffer $b_f=s_f+3.5+c^{FG}_f$. Firm $f$ is hit by its earliest group whose remaining length is positive (AND). The rule has no capacity, no rerouting load and no order effects.
 
@@ -320,7 +320,7 @@ $z$ transitive triangle & \pilot{10.7} & \pilot{15.5} & \pilot{11.0} \\
 \end{table}
 
 \subsection{Anatomy of cascades (H1)}
-\pilot{22.1\%} of firm--scenario pairs suffer a service failure, but only \pilot{20\%} of failures are downstream of the disrupted firm (Fig.~\ref{fig:anatomy}). Downstream failures fade within about three hops (failure rate \pilot{0.38, 0.22, 0.05} at hops 1--3) as stock buffers absorb the shortage. Lateral failures reach up to \pilot{five} hops and are split between supply-caused and overload-caused parents (\pilot{2\,831} vs \pilot{1\,593}): alternative suppliers are overloaded by rerouted orders and pass the shortage to their other customers. Upstream, \pilot{31.2\%} of ancestors fail -- mostly through the recovery surge, when the disrupted firm restarts and orders a burst its suppliers cannot meet \citep{Li2021}. Fig.~\ref{fig:cascade} shows one cascade. Diamonds weaken dual sourcing: downstream firms exposed through a diamond fail in \pilot{10.8\%} ($\pm\pilot{2.6}$) of cases, more than firms with an independent alternative (\pilot{9.2\%} $\pm\pilot{1.2}$) but fewer than single-sourced firms (\pilot{15.6\%}). In the pilot, diamonds therefore \emph{erode} rather than cancel the protection of dual sourcing. \todo{Confirm with the full run.}
+\pilot{22.1\%} of firm--scenario pairs suffer a service failure, but only \pilot{20\%} of failures are downstream of the disrupted firm (Fig.~\ref{fig:anatomy}). Downstream failures fade within about three hops (failure rate \pilot{0.38, 0.22, 0.05} at hops 1--3) as stock buffers absorb the shortage. Lateral failures reach up to \pilot{five} hops and are split between supply-caused and overload-caused parents (\pilot{2\,831} vs \pilot{1\,593}): alternative suppliers are overloaded by rerouted orders and pass the shortage to their other customers. Upstream, \pilot{31.2\%} of ancestors fail -- mostly through the recovery surge, when the disrupted firm restarts and orders a burst its suppliers cannot meet \citep{Li2021}. Fig.~\ref{fig:propagation} follows one cascade. Firm \pilot{34} (T5) of a chokepoint network is down for \pilot{56} days, and its buyers detect the outage and reroute after \pilot{7.7} days. The first failures are \emph{lateral}: on days \pilot{17} and \pilot{20}, two alternative suppliers of the disrupted firm -- they share a sourcing group with it -- fail because the rerouted orders of a common T4 buyer exceed their capacity (overload-caused links, panel e). The \emph{downstream} shortage arrives only after stocks are used up. It reaches that T4 buyer on day \pilot{26}, T3 from day \pilot{34} (most between days \pilot{50} and \pilot{72}), T2 on days \pilot{55--62} and T1 on days \pilot{83--86}, and never reaches the OEMs. \emph{Upstream}, the disrupted firm's suppliers change their orders without failing (transmitters, days \pilot{19--36}), and raw-material firms further up fail from overload. Failures keep rising after the restart on day \pilot{56}: the downstream wave is still travelling, and catch-up orders overload suppliers (panel f). In total \pilot{51} of the \pilot{81} other firms fail. On day \pilot{151}, \pilot{20} are still in failure and \pilot{31} have recovered (panel d). Diamonds weaken dual sourcing: downstream firms exposed through a diamond fail in \pilot{10.8\%} ($\pm\pilot{2.6}$) of cases, more than firms with an independent alternative (\pilot{9.2\%} $\pm\pilot{1.2}$) but fewer than single-sourced firms (\pilot{15.6\%}). In the pilot, diamonds therefore \emph{erode} rather than cancel the protection of dual sourcing. \todo{Confirm with the full run.}
 
 \begin{figure*}[t]
 \centering
@@ -331,9 +331,12 @@ $z$ transitive triangle & \pilot{10.7} & \pilot{15.5} & \pilot{11.0} \\
 
 \begin{figure*}[t]
 \centering
-\includegraphics[width=\textwidth]{fig_cascade.png}
-\caption{One cascade: a tier-6 firm is down for 56 days. Left: extra unfilled orders per tier over time. Right: cascade tree from causal parents (blue downstream, green upstream, orange lateral, black the disrupted firm).}
-\label{fig:cascade}
+\includegraphics[width=\textwidth]{fig_propagation.png}
+\caption{How one disruption propagates (pilot): firm \pilot{34} (tier T5) of a chokepoint network is down for \pilot{56} days.
+(a)--(d) The whole network at the days by which 10\%, 40\%, 75\% and all failures have started; raw materials left, OEMs right. Red firms are in failure (shade = extra unfilled orders, in days of output); grey firms failed earlier and have recovered. Arrows are the causal-parent links active so far: solid = supply-caused, along the material flow; dashed red = overload-caused, orders travelling against the flow. The star is the disrupted firm (black while down).
+(e) Cascade paths: every failed firm at (time to impact, tier), linked to its causal parent $p(f)$. Colour = direction, circle/triangle = supply/overload-caused, size = severity. Hollow circles are transmitters (firms that changed their orders without failing). Shaded: the outage; dotted: detection and rerouting.
+(f) Number of firms in failure by direction.}
+\label{fig:propagation}
 \end{figure*}
 
 \subsection{What topology-based rules miss (H2)}
