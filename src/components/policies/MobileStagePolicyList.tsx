@@ -27,6 +27,7 @@ import { groupByKeyA } from "@/lib/policies/groupRows";
 import { effectivePolicy, type OverrideRow } from "@/lib/policies/resolve";
 import { lineNeedsInput, groupHasPrimary, type ResolveField } from "@/lib/policies/stageGuards";
 import { inventoryParamsForType, kappaIsRead } from "@/lib/policies/registryPolicyTypes";
+import { reviewPeriodWeeks } from "@/lib/policies/reviewPeriod";
 import {
   resolveCell,
   savedOverrideValue,
@@ -395,8 +396,22 @@ export function MobileStagePolicyList({
                   })}
                   {activeParams.map((p) => {
                     const n = paramValue(p.field);
-                    const shown = n !== undefined ? `${n}${p.unit ? ` ${p.unit}` : ""}` : "—";
-                    return <MobileRow key={p.field} chevron={false} label={p.label} value={shown} />;
+                    // T is shown in weeks — the cadence the run uses (reviewPeriod.ts).
+                    const isReview = p.field === "review_period_days";
+                    const shown =
+                      n === undefined
+                        ? "—"
+                        : isReview
+                          ? `${reviewPeriodWeeks(n)} wk`
+                          : `${n}${p.unit ? ` ${p.unit}` : ""}`;
+                    return (
+                      <MobileRow
+                        key={p.field}
+                        chevron={false}
+                        label={isReview ? "Review period T (weeks)" : p.label}
+                        value={shown}
+                      />
+                    );
                   })}
                 </MobilePanel>
               );

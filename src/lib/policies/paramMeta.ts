@@ -151,10 +151,10 @@ export const PARAM_META: Record<string, ParamMeta> = {
   },
   review_period_days: {
     symbol: "T",
-    unit: "days",
-    range: "≥ 1",
+    unit: "weeks",
+    range: "1 – 13",
     meaning:
-      "Review period for the Periodic-review (T,S) policy — the position is topped up to S only every T days; between reviews it drifts down with demand. The engine steps in weeks, so T rounds to the nearest whole week (at least 1).",
+      "Review period for the Periodic-review (T,S) policy — the position is topped up to S only every T weeks; between reviews it drifts down with demand. Entered in whole weeks (stored as days, ×7); the engine steps in weeks, so a fraction is rounded to the nearest whole week, between 1 and 13.",
     formula: "O_{i,t} = 1[(t − t₀) mod T = 0]·(S − IP_{i,t})⁺",
     specRef: "§III.5",
   },

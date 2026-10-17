@@ -94,6 +94,7 @@ import {
   type SavePlan,
 } from "@/lib/policies/masterOverrides";
 import { policyTypeLabel, inventoryParamsForType, paramFeasibility } from "@/lib/policies/registryPolicyTypes";
+import { reviewPeriodDays, reviewPeriodWeeks } from "@/lib/policies/reviewPeriod";
 import { engineClassificationFor } from "@/lib/policies/engineBridge";
 import { groupHasPrimary as groupHasPrimaryFor, groupKeyFor, lineNeedsInput } from "@/lib/policies/stageGuards";
 import { ParameterSheet } from "./ParameterSheet";
@@ -974,10 +975,20 @@ export function StagePolicyTable({
         params={regParams.map((p) => {
           const value = valueFor(p.field);
           const n = typeof value === "number" ? value : value == null ? undefined : Number(value);
+          // T is typed and shown in WEEKS and stored as `review_period_days`
+          // (reviewPeriod.ts — the one boundary). What shows is the whole-week
+          // cadence the run uses, so 60 stored days read as 9, as the mapper says.
+          const isReview = p.field === "review_period_days";
+          const stored = n !== undefined && Number.isFinite(n) ? n : undefined;
           return {
             field: p.field,
-            value: n !== undefined && Number.isFinite(n) ? n : undefined,
-            onCommit: (v: number | undefined) => onCellChange(rowKey, p.field, v),
+            value: isReview && stored !== undefined ? reviewPeriodWeeks(stored) : stored,
+            onCommit: (v: number | undefined) =>
+              onCellChange(
+                rowKey,
+                p.field,
+                isReview && v !== undefined && Number.isFinite(v) ? reviewPeriodDays(v) : v,
+              ),
             invalid:
               paramFeasibility(p, value ?? undefined) ??
               (p.field === "rop_q_quantity" && n === undefined
@@ -988,7 +999,11 @@ export function StagePolicyTable({
             notSimulated: notSimulatedNote(p.field),
           };
         })}
-        labelFor={(f) => adaptLabel(invParamColByField.get(f)?.label ?? f, f)}
+        labelFor={(f) =>
+          f === "review_period_days"
+            ? "Review period T (weeks)"
+            : adaptLabel(invParamColByField.get(f)?.label ?? f, f)
+        }
         basis={basis as "days_of_supply" | "forward_visible"}
         onBasisChange={(b) => onCellChange(rowKey, "basis", b)}
         basisNotSimulated={notSimulatedNote("basis")}
