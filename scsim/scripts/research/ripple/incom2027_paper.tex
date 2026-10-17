@@ -22,10 +22,14 @@
 \usepackage{xcolor}
 \usepackage{algorithm}
 \usepackage{algpseudocode}
+\usepackage{seqsplit}
 \graphicspath{{figures/}}
 
 \newcommand{\pilot}[1]{\textcolor{red}{#1}}   % pilot value: replace after the full run
 \newcommand{\todo}[1]{\textcolor{red}{[#1]}}
+\newcommand{\nbcommit}{96f8ce7d4e06}           % commit of the executed notebook
+\newcommand{\netdigest}{\seqsplit{59909c87b96ba5f0bea045587b511f4e50c461982d1088a82eb4c07470125571}}       % pilot network digest (SHA-256)
+\newcommand{\labeldigest}{\seqsplit{f4f87991e2450fcaba3774c17f898da5ff7dec33e016fa59b60ca089e52be15f}}   % pilot label digest (SHA-256)
 
 \begin{document}
 \begin{frontmatter}
@@ -39,7 +43,7 @@
 \address[Second]{\todo{Affiliation, address} (e-mail: \todo{e-mail}).}
 
 \begin{abstract}
-When a firm deep in a supply network fails, the damage travels further than its customers: alternative suppliers are overloaded by rerouted orders, and suppliers are hit by the order surge when the failed firm restarts. We study these cascades on product-integrated multi-tier networks in which every node is a firm, products are linked by multi-level bills of materials, and the triads that shape propagation (shared suppliers, co-suppliers, transitive triangles, diamonds and shared materials) are generated under explicit control. A deterministic discrete-event simulation of every firm provides firm-level ground truth: whether a firm fails to serve its customers, when, how badly, and through which neighbour. In a pilot study, \pilot{80\%} of service failures are lateral or upstream and are therefore invisible to topology-based cascade rules, which reach an F1-score of \pilot{0.31}. A graph neural network whose message passing follows the AND logic of the bill of materials and the OR logic of multi-sourcing predicts firm failures on unseen and larger networks with an F1-score of \pilot{0.63}, ahead of a generic graph neural network (\pilot{0.55}), at a fraction of the simulation cost.
+When a firm deep in a supply network fails, the damage travels further than its customers: alternative suppliers are overloaded by rerouted orders, and suppliers are hit by the order surge when the failed firm restarts. We study these cascades on product-integrated multi-tier networks in which every node is a firm, products are linked by multi-level bills of materials, and the triads that shape propagation (shared suppliers, co-suppliers, transitive triangles, diamonds and shared materials) are generated under explicit control. A deterministic discrete-event simulation of every firm provides firm-level ground truth: whether a firm fails to serve its customers, when, how badly, and through which neighbour. In a pilot study, \pilot{80\%} of service failures are lateral or upstream and are therefore invisible to topology-based cascade rules, which reach an F1-score of \pilot{0.31}. A graph neural network whose message passing follows the AND logic of the bill of materials and the OR logic of multi-sourcing predicts firm failures on unseen networks with an F1-score of \pilot{0.63} (\pilot{0.64} on larger ones), ahead of a generic graph neural network (\pilot{0.57}), at a fraction of the simulation cost.
 \end{abstract}
 
 \begin{keyword}
@@ -78,6 +82,8 @@ We test three hypotheses. \textbf{H1}: network structure shapes cascades -- late
 \section{Product-integrated network generation}
 \label{sec:gen}
 
+All statements in Sections~\ref{sec:gen}--\ref{sec:gnn} describe the reference implementation exactly; Appendix~\ref{app:repro} lists every constant, random stream, ordering and tie-breaking rule needed to reproduce the networks and ground truth bit for bit.
+
 \subsection{Objects and notation}
 A network has tiers $k=0,\dots,8$; tier 0 holds end products and OEMs, tier 8 raw materials. It consists of two linked graphs.
 \begin{itemize}
@@ -109,7 +115,7 @@ Algorithm~\ref{alg:gen} generates one network from a family template (Table~\ref
 \For{$k=0,\dots,7$; firms $f$ of tier $k$ in random order; regular components $c$ of $f$} \Comment{sourcing}
   \State $\Sigma\gets$ suppliers of $c$ already chosen by the co-sources of $f$
   \State if $\Sigma\neq\emptyset$: w.p.\ $\kappa$ copy a supplier from $\Sigma$ (diamond); else exclude $\Sigma$ when alternatives exist
-  \State if none chosen: w.p.\ $\beta$ copy the most frequent supplier of $c$ among earlier buyers (shared supplier)
+  \State if none chosen: w.p.\ $\beta$ copy the most frequent first supplier of $c$ among earlier buyers, ties to the lowest index (shared supplier)
   \State if none chosen: pick $s\in\mathrm{Prod}(c)$ with probability $\propto(\mathrm{buyers}(s)+1)^{\alpha}$ (hubs)
   \State w.p.\ $\rho$ add a second, different producer by the same rule (dual sourcing)
 \EndFor
@@ -197,7 +203,7 @@ Consume the components, occupy the resource for $Q_{f,i}/C_f$ days, and check re
 \end{description}
 
 \subsection{Experimental protocol}
-All inputs are deterministic, so one run per scenario is exact. Each network starts with $F=S^{FG}$ and $I_g=S_g$, is warmed up for $W$ days, and its full state is copied. Every disruption scenario $(v,D)$ and the clean reference continue from that copy for $H$ days (the clean run receives the same number of no-op control events, so tie-breaking is identical). Both runs record, once per day, cumulative shipments, cumulative orders received and backlog per firm, and cumulative deliveries and orders per link. Because the two runs share the same past and are deterministic, \emph{every} difference between them is caused by the disruption.
+All inputs are deterministic, so one run per scenario is exact. Each network starts at $t=0$ with $F=S^{FG}$, $I_g=S_g$, empty queues and no orders in transit. It is warmed up for $W$ days, and its full state is copied at $t_0=W$. Every disruption scenario $(v,D)$ and the clean reference continue from that copy for $H$ days (the clean run receives the same number of no-op control events, so tie-breaking is identical). Both runs record, at $t_0+k+0.5$ for $k=0,\dots,H-1$, cumulative shipments, cumulative orders received and backlog per firm, and cumulative deliveries and orders per link. Because the two runs share the same past and are deterministic, \emph{every} difference between them is caused by the disruption.
 
 \subsection{Definition of the disruption cascade}
 \label{sec:cascade}
@@ -248,7 +254,7 @@ On every network the clean run serves \pilot{100\%} of market demand, and the ne
 \end{itemize}
 No feature tells the model where $v$ is relative to $f$; that must be learned by message passing.
 
-\emph{AND/OR-aware layer.} All $\phi_j$ are two-layer MLPs (GELU, width $d_h$); $h$ are firm states. Group states are re-encoded in every layer from the group features $e_g$. For a group $g=(f,c)$, sums and maxima run over its suppliers $s\in S_g$:
+\emph{AND/OR-aware layer.} Every $\phi_j$ is a two-layer MLP, $\phi(x)=W_2\,\mathrm{GELU}(W_1x+b_1)+b_2$, with hidden and output width $d_h$; $h$ are firm states, initialised by an encoder MLP of the firm features. Group states are recomputed in every layer from the current firm states and a fixed group encoding $\phi_0(e_g)$. For a group $g=(f,c)$, sums and maxima run over its suppliers $s\in S_g$:
 \begin{align}
 \mu_{sg}&=\phi_1([h_s,L_{sf}]),\\
 h_g&=\phi_2\big([\textstyle\sum_{s}\mu_{sg},\ \max_{s}\mu_{sg},\ h_f,\ \phi_0(e_g)]\big),\label{eq:or}\\
@@ -268,7 +274,7 @@ where $\mathcal{G}_f$ are the groups of $f$, $g\ni s$ the groups that $s$ suppli
 \end{multline}
 with positive-class weight $w=\min(20,(1-\bar y)/\bar y)$; the time term uses failed firms only.
 
-\emph{Training.} AdamW (learning rate $2\cdot10^{-3}$, weight decay $10^{-4}$), cosine schedule, batches of 16 scenarios, gradient clipping at 1, \pilot{25} epochs with $d_h=\pilot{64}$ in the pilot, and 80 epochs with $d_h=96$ in the full study. The checkpoint with the best validation AUPRC is kept, and the decision threshold for F1 is tuned on validation networks.
+\emph{Training.} AdamW (learning rate $2\cdot10^{-3}$, weight decay $10^{-4}$), cosine schedule, batches of 16 scenarios, gradient clipping at 1, \pilot{25} epochs with $d_h=\pilot{64}$ in the pilot, and 80 epochs with $d_h=96$ in the full study. The checkpoint with the best validation AUPRC is kept, and the decision threshold for F1 is tuned on validation networks. Appendix~\ref{app:repro} gives every remaining detail.
 
 \emph{Comparisons.} The \textbf{generic GNN} keeps only the firm-to-firm channels ($m^{\mathrm{in}},m^{\mathrm{out}}$), i.e.\ a GraphSAGE-style model \citep{Hamilton2017} with the same depth, width and training, so the comparison isolates the product structure. The \textbf{feature MLP} has no message passing but receives what the GNNs must infer: hop distance to $v$ and the direction (down, up, lateral). The two rules of Section~\ref{sec:cascade} complete the set.
 
@@ -283,7 +289,7 @@ The pilot uses \pilot{33} networks (\pilot{11} per family): \pilot{24} at traini
 \section{Results}
 
 \subsection{Generated networks}
-Fig.~\ref{fig:atlas} shows one network per family and Table~\ref{tab:fp} their fingerprints. All networks have depth eight. Relative to the tier-preserving null, shared-supplier triads ($z=\pilot{5.7}$--\pilot{10.0}) and transitive triangles ($z=\pilot{10.7}$--\pilot{12.7}) are strongly over-represented. The controls move the structure they target: Spearman correlations are \pilot{0.93} for $\rho\to$ dual-sourcing share, \pilot{0.75} for $\tau\to$ closure groups and \pilot{0.41} for $\kappa\to$ hidden concentration; $\beta$ acts more weakly on producer dominance (\pilot{0.35}).
+Fig.~\ref{fig:atlas} shows one network per family and Table~\ref{tab:fp} their fingerprints. All networks have depth eight. Relative to the tier-preserving null, shared-supplier triads ($z=\pilot{5.7}$--\pilot{10.0}) and transitive triangles ($z=\pilot{10.7}$--\pilot{15.5}) are strongly over-represented. The controls move the structure they target: Spearman correlations are \pilot{0.93} for $\rho\to$ dual-sourcing share, \pilot{0.75} for $\tau\to$ closure groups and \pilot{0.40} for $\kappa\to$ hidden concentration; $\beta$ acts more weakly on producer dominance (\pilot{0.37}).
 
 \begin{figure*}[t]
 \centering
@@ -301,20 +307,20 @@ Fig.~\ref{fig:atlas} shows one network per family and Table~\ref{tab:fp} their f
  & Pyramid & Assembly & Chokepoint \\
 \midrule
 Firms & \pilot{130} & \pilot{115} & \pilot{103} \\
-Links & \pilot{734} & \pilot{852} & \pilot{467} \\
-Max out-degree & \pilot{16.0} & \pilot{22.2} & \pilot{15.7} \\
+Links & \pilot{734} & \pilot{851} & \pilot{467} \\
+Max out-degree & \pilot{16.1} & \pilot{22.0} & \pilot{15.7} \\
 Assortativity & \pilot{$-0.01$} & \pilot{0.00} & \pilot{$-0.16$} \\
 Degree of commonality & \pilot{2.89} & \pilot{4.43} & \pilot{2.56} \\
 Dual-sourcing share & \pilot{0.25} & \pilot{0.20} & \pilot{0.23} \\
-Hidden concentration & \pilot{0.72} & \pilot{0.74} & \pilot{0.72} \\
-$z$ shared supplier & \pilot{10.0} & \pilot{7.8} & \pilot{5.7} \\
-$z$ transitive triangle & \pilot{10.7} & \pilot{12.7} & \pilot{11.0} \\
+Hidden concentration & \pilot{0.73} & \pilot{0.74} & \pilot{0.72} \\
+$z$ shared supplier & \pilot{10.0} & \pilot{9.1} & \pilot{5.7} \\
+$z$ transitive triangle & \pilot{10.7} & \pilot{15.5} & \pilot{11.0} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \subsection{Anatomy of cascades (H1)}
-\pilot{22.2\%} of firm--scenario pairs suffer a service failure, but only \pilot{20\%} of failures are downstream of the disrupted firm (Fig.~\ref{fig:anatomy}). Downstream failures fade within about three hops (failure rate \pilot{0.38, 0.22, 0.05} at hops 1--3) as stock buffers absorb the shortage. Lateral failures reach up to \pilot{five} hops and are split between supply-caused and overload-caused parents (\pilot{2\,848} vs \pilot{1\,594}): alternative suppliers are overloaded by rerouted orders and pass the shortage to their other customers. Upstream, \pilot{31.5\%} of ancestors fail -- mostly through the recovery surge, when the disrupted firm restarts and orders a burst its suppliers cannot meet \citep{Li2021}. Fig.~\ref{fig:cascade} shows one cascade. Diamonds weaken dual sourcing: downstream firms exposed through a diamond fail in \pilot{11.6\%} ($\pm\pilot{2.7}$) of cases, more than firms with an independent alternative (\pilot{8.9\%} $\pm\pilot{1.2}$) but fewer than single-sourced firms (\pilot{15.7\%}). In the pilot, diamonds therefore \emph{erode} rather than cancel the protection of dual sourcing. \todo{Confirm with the full run.}
+\pilot{22.1\%} of firm--scenario pairs suffer a service failure, but only \pilot{20\%} of failures are downstream of the disrupted firm (Fig.~\ref{fig:anatomy}). Downstream failures fade within about three hops (failure rate \pilot{0.38, 0.22, 0.05} at hops 1--3) as stock buffers absorb the shortage. Lateral failures reach up to \pilot{five} hops and are split between supply-caused and overload-caused parents (\pilot{2\,831} vs \pilot{1\,593}): alternative suppliers are overloaded by rerouted orders and pass the shortage to their other customers. Upstream, \pilot{31.2\%} of ancestors fail -- mostly through the recovery surge, when the disrupted firm restarts and orders a burst its suppliers cannot meet \citep{Li2021}. Fig.~\ref{fig:cascade} shows one cascade. Diamonds weaken dual sourcing: downstream firms exposed through a diamond fail in \pilot{10.8\%} ($\pm\pilot{2.6}$) of cases, more than firms with an independent alternative (\pilot{9.2\%} $\pm\pilot{1.2}$) but fewer than single-sourced firms (\pilot{15.6\%}). In the pilot, diamonds therefore \emph{erode} rather than cancel the protection of dual sourcing. \todo{Confirm with the full run.}
 
 \begin{figure*}[t]
 \centering
@@ -331,10 +337,10 @@ $z$ transitive triangle & \pilot{10.7} & \pilot{12.7} & \pilot{11.0} \\
 \end{figure*}
 
 \subsection{What topology-based rules miss (H2)}
-Both rules only predict downstream failures. The cascade rule recovers \pilot{94.6\%} of downstream failures but only \pilot{18.9\%} of all failures (precision \pilot{0.44}), and its timing error on correctly predicted failures is \pilot{26.6} days; reachability recovers all downstream failures with precision \pilot{0.15} and a timing error of \pilot{57.8} days.
+Both rules only predict downstream failures. The cascade rule recovers \pilot{94.2\%} of downstream failures but only \pilot{18.9\%} of all failures (precision \pilot{0.44}), and its timing error on correctly predicted failures is \pilot{26.2} days; reachability recovers all downstream failures with precision \pilot{0.15} and a timing error of \pilot{57.8} days.
 
 \subsection{GNN prediction (H3)}
-Table~\ref{tab:gnn} compares models on unseen networks at training scale and on larger unseen networks. The AND/OR-GNN has the highest AUPRC and F1 on both, and the smallest timing error. It leads in all three directions (Fig.~\ref{fig:gnn}b) and loses little on larger networks (Fig.~\ref{fig:gnn}c). One forward pass takes \pilot{20.5} ms against \pilot{135} ms for one DES run of the same network. At six or more hops the GNNs miss the few remaining failures (Fig.~\ref{fig:gnn}a); deeper message passing or virtual nodes are a natural next step.
+Table~\ref{tab:gnn} compares models on unseen networks at training scale and on larger unseen networks. The AND/OR-GNN has the highest AUPRC and F1 on both. Its timing error matches the generic GNN on test networks and is lower on larger ones. It leads in all three directions (Fig.~\ref{fig:gnn}b), is highest or level at every hop distance (Fig.~\ref{fig:gnn}a), and does not lose accuracy on larger networks (Fig.~\ref{fig:gnn}c). One forward pass takes \pilot{22.2} ms against \pilot{150} ms for one DES run of the same network.
 
 \begin{table}[t]
 \caption{Failure prediction on unseen networks (pilot, one seed). $\tau$: mean absolute error in days on correctly predicted failures.}
@@ -346,11 +352,11 @@ Table~\ref{tab:gnn} compares models on unseen networks at training scale and on 
  & \multicolumn{3}{c|}{Test (same scale)} & \multicolumn{3}{c}{Larger networks} \\
 Model & AUPRC & F1 & $\tau$ & AUPRC & F1 & $\tau$ \\
 \midrule
-AND/OR-GNN & \pilot{.71} & \pilot{.63} & \pilot{18.4} & \pilot{.68} & \pilot{.63} & \pilot{22.8} \\
-Generic GNN & \pilot{.46} & \pilot{.55} & \pilot{20.6} & \pilot{.54} & \pilot{.57} & \pilot{25.1} \\
-Feature MLP & \pilot{.44} & \pilot{.44} & \pilot{23.2} & \pilot{.50} & \pilot{.48} & \pilot{25.4} \\
-Cascade rule & -- & \pilot{.31} & \pilot{21.4} & -- & \pilot{.24} & \pilot{30.0} \\
-Reachability & -- & \pilot{.18} & \pilot{51.8} & -- & \pilot{.15} & \pilot{61.9} \\
+AND/OR-GNN & \pilot{.73} & \pilot{.63} & \pilot{20.6} & \pilot{.70} & \pilot{.64} & \pilot{24.4} \\
+Generic GNN & \pilot{.46} & \pilot{.57} & \pilot{20.5} & \pilot{.52} & \pilot{.57} & \pilot{25.4} \\
+Feature MLP & \pilot{.44} & \pilot{.45} & \pilot{23.1} & \pilot{.51} & \pilot{.48} & \pilot{25.9} \\
+Cascade rule & -- & \pilot{.31} & \pilot{21.1} & -- & \pilot{.24} & \pilot{28.5} \\
+Reachability & -- & \pilot{.18} & \pilot{51.5} & -- & \pilot{.15} & \pilot{61.0} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -365,7 +371,7 @@ Reachability & -- & \pilot{.18} & \pilot{51.8} & -- & \pilot{.15} & \pilot{61.9}
 %% ----------------------------------------------------------------------------
 \section{Conclusion}
 
-On product-integrated multi-tier networks, most service failures caused by a disruption are not downstream of it: they reach alternative suppliers through rerouted orders and reach upstream suppliers through the recovery surge. Cascade rules that follow the material flow cannot see them. A GNN whose message passing mirrors the AND logic of the BOM and the OR logic of multi-sourcing learns these cascades from discrete-event ground truth and transfers to unseen and larger networks, at a small fraction of the simulation cost. Limitations: the pilot is small and uses one training seed; networks are synthetic; the model is deterministic, with a single disruption at a time; and far-hop failures remain hard to predict. Future work will run the full study, add real topologies and stochastic demand, and predict the causal parent -- the cascade path itself.
+On product-integrated multi-tier networks, most service failures caused by a disruption are not downstream of it: they reach alternative suppliers through rerouted orders and reach upstream suppliers through the recovery surge. Cascade rules that follow the material flow cannot see them. A GNN whose message passing mirrors the AND logic of the BOM and the OR logic of multi-sourcing learns these cascades from discrete-event ground truth and transfers to unseen and larger networks, at a small fraction of the simulation cost. Limitations: the pilot is small and uses one training seed; networks are synthetic; and the model is deterministic, with a single disruption at a time. Future work will run the full study, add real topologies and stochastic demand, and predict the causal parent -- the cascade path itself.
 
 %% ----------------------------------------------------------------------------
 \begin{ack}
@@ -436,5 +442,185 @@ Zhao, K., Zuo, Z., and Blackhurst, J.V. (2019).
 \newblock \emph{Journal of Operations Management}, 65(2), 190--212.
 
 \end{thebibliography}
+
+%% ============================================================================
+\appendix
+\section{Reproducibility specification}
+\label{app:repro}
+
+This appendix, with the reference implementation, fixes every quantity needed to regenerate the networks, the ground truth and the models. Where the text and the code could be read differently, the code is normative.
+
+\subsection{Code, environment and verification}
+\begin{itemize}
+\item \textbf{Code.} Notebook \texttt{scsim/scripts/research/ripple/incom2027\_cascade.ipynb} in the SuReSuite repository, commit \texttt{\nbcommit}. It is self-contained: Stage~1 generation, Stage~2 simulation, Stage~3 labels and baselines, Stage~4 GNN.
+\item \textbf{Environment.} Python 3.13.16; numpy 2.5.3; pandas 3.0.5; networkx 3.7; scikit-learn 1.9.1; scipy 1.18.1; matplotlib 3.11.2; torch 2.14.1, CPU only; Linux x86\_64. The versions are pinned in \texttt{requirements.txt} next to the notebook.
+\item \textbf{Run.} Set the environment variable \texttt{RIPPLE\_MODE} to \texttt{quick} (pilot) or \texttt{incom} (full study) and execute all cells in order. The pilot takes about 13~minutes on four CPU cores.
+\item \textbf{Verification.} The notebook prints two SHA-256 digests.
+  \begin{itemize}
+  \item The \emph{network digest} covers, for every network in order: firm tiers, portfolios, BOMs, sourcing sets, lead times, rates $x_{f,i}$, capacities, base stocks, FG targets and $\delta$.
+  \item The \emph{label digest} covers, for every scenario in order: network, target, duration, and per firm the failure flag, $\tau_f$, $\sigma_f$ and $p(f)$.
+  \end{itemize}
+  For the pilot they are \texttt{\netdigest} and \texttt{\labeldigest}. A run that prints both digests reproduced the networks and the ground truth bit for bit. Two independent executions gave identical digests.
+\item \textbf{Bit-exactness.} The simulation is deterministic and uses IEEE double precision throughout. NumPy random streams are reproducible for a fixed NumPy version, which is why versions are pinned. GNN training runs with \texttt{torch.use\_deterministic\_algorithms(True)}; it is repeatable on the same hardware and thread count, but other CPUs may differ in the last bits, which moves model metrics at most in the third decimal.
+\end{itemize}
+
+\subsection{Seeds and random streams}
+All random draws use NumPy \texttt{Generator}s (PCG64). Uniform integers $\mathcal{U}\{a,\dots,b\}$ are \texttt{integers(a, b+1)}; uniform reals are \texttt{uniform} or \texttt{random}; choices are \texttt{choice}.
+\begin{center}\footnotesize
+\begin{tabular}{p{2.6cm}p{5.2cm}}
+\toprule
+Stream & Seed and use \\
+\midrule
+Master & 2027: \texttt{np.random.seed}, \texttt{random.seed}, \texttt{torch.manual\_seed} (no draws are taken from these global streams) \\
+Network set & \texttt{Generator(2027)}: Latin hypercubes, splits, network seeds $\omega_n$ (Sec.~\ref{app:set}) \\
+Structure & \texttt{Generator}($\omega_n$): every draw of Algorithm~\ref{alg:gen}, steps 1--5, in the order of Sec.~\ref{app:gen} \\
+Quantities & \texttt{Generator}($\omega_n+7$): lead times (links in lexicographic order of (supplier, buyer)), then $u_f$, then $s_f$, then $s^{FG}_f$ (firms in index order) \\
+Demand & \texttt{Generator}($1000\,\omega_n+i$).\texttt{uniform(5,20)} for end item $i$ \\
+Targets & \texttt{Generator}($\omega_n+99$): disrupted firms per tier \\
+Triad null & \texttt{Generator(2028)}, shared by the atlas networks in network order \\
+GNN & \texttt{torch.manual\_seed(0)} and \texttt{Generator(0)} (batch order), reset for every model \\
+\bottomrule
+\end{tabular}
+\end{center}
+If a generated network fails the structural checks, its seed is increased by one and generation is repeated, at most five times.
+
+\subsection{Construction of the network set}
+\label{app:set}
+The families are processed in the order pyramid, assembly, chokepoint. For each family, with $n=n_{\mathrm{s}}+n_{\mathrm{b}}$ networks ($n_{\mathrm{s}}$ at training scale, $n_{\mathrm{b}}$ larger), the stream draws:
+\begin{enumerate}
+\item a Latin hypercube. For each factor in the order $u,\rho,\alpha,\beta,\kappa,\tau,\tau_d,s,s^{FG},\delta$, draw a permutation $\pi$ of $\{0,\dots,n-1\}$ and $U_r\sim\mathcal{U}[0,1)$; row $r$ receives $\mathrm{lo}+(\pi_r+U_r)/n\cdot(\mathrm{hi}-\mathrm{lo})$.
+\item a permutation of the $n_{\mathrm{s}}$ training-scale rows. The first $\mathrm{round}(0.7n_{\mathrm{s}})$ in that order go to training, the next $\max(1,\mathrm{round}(0.15n_{\mathrm{s}}))$ to validation, the rest to test. Rows $n_{\mathrm{s}},\dots,n-1$ are the larger networks.
+\item one seed $\omega_n\sim\mathcal{U}\{0,\dots,10^9-1\}$ per row, in row order.
+\end{enumerate}
+Item counts per tier are $\max(2,\mathrm{round}(w_k\cdot\mathrm{scale}))$, with Python rounding (ties to even). The chokepoint tier is fixed at 3 items and is not scaled. The run settings are in Table~\ref{tab:runs}.
+
+\begin{table}[h]
+\caption{Run settings.}
+\label{tab:runs}
+\centering\footnotesize
+\begin{tabular}{lcc}
+\toprule
+Setting & Pilot (\texttt{quick}) & Full (\texttt{incom}) \\
+\midrule
+networks per family ($n_{\mathrm{s}}$+$n_{\mathrm{b}}$) & 8+3 & 200+30 \\
+train/val/test networks per family & 6/1/1 & 140/30/30 \\
+scale (training / larger) & 0.5 / 1.0 & 1.0 / 2.0 \\
+targets per tier (T1--T8) & 2 & 4 \\
+durations $D$ (days) & 21, 56 & 14, 28, 56, 84 \\
+warm-up $W$ / horizon $H$ (days) & 120 / 160 & 150 / 240 \\
+null samples (atlas networks) & 10 & 20 \\
+GNN width $d_h$ / epochs & 64 / 25 & 96 / 80 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Generator: exact rules}
+\label{app:gen}
+\begin{itemize}
+\item \emph{Items.} Items are numbered consecutively, tier by tier from T0. The number of platforms is $P=\min(P_{\mathrm{tmpl}},w_0)$. The $j$-th end item gets platform $j\bmod P$; every other item gets one drawn from $\mathcal{U}\{0,\dots,P-1\}$, one draw per item in index order (end items included, then overwritten).
+\item \emph{BOM.} For tiers $k=0..7$ and items $i$ in index order: $m_i=\min(\mathcal{U}\{m_{\min},\dots,m_{\max}\},w_{k+1})$. The $m_i$ components are drawn by one \texttt{choice} without replacement over the tier-$(k{+}1)$ items, with probabilities $\propto(\mathrm{use}_j+1)^{\alpha_b}\cdot[\pi(j){=}\pi(i)\ ?\ 1:\mu]$. Then, for each drawn component in draw order, $a_{ij}\sim\mathcal{U}\{1,2,3\}$ and $\mathrm{use}_j\mathrel{+}=1$.
+\item \emph{Repair.} For tiers $k=1..8$ and items in index order, an item with $\mathrm{use}_j=0$ is added to the BOM of a parent drawn uniformly from the same-platform items of tier $k-1$ (all items of $k-1$ if there are none), with $a\sim\mathcal{U}\{1,2,3\}$.
+\item \emph{Closure.} For tiers $k=0..6$ and items $i$ in index order; for each regular component $j$ of $i$ in insertion order; for each regular component $l$ of $j$ in insertion order: if $l\notin\mathrm{BOM}(i)$, draw $U$, and if $U<\tau$ add $l$ with $a_{il}=1$.
+\item \emph{Firms.} For each tier, platforms are visited in a random permutation. Within a platform the items are put in a random permutation and cut into consecutive portfolios, each of size $\mathcal{U}\{p_{\min},\dots,p_{\max}\}$ (the last may be smaller). Firms are numbered in creation order.
+\item \emph{Extra producers.} For each item of the tier in index order, two attempts. Let $A$ be the firms of the tier that do not yet produce it. If $A\neq\emptyset$, draw $U$; if $U<q$, choose uniformly from the same-platform firms in $A$ if there are any and a second draw is $<0.8$, otherwise uniformly from $A$.
+\item \emph{Sourcing order.} Tiers $k=0..7$. The firms of the tier are visited in a random permutation, and each firm's regular components in ascending index. ``Earlier buyers'' of $c$ are the groups of $c$ already created, and $\mathrm{buyers}(s)$ counts every group that already includes $s$.
+\item \emph{Sourcing rule for group $(f,c)$.}
+  \begin{itemize}
+  \item $\Sigma$ is the union of the supplier sets of $c$ held by $f$'s co-sources.
+  \item If $\Sigma\neq\emptyset$: draw $U$; if $U<\kappa$, the first supplier is chosen uniformly from $\Sigma$ in ascending order; otherwise, if $\mathrm{Prod}(c)\setminus\Sigma\neq\emptyset$, the set $\Sigma$ is excluded.
+  \item If no supplier has been chosen and $c$ has earlier buyers: draw $U$; if $U<\beta$, take the most frequent first supplier among them, excluding $\Sigma$ if excluded, with ties broken by the lowest firm index. If none remains, fall through to the next rule.
+  \item Otherwise, draw from $\mathrm{Prod}(c)$ minus the excluded set with probability $\propto(\mathrm{buyers}(s)+1)^{\alpha}$.
+  \item Second source: if $|\mathrm{Prod}(c)|\ge2$, draw $U$; if $U<\rho$, add a second producer by the same weights, excluding only the first.
+  \end{itemize}
+\item \emph{Coverage and co-sources.} After each tier $k$, every item $c$ of tier $k{+}1$ is visited in index order. Each producer of $c$ that appears in none of $c$'s groups is appended to one of those groups, chosen uniformly. Then every pair of suppliers in the same group is recorded as co-sources.
+\item \emph{Closure sourcing.} Firms in index order, closure components in ascending index. Draw $U$; if $U<\tau_d$, choose uniformly (ascending order) among the suppliers that $f$'s regular suppliers use for $c$, if any. Otherwise use the hub rule. Closure groups have one supplier.
+\item \emph{Final coverage.} Every non-end item is visited in index order; each of its producers that appears in none of its groups is appended to a uniformly chosen group of that item.
+\end{itemize}
+
+\subsection{Quantities: exact rules}
+\begin{itemize}
+\item \emph{Rates.} $x_{f,i}=d_i/|\mathrm{Prod}(i)|$ for end items. Then, for tiers $k=0..8$: for every firm of tier $k$ and every item in its portfolio, $n_{(f,c)}\mathrel{+}=x_{f,i}\,a_{ic}$; after the tier, every group $(f,c)$ of the tier adds $n_{(f,c)}/|S_{(f,c)}|$ to $x_{s,c}$ for each $s\in S_{(f,c)}$.
+\item \emph{Pruning.} Pairs with $x_{f,i}\le10^{-9}$ and groups with $n_g\le10^{-9}$ are dropped (none occur).
+\item \emph{Ordering.} Groups are ordered by (tier of $f$, $f$, $c$) and links lexicographically. The firm graph's adjacency follows this order, so predecessor and successor lists are in ascending firm index.
+\item \emph{Parameters.} $L_{sf}\sim\mathcal{U}\{2,\dots,3+k(s)\}$; $u_f=\mathrm{clip}(u+\mathcal{U}[-0.05,0.05],0.3,0.97)$; $C_f=x_f/u_f$; $s_f=s\cdot\mathcal{U}[0.5,1.5]$; $s^{FG}_f=s^{FG}\cdot\mathcal{U}[0.5,1.5]$.
+\item \emph{Stock levels.} $L_g=\max_{s\in S_g}L_{sf}$; $S_g=n_g(L_g+14+s_f)$; $Q_g=7n_g$; $S^{FG}_{f,i}=x_{f,i}(7+s^{FG}_f)$; $Q_{f,i}=7x_{f,i}$.
+\end{itemize}
+
+\subsection{Simulation: exact rules}
+\begin{itemize}
+\item \emph{Event list.} A binary heap keyed by (time, priority, creation counter). Priorities: control 0, arrival 1, completion 2, market order 3, sampling 9. The creation counter increases by one per scheduled event.
+\item \emph{Market orders.} One per OEM item at $t=0$, then every 1.0 day.
+\item \emph{Immediacy.} Orders have no information delay. Placing an order appends it to the supplier's queue and immediately calls ``try to ship'' and ``try to produce'' at that supplier, within the same event.
+\item \emph{Tolerance.} Stock comparisons use a tolerance of $10^{-9}$.
+\item \emph{Production choice.} Items are visited in portfolio order. An item is chosen only if its gap exceeds the best so far by more than $10^{-9}$, so ties go to the earlier item.
+\item \emph{During an outage.} A lot already in progress completes. At restart the firm first tries to ship each item in portfolio order, then tries to produce.
+\item \emph{Rotation.} Each group keeps a counter of orders placed. The supplier is the $(\text{counter} \bmod |A_g|)$-th element of the active list $A_g$ (suppliers not excluded, in $S_g$ order; all of $S_g$ if every supplier is excluded). Exclusion is global: every buyer of $v$ stops ordering from it at $t_0+\delta$.
+\item \emph{Branching.} The warm-up processes all events with $t\le W$; the state is then deep-copied.
+  \begin{itemize}
+  \item A disrupted branch schedules, in this order: start ($t_0$), end ($t_0+D$), exclude ($t_0+\delta$), include ($t_0+D+\delta$).
+  \item The clean branch schedules four no-op control events at $t_0$, which keeps the creation counters aligned.
+  \item Both schedule the first sampling event at $t_0+0.5$ and process all events with $t\le t_0+H$.
+  \end{itemize}
+\item \emph{Validation.}
+  \begin{itemize}
+  \item Fill rate: market units shipped divided by market units ordered between the first and last samples.
+  \item Stability: with $b(k)=\sum_f B_f(k)/x_f$, the mean of $b$ over the second half of the samples may exceed the mean over the first half by at most $0.1\times$ the first-half mean $+2$.
+  \end{itemize}
+\end{itemize}
+
+\subsection{Labels and baselines: exact rules}
+\begin{itemize}
+\item \emph{Time index.} Sample $k$ (taken at $t_0+k+0.5$) is day $k$. $\tau_f$ is the smallest $k$ with $\Delta_f(k),\dots,\Delta_f(k+P-1)\ge\theta$; firms without such a $k$ have no $\tau_f$. The disrupted firm is excluded from every label set and metric.
+\item \emph{Parent ties.} Ties in $p(f)$ go to the lowest firm index. Planned flows below $10^{-9}$ are floored at $10^{-9}$.
+\item \emph{Hop distance.} Breadth-first search on the undirected firm graph; unreachable firms get 99.
+\item \emph{Reachability.} $\tau$ is the Dijkstra distance from $v$ on $G$ with link weights $L_{sf}$.
+\item \emph{Cascade rule.} Firms are visited in \texttt{networkx.topological\_sort} order. If $D-c^{FG}_v\le0$, no firm is hit.
+\item \emph{Exposure classes} (H1), for every downstream firm $f$.
+  \begin{itemize}
+  \item A group is \emph{exposed} if at least one of its suppliers is $v$ or downstream of $v$.
+  \item $f$ is \emph{single} if some exposed group has one supplier.
+  \item Otherwise it is \emph{diamond} if some exposed group has all its suppliers exposed.
+  \item Otherwise it is \emph{independent dual} if it has an exposed group, and \emph{none} if it has none.
+  \end{itemize}
+  The 95\% interval is $\pm1.96\sqrt{\hat p(1-\hat p)/n}$.
+\end{itemize}
+
+\subsection{GNN: exact rules}
+\begin{itemize}
+\item \emph{MLPs.} $\mathrm{MLP}(a\to b)=\mathrm{Linear}(a,b)$--GELU--$\mathrm{Linear}(b,b)$, with PyTorch default initialisation.
+\item \emph{Modules.}
+  \begin{itemize}
+  \item Firm encoder: $\mathrm{MLP}(20\to d_h)$; $\mathrm{MLP}(24\to d_h)$ for the feature MLP.
+  \item Group encoder $\phi_0$: $\mathrm{MLP}(4\to d_h)$.
+  \item Per AND/OR layer: $\phi_1,\phi_4,\phi_5$: $\mathrm{MLP}(d_h{+}1\to d_h)$; $\phi_2$: $\mathrm{MLP}(4d_h\to d_h)$; $\phi_3$: $\mathrm{MLP}(2d_h{+}1\to d_h)$; $\phi_6$: $\mathrm{MLP}(7d_h\to d_h)$; LayerNorm($d_h$).
+  \item Per generic layer: $\phi_4,\phi_5$ as above, $\phi_6$: $\mathrm{MLP}(3d_h\to d_h)$.
+  \item Head: $\mathrm{MLP}(d_h\to3)$.
+  \item Aggregations over an empty set return 0 (e.g.\ raw-material firms have no groups).
+  \end{itemize}
+\item \emph{Features.} Firm features are in this order: tier one-hot (9); $u_f$; $\log(1+x_f)/5$; $(s^{FG}_f+3.5)/10$; $|I_f|/4$; $\log(1+\text{out-degree})/3$; $\log(1+\text{in-degree})/3$; share of $f$'s groups with $|S_g|>1$ (0 if none); $(s_f+3.5)/10$; mean lead time over all incoming links $/10$ (0 if none); target flag; $D/\max D$. The feature MLP appends $\min(\text{hop},12)/12$ and down/up/lateral indicators.
+\item \emph{Targets.} Failure $y_f\in\{0,1\}$; $\tau_f/H$ (0 where $y_f=0$, not used); $\log(1+\sigma_f)$.
+\item \emph{Batching.} Scenarios are concatenated as disjoint graphs with index offsets.
+\item \emph{Training loop.} Per epoch:
+  \begin{itemize}
+  \item permute the training scenarios with \texttt{Generator(0)}, which is advanced across epochs;
+  \item for each batch of 16 in that order: loss, backward pass, gradient-norm clipping at 1.0, AdamW step;
+  \item after the epoch: one cosine-annealing step ($T_{\max}$ = epochs, $\eta_{\min}=0$), then predict the validation scenarios in batches of 32 and compute the AUPRC over non-target firms;
+  \item keep the state if the AUPRC strictly improves.
+  \end{itemize}
+  The Huber loss on severity uses $\delta=1$. The positive weight is computed once from the training labels of non-target firms.
+\item \emph{Threshold.} $t^\ast$ is the first maximiser of validation F1 over $\{0.05,0.10,\dots,0.95\}$; a firm is predicted to fail if its probability exceeds $t^\ast$.
+\item \emph{Metrics.} scikit-learn \texttt{average\_precision\_score}, \texttt{f1\_score}, \texttt{precision\_score} and \texttt{recall\_score} over non-target firms of all scenarios of a split. The $\tau$ MAE is taken over firms with $y_f=1$ and a predicted failure. Hop bins are $\{1\},\{2\},\{3\},\{4\},\{5\},\{6,7\},\{\ge8\}$; a bin is reported only if it contains at least 5 failures.
+\end{itemize}
+
+\subsection{Fingerprints and statistics: exact rules}
+\begin{itemize}
+\item \emph{Degree of commonality.} The mean number of parent items over non-end items, counting regular and closure parents.
+\item \emph{Producer dominance.} Over components with at least 2 producers and at least 3 (group, producer) relations: the largest producer's share of those relations.
+\item \emph{Hidden concentration.} Over pairs (dual-sourced group $g$, input $l\in\mathrm{BOM}(c)$) in which every supplier of $g$ has a group for $l$ and $l$ has at least 2 producers: the share where the suppliers' sets for $l$ intersect.
+\item \emph{Assortativity.} \texttt{networkx.degree\_pearson\_correlation\_coefficient} on the undirected firm graph.
+\item \emph{Modularity.} With communities given by firm platforms.
+\item \emph{Triad $z$-scores.} $z=(n_{\mathrm{obs}}-\bar n_{\mathrm{null}})/\mathrm{sd}_{\mathrm{null}}$, with the population standard deviation over the null samples. Each null graph places, for every tier pair, the observed number of links on distinct (supplier, buyer) cells drawn uniformly without replacement.
+\item \emph{Control checks.} Spearman correlations are taken over all networks, training-scale and larger.
+\end{itemize}
 
 \end{document}
