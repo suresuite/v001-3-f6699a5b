@@ -4,6 +4,10 @@ Draft review batch, not a declaration that the entire manual is finished.
 
 Initial source: `7698ac2d541242de35383d488cfa3cc1ab5a31c2`. Refreshed through `21cc4a4aed1ac11b9de4b60fa464f0596b0bd21a`, then `32aa35b8f4f525ce9c75c49685d0866803840af3` as main advanced. Both upstream updates (150 and 103 changed blobs) matched their Git blob hashes locally before integration. The final refresh adds Supplier-stage per-lane lead-time overrides, whole-week rounding and the lane/default fallback. The final comparison, replenishment and export guidance incorporates that newer behavior. No production writes, permissions, deployment, migrations or engine behavior were changed.
 
+## Refresh 2026-10-18
+
+Seven evidence hashes had gone stale as main advanced past the reviewed commit (Phase 14–16 work, the notebook key check and two policy-grid fixes). Each file's change since the version its hash was recorded against was read against the manual page it backs. Four manual claims were corrected: who can create an API key and the button's name (`getting-an-api-key`), the engine-difference rule of the comparison screen (`experiments-and-comparison`), the bounded lead-time exception to "an override wins" (`how-policies-work`), and the optional lane-shape and production lead-time columns (`uploading-data`). `engineInputExport.ts` changed only in how the Export reads the project's MTS/MTO default; no claim depended on it. Not refreshed: the other twelve hashes, which still match. Not reviewed here: `plant-stage` and `customer-stage` against the production lead-time and requested-delivery-schedule fields, which are outside this evidence map.
+
 ## What changed
 
 - **Starting:** four reader paths now lead to an outcome. The analyst tutorial supplies seven synthetic CSVs, a precise experiment protocol, expected checkpoints, failure recovery and locally executed results.
