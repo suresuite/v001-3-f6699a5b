@@ -72,7 +72,7 @@ runs = {}
 for world, sc in scenarios.items():
     for label, version in (("A", version_a), ("B", version_b)):
         print(f"── {label} · {world}")
-        runs[(world, label)] = api.run_and_wait(PID, sc["id"], version["id"])
+        runs[(world, label)] = api.run_and_wait(PID, sc["id"], version["id"], acknowledge_warnings=ACKNOWLEDGE_WARNINGS)
 if "outage year" in scenarios:
     assert_disruption_applied(api.replications(runs[("outage year", "A")]["id"]))
 
@@ -104,7 +104,8 @@ if RUN_SWEEP and SUPPLIER:
         for days in SWEEP_LEVELS:
             api.set_policy(PID, "inventory", safety_stock_method="fixed_days", safety_stock_days=days)
             v = api.snapshot_policies(PID, f"safety stock {days} days")
-            r = api.run_and_wait(PID, scenarios["outage year"]["id"], v["id"])
+            r = api.run_and_wait(PID, scenarios["outage year"]["id"], v["id"],
+                                 acknowledge_warnings=ACKNOWLEDGE_WARNINGS)
             reps = replications_frame(api.replications(r["id"]))
             rows.append({"safety stock (days)": days, "fill rate": r["aggregate_kpis"]["fill_rate"],
                          "holding cost": reps["cost_ss_holding"].mean(), "lost sales": reps["cost_lost_sales"].mean()})

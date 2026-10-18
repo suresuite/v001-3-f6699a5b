@@ -55,11 +55,11 @@ if not SOLE_SOURCE_SUPPLIER:
 # %%
 scenarios = {name: stress_scenario(api, PID, base, events, name=f"{base['name']} + {name}")
              for name, events in tests.items()}
-baseline_run = api.run_and_wait(PID, base["id"], version["id"])
+baseline_run = api.run_and_wait(PID, base["id"], version["id"], acknowledge_warnings=ACKNOWLEDGE_WARNINGS)
 stress_runs = {}
 for name, sc in scenarios.items():
     print(f"── {name}")
-    stress_runs[name] = api.run_and_wait(PID, sc["id"], version["id"])
+    stress_runs[name] = api.run_and_wait(PID, sc["id"], version["id"], acknowledge_warnings=ACKNOWLEDGE_WARNINGS)
     assert_disruption_applied(api.replications(stress_runs[name]["id"]))
 
 # %% [markdown]

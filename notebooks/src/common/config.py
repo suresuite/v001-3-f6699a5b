@@ -7,3 +7,4 @@ SCENARIO_ID = ""         # a baseline scenario; "" = pick one without disruption
 POLICY_VERSION_ID = ""   # a policy snapshot; "" = snapshot the current configuration
 SUPPLIER_ID = ""         # a supplier id from your own data, for the disruption examples
 MODE = "auto"            # "auto" = live when an API key is found, else the offline demo; "live"; "demo"
+ACKNOWLEDGE_WARNINGS = False  # True = run anyway when the pre-run data check only warns (missing values use the platform defaults)
