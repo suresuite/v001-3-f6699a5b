@@ -196,6 +196,26 @@ const ENDPOINTS: [string, string, string][] = [
   ['GET /keys · POST /keys/{id}:revoke', 'admin:keys', 'Key inventory / kill switch over the API'],
 ];
 
+/** Rows a reference table shows before "Show all" — the rest are not hidden silently. */
+const NB_TABLE_ROWS = 8;
+/** A reference table scrolls inside its own box, so its column row can stay pinned. */
+const NB_TABLE_SCROLL = 'max-h-[26rem] overflow-auto';
+const NB_TABLE_HEAD = '[&_th]:sticky [&_th]:top-0 [&_th]:z-10';
+
+function ShowAllFooter({ shown, total, all, onToggle }: {
+  shown: number; total: number; all: boolean; onToggle: () => void;
+}) {
+  if (total <= NB_TABLE_ROWS) return null;
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-[--hair-border] px-4 py-2 text-[11px] text-muted-foreground">
+      <span>Showing {shown} of {total}, newest first</span>
+      <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={onToggle}>
+        {all ? 'Show fewer' : `Show all ${total}`}
+      </button>
+    </div>
+  );
+}
+
 function CopyButton({ text, label }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -281,6 +301,8 @@ export default function DeveloperApi({ isCollapsed, setIsCollapsed }: Props) {
   const [nbScenarios, setNbScenarios] = useState<NbScenario[]>([]);
   const [nbPolicyVersions, setNbPolicyVersions] = useState<NbPolicyVersion[]>([]);
   const [nbDatasetVersions, setNbDatasetVersions] = useState<NbDatasetVersion[]>([]);
+  const [nbShowAllPolicies, setNbShowAllPolicies] = useState(false);
+  const [nbShowAllDatasets, setNbShowAllDatasets] = useState(false);
 
   const rpcAuth = useMemo(
     () => ({ p_user_id: user?.id, p_user_email: user?.email }),
@@ -1575,9 +1597,9 @@ for kpi in ("fill_rate", "lost_units", "lost_sales_value", "max_backlog", "ttr_w
                         </p>
                       ) : (
                         <div className={`${SURFACE} overflow-hidden`}>
-                          <div className="overflow-x-auto">
+                          <div className={NB_TABLE_SCROLL}>
                             <table className="w-full border-collapse">
-                              <thead>
+                              <thead className={NB_TABLE_HEAD}>
                                 <tr>
                                   <th className={TH}>Name</th>
                                   <th className={TH}>ID</th>
@@ -1614,9 +1636,9 @@ for kpi in ("fill_rate", "lost_units", "lost_sales_value", "max_backlog", "ttr_w
                         </p>
                       ) : (
                         <div className={`${SURFACE} overflow-hidden`}>
-                          <div className="overflow-x-auto">
+                          <div className={NB_TABLE_SCROLL}>
                             <table className="w-full border-collapse">
-                              <thead>
+                              <thead className={NB_TABLE_HEAD}>
                                 <tr>
                                   <th className={TH}>Label</th>
                                   <th className={TH} title="The snapshot's number and its level versions: Product · pRocess · Firm · Simulation inputs">Version</th>
@@ -1627,7 +1649,7 @@ for kpi in ("fill_rate", "lost_units", "lost_sales_value", "max_backlog", "ttr_w
                                 </tr>
                               </thead>
                               <tbody>
-                                {nbPolicyVersions.slice(0, 8).map((v) => (
+                                {(nbShowAllPolicies ? nbPolicyVersions : nbPolicyVersions.slice(0, NB_TABLE_ROWS)).map((v) => (
                                   <tr key={v.id} className="hover:bg-[#fcfcfc]">
                                     <td className={`${TD} text-xs font-medium`}>{v.label ?? 'unlabelled'}</td>
                                     <td className={`${TD} whitespace-nowrap font-mono text-[11px]`}>{snapshotTuple(v)}</td>
@@ -1640,6 +1662,12 @@ for kpi in ("fill_rate", "lost_units", "lost_sales_value", "max_backlog", "ttr_w
                               </tbody>
                             </table>
                           </div>
+                          <ShowAllFooter
+                            shown={nbShowAllPolicies ? nbPolicyVersions.length : Math.min(NB_TABLE_ROWS, nbPolicyVersions.length)}
+                            total={nbPolicyVersions.length}
+                            all={nbShowAllPolicies}
+                            onToggle={() => setNbShowAllPolicies((v) => !v)}
+                          />
                         </div>
                       )}
                     </div>
@@ -1655,9 +1683,9 @@ for kpi in ("fill_rate", "lost_units", "lost_sales_value", "max_backlog", "ttr_w
                         </p>
                       ) : (
                         <div className={`${SURFACE} overflow-hidden`}>
-                          <div className="overflow-x-auto">
+                          <div className={NB_TABLE_SCROLL}>
                             <table className="w-full border-collapse">
-                              <thead>
+                              <thead className={NB_TABLE_HEAD}>
                                 <tr>
                                   <th className={TH}>Label</th>
                                   <th className={TH}>ID</th>
@@ -1666,7 +1694,7 @@ for kpi in ("fill_rate", "lost_units", "lost_sales_value", "max_backlog", "ttr_w
                                 </tr>
                               </thead>
                               <tbody>
-                                {nbDatasetVersions.slice(0, 8).map((v) => (
+                                {(nbShowAllDatasets ? nbDatasetVersions : nbDatasetVersions.slice(0, NB_TABLE_ROWS)).map((v) => (
                                   <tr key={v.id} className="hover:bg-[#fcfcfc]">
                                     <td className={`${TD} text-xs font-medium`}>{v.label ?? 'unlabelled'}</td>
                                     <td className={TD}><IdCell value={v.id} /></td>
@@ -1677,6 +1705,12 @@ for kpi in ("fill_rate", "lost_units", "lost_sales_value", "max_backlog", "ttr_w
                               </tbody>
                             </table>
                           </div>
+                          <ShowAllFooter
+                            shown={nbShowAllDatasets ? nbDatasetVersions.length : Math.min(NB_TABLE_ROWS, nbDatasetVersions.length)}
+                            total={nbDatasetVersions.length}
+                            all={nbShowAllDatasets}
+                            onToggle={() => setNbShowAllDatasets((v) => !v)}
+                          />
                         </div>
                       )}
                     </div>
