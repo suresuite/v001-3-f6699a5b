@@ -45,9 +45,9 @@ export default function Guide() { return <>
 <Section id="dependencies" title="Which file does what">
   <P>Item lists <em>describe</em> things. The BOM and the two logistics files <em>connect</em> them. A model that can run needs both kinds, plus economics, demand and capacity — having every table present is not the same as being ready to run.</P>
   <Defs items={[
-    { term: "Item lists", def: <>Suppliers, Materials, Products and Customers. Their IDs must match the BOM and logistics files exactly, after trimming spaces. A supplier on its own creates no supply relationship.</> },
+    { term: "Item lists", def: <>Suppliers, Materials, Products and Customers. Their IDs must match the BOM and logistics files exactly, after trimming spaces. A supplier on its own creates no supply relationship. Products also accept optional production lead-time columns (<Term>production_lead_time</Term> with <Term>production_lead_time_unit</Term>, and a shape); a blank unit means weeks.</> },
     { term: "BOM", def: <>How much of each material one product uses — units per unit, not a percentage. In the tutorial, P-CONTROL uses 1 M-BOARD and 2 M-CASE.</> },
-    { term: "Inbound logistics", def: <>Which supplier delivers which material. <Term>volume</Term> is a rate in <Term>time_unit</Term>; <Term>lead_time</Term> has its own <Term>lead_time_unit</Term>.</> },
+    { term: "Inbound logistics", def: <>Which supplier delivers which material. <Term>volume</Term> is a rate in <Term>time_unit</Term>; <Term>lead_time</Term> has its own <Term>lead_time_unit</Term>. Optional columns (<Term>lead_time_dist</Term>, <Term>lead_time_cv</Term>, <Term>lead_time_min</Term>, <Term>lead_time_mode</Term>, <Term>lead_time_max</Term>) give the lane its own lead-time shape; a lane with none follows its material's.</> },
     { term: "Outbound logistics", def: <>Which customer buys which product. <Term>volume</Term> and <Term>time_unit</Term> set the demand rate; <Term>unit_price</Term> is the selling price. Product-level and customer/product overrides may change the demand the simulation uses.</> },
     { term: "Optional", def: <>Node locations (for maps), deep-tier firms (for exploration) and a multi-level BOM (for projects set up for one). None of these proves an upstream relationship or adds a production stage.</> },
   ]} />

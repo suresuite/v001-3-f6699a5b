@@ -72,7 +72,7 @@ print("engine ready:", RUN_LOCAL)
 
 # %%
 scenario = baseline_scenario(api, PID, SCENARIO_ID)
-platform = api.run_and_wait(PID, scenario["id"], pol.id)
+platform = api.run_and_wait(PID, scenario["id"], pol.id, acknowledge_warnings=ACKNOWLEDGE_WARNINGS)
 
 if RUN_LOCAL:
     run_data = dataset(api, PID, platform["dataset_version_id"]) if platform.get("dataset_version_id") else data

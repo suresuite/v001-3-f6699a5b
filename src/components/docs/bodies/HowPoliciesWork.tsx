@@ -47,7 +47,7 @@ export default function Guide() { return <>
   <Defs items={[
     { term: "An example", def: "M-BOARD costs 20 in the tutorial master. An override of 25 changes the simulated valuation and leaves the master at 20. Removing the override restores 20; re-uploading the master doesn't remove it." },
     { term: "Blank isn't zero", def: "A blank can mean no override, derive a value, or use a default. Zero opening stock starts empty; zero safety-stock days asks for no fixed buffer. Check the field's limits before you type 0." },
-    { term: "Lead time", def: "The Supplier-stage cell can override a lane without changing the lane. An override wins; otherwise the lane, or a two-week default if the lane has none." },
+    { term: "Lead time", def: "The Supplier-stage cell can override a lane without changing the lane. An override wins; otherwise the lane, or a two-week default if the lane has none. The exception is a lane whose lead-time shape is triangular or uniform: the run plans on the mean of its bounds, the cell shows that mean as a derived value, and a lead time typed on the row is not read." },
   ]} />
   <Details title="How this works: lead time and finished-goods targets">
     <p>Lead-time entry uses whole weeks, rounded half to even and clamped to 1–51, matching the engine. Removing the override restores the lane/default chain.</p>

@@ -6,7 +6,7 @@
       "path": "src/components/UploadWizard.tsx",
       "symbols": "UploadWizard, IngestRunPanel",
       "manual_page": "uploading-data",
-      "sha256": "d1a9aefc1a11770bb7c0cf9b319179cbabf843aa8223bce13bcb4149abb36b6c"
+      "sha256": "6c8a3336d73decedc5992c0a0d089a4343e2685665debef8e4319e948d76bade"
     },
     {
       "path": "supabase/functions/_shared/ingestValidate.ts",
@@ -18,13 +18,13 @@
       "path": "supabase/functions/_shared/ingestSpec.generated.ts",
       "symbols": "INGEST_DATASETS",
       "manual_page": "uploading-data",
-      "sha256": "520974077ce40306a2306b24f8e9f2d2230c4571e50b63f7de794ae2dafd9671"
+      "sha256": "81983f8da6b5ed06f81341bb111e4f06648c2c77807aa7fa2d0157599bb206ae"
     },
     {
       "path": "src/lib/policies/resolveEffective.ts",
       "symbols": "getEffectiveValue, resolveCell",
       "manual_page": "how-policies-work",
-      "sha256": "237d08717e82532b15fe911edbf42662ae8429530666ec4dea102a342a79e793"
+      "sha256": "0796fb4af7a4704246c95bccf2a0a3add92cb92d43585e9b10b10963b70b483a"
     },
     {
       "path": "src/lib/policies/projectRules.ts",
@@ -36,7 +36,7 @@
       "path": "scsim/scsim/io/project_map.py",
       "symbols": "_build_settings, _map_policies, from_project_data",
       "manual_page": "how-policies-work",
-      "sha256": "776a086887d7202f68cccd6e51b58c278beb381b874e583fc0f27e98a46b207b"
+      "sha256": "9ad0716075b6a87d35e260edf1a563f1580d7fc617030c56f951c8cb854cbad5"
     },
     {
       "path": "sim-worker/sim_worker/local.py",
@@ -60,13 +60,13 @@
       "path": "src/lib/sim/comparability.ts",
       "symbols": "comparabilityFailures",
       "manual_page": "experiments-and-comparison",
-      "sha256": "bf51939b9b91240ba63e81963fac2ac092606cab6b389593e6db2a65d76d05d3"
+      "sha256": "0d02adeacfcfe49feced72a0ea7c8c645ab9eaf62272567b9d4f3cda2c123c0a"
     },
     {
       "path": "supabase/functions/api/index.ts",
       "symbols": "listProjects, RunCreateSchema, routes, authenticate",
       "manual_page": "getting-an-api-key",
-      "sha256": "1c52c6f5c554adf20e1e90a5fdf05039e172f28892a2eb8846ffbf4eda76cfc6"
+      "sha256": "b82f4c3605dbf7d1baa754304d7f1faf79e55b8d223b66e4d4b94e29a24e6898"
     },
     {
       "path": "supabase/functions/sim-command/index.ts",
@@ -108,7 +108,7 @@
       "path": "src/lib/policies/engineInputExport.ts",
       "symbols": "engineInputExport",
       "manual_page": "how-policies-work",
-      "sha256": "a0318390d116c7f8a7845cf3a33067643965888862dd1f4f5e7d982c1d695dd1"
+      "sha256": "e6138125584b20937ce723d2f384544fb06bcba9da089bd7208aa98cf01c11ad"
     },
     {
       "path": "scsim/scsim/policies/strategic/p_p3_safety_stock.py",

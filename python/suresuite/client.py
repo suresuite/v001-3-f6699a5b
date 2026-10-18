@@ -298,7 +298,8 @@ class SuReSuite:
                 for f in d.get("findings") or []:
                     print(f"  - [{f.get('severity')}] {f.get('message')}")
                 if d.get("validation") == "ack_required":
-                    print("these are warnings: if they are acceptable, dispatch again with acknowledge_warnings=True")
+                    print("these are warnings: if they are acceptable, set ACKNOWLEDGE_WARNINGS = True in the CONFIG cell "
+                          "(or pass acknowledge_warnings=True) and run this cell again")
             raise
         print(f"run {submitted['run_id']} dispatched ({submitted['status']})")
         return self.run(submitted["run_id"])

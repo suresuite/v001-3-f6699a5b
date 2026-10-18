@@ -74,7 +74,7 @@ scenario = baseline_scenario(api, PID, SCENARIO_ID)
 # **Expect:** `→ done` and the number of replications.
 
 # %%
-run = require_done(api.run_and_wait(PID, scenario["id"], VERSION["id"]))
+run = require_done(api.run_and_wait(PID, scenario["id"], VERSION["id"], acknowledge_warnings=ACKNOWLEDGE_WARNINGS))
 
 # %% [markdown]
 # ## 5 · Read the results

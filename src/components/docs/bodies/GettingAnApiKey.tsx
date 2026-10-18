@@ -28,9 +28,9 @@ export default function Guide() { return <>
 
 <Section id="creating-one" title="Create a key">
   <Steps steps={[
-    { title: "Open API keys", where: "/developer", body: <><AppLink to="/developer">Developer API</AppLink> › <strong>API keys</strong> › <strong>New key</strong>. You need key-management access.</> },
-    { title: "Name it for its job", where: "New key", body: "Pick test or live, restrict it to the projects and scopes it needs, and set an expiry." },
-    { title: "Copy the secret", where: "New key", body: "It's shown once. Later views show only a prefix.", check: "the key in your list, showing its prefix, scopes and expiry." },
+    { title: "Open API keys", where: "/developer", body: <><AppLink to="/developer">Developer API</AppLink> › <strong>API keys</strong> › <strong>Create API key</strong>. Any user can create a personal key with the read scopes (<Term>read:data</Term>, <Term>read:policies</Term>, <Term>read:runs</Term>); an organization key, or any write scope, needs an administrator or modeler.</> },
+    { title: "Name it for its job", where: "Create API key", body: "Pick test or live, restrict it to the projects and scopes it needs, and set an expiry." },
+    { title: "Copy the secret", where: "Create API key", body: "It's shown once. Later views show only a prefix.", check: "the key in your list, showing its prefix, scopes and expiry." },
   ]} />
   <DocFigure id="api-request" />
   <DocTable
