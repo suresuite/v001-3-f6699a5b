@@ -58,6 +58,7 @@ import {
   type RailState,
 } from "@/components/sim/StageRail";
 import { supabase } from "@/integrations/supabase/client";
+import { readProjectFulfillmentModel } from "@/lib/sim/projectFulfillmentModel";
 import { useAuth } from "@/hooks/useAuth";
 import { useProjectRights } from "@/hooks/useProjectRights";
 import type { StageRow } from "@/hooks/useStageRows";
@@ -117,6 +118,7 @@ import type { PolicyBundle, FulfillmentStrategy } from "@/lib/policies/schemas";
 import type { OverrideRow } from "@/lib/policies/resolve";
 import { MappingWarningsCard } from "@/components/sim/RunProgressPanel";
 import { RunQueueConsole } from "@/components/sim/RunQueueConsole";
+import { usePolicyVersionLabels } from "@/hooks/usePolicyVersionLabels";
 import { FROZEN_CELL, FROZEN_CELL_ON_TINT } from '@/components/shared';
 import { useIsMobile } from '@/hooks/use-is-mobile';
 import { M, MobileChip, MobileGroup, MobilePanel, MobileRow } from '@/components/mobile';
@@ -386,6 +388,8 @@ export function RunValidateStage({
     if (localRun && !list.some((r) => r.id === localRun.id)) list.unshift(localRun);
     return list;
   }, [history, localRun]);
+  // The policy version's name per run, so the queue says which policy each row ran under.
+  const policyLabels = usePolicyVersionLabels(useMemo(() => jobs.map((j) => j.policy_version_id), [jobs]));
 
   // Which job the inspection dashboard below the queue shows. Null = the
   // latest run (default). "View" on a completed row selects it; its reps are
@@ -1003,13 +1007,20 @@ export function RunValidateStage({
     setLocalRun(preliminaryRun(runId, scenarioId, projectId!, scenario.replications));
     let result: EngineResult;
     try {
+      // The project's default MTS / MTO, read as the worker reads it
+      // (`projects.supply_chain_model`) — NOT the policy's `fulfillment_strategy`
+      // string, which made the same saved version run MTS here and MTO on the
+      // server whenever a product states no mode of its own (§4 D197).
+      const projectModel = await readProjectFulfillmentModel(
+        supabase as never, projectId, user ? { id: user.id, email: user.email } : null,
+      );
       result = await runInBrowser(
         {
           runId,
           projectId: projectId!,
           snapshot,
           scenario: { ...scenario, crn: true },
-          projectModel: fulfillmentStrategy,
+          projectModel,
           // The frozen version the run is stamped with; the page's tables only
           // for a run that has none (sim-command unreachable), and then said.
           dataset: frozen?.snapshot ?? engineDataset(),
@@ -1801,6 +1812,7 @@ export function RunValidateStage({
                   activeRepsRunId={latestRun?.id ?? null}
                   selectedRunId={inspectedRun?.id ?? null}
                   credibility={runCredibility}
+                  policyLabels={policyLabels}
                   onCancel={cancelJob}
                   onCancelAllActive={cancelAllActive}
                   onView={onViewRun}

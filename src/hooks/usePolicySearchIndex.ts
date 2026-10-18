@@ -57,15 +57,47 @@ interface Args {
   products: NamedRow[];
   suppliers: NamedRow[];
   plantName: string | null | undefined;
+  /** Build the index only while a query is typed. The inputs are fresh arrays
+   *  on every page render, so an always-on index was rebuilt on every edit. */
+  enabled?: boolean;
 }
 
 const str = (row: StageRow, field: string) => String(row[field] ?? "");
 
+/** Overrides per target_key, counted once. A set of keys is then a sum over its
+ *  members — the same number `overrides.filter(o => keys.has(o.target_key))`
+ *  gave, without a pass over every override for every material and product. */
+function overrideCounts(overrides: OverrideRow[]): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const o of overrides) out.set(o.target_key, (out.get(o.target_key) ?? 0) + 1);
+  return out;
+}
+
 /** Real override count for a set of target_keys — the same target_key
  *  format `columnSpecs.ts`'s own `targetKey` functions produce, so this
  *  can never disagree with what the grid resolves. */
-function countOverrides(overrides: OverrideRow[], keys: Set<string>): number {
-  return overrides.filter((o) => keys.has(o.target_key)).length;
+function countOverrides(counts: Map<string, number>, keys: Iterable<string>): number {
+  let n = 0;
+  for (const k of keys) n += counts.get(k) ?? 0;
+  return n;
+}
+
+/** id → first matching row, as `Array.find` returned it. */
+function firstById<T extends { id: string }>(rows: T[]): Map<string, T> {
+  const out = new Map<string, T>();
+  for (const r of rows) if (!out.has(r.id)) out.set(r.id, r);
+  return out;
+}
+
+/** Group rows' `key` by one of their string fields. */
+function keysBy(rows: StageRow[], field: string, into = new Map<string, Set<string>>()): Map<string, Set<string>> {
+  for (const r of rows) {
+    const id = str(r, field);
+    let set = into.get(id);
+    if (!set) into.set(id, (set = new Set()));
+    set.add(r.key);
+  }
+  return into;
 }
 
 export function usePolicySearchIndex({
@@ -75,12 +107,18 @@ export function usePolicySearchIndex({
   products,
   suppliers,
   plantName,
+  enabled = true,
 }: Args): SearchResult[] {
   return useMemo(() => {
+    if (!enabled) return [];
     const supplierRows = rowsByStage.supplier?.rows ?? [];
     const plantRows = rowsByStage.plant?.rows ?? [];
     const customerRows = rowsByStage.customer?.rows ?? [];
     const results: SearchResult[] = [];
+    const counts = overrideCounts(overrides);
+    const supplierById = firstById(suppliers);
+    const materialById = firstById(materials);
+    const productById = firstById(products);
 
     // ── Suppliers (firm) — grouped from the supplier×material rows ───────
     const supplierSpec = specFor("supplier");
@@ -96,43 +134,37 @@ export function usePolicySearchIndex({
       results.push({
         type: "supplier",
         id,
-        name: suppliers.find((s) => s.id === id)?.name ?? id,
+        name: supplierById.get(id)?.name ?? id,
         sub: `${materialIds.size} material${materialIds.size === 1 ? "" : "s"}`,
-        policyCount: countOverrides(overrides, keys),
+        policyCount: countOverrides(counts, keys),
         targetStage: "supplier",
       });
     }
 
     // ── Materials (product) — real names from useItemMasters ─────────────
+    const keysByMaterial = keysBy(supplierRows, "material_id");
     for (const material of materials) {
-      const keys = new Set(
-        supplierRows
-          .filter((r) => str(r, "material_id") === material.id)
-          .map((r) => r.key),
-      );
-      if (keys.size === 0) continue; // not on any inbound lane this project
+      const keys = keysByMaterial.get(material.id);
+      if (!keys || keys.size === 0) continue; // not on any inbound lane this project
       results.push({
         type: "material",
         id: material.id,
         name: material.name,
-        policyCount: countOverrides(overrides, keys),
+        policyCount: countOverrides(counts, keys),
         targetStage: "supplier",
       });
     }
 
     // ── Products (product) — appear on both plant and customer rows ──────
+    const keysByProduct = keysBy(customerRows, "product_id", keysBy(plantRows, "product_id"));
     for (const product of products) {
-      const keys = new Set(
-        [...plantRows, ...customerRows]
-          .filter((r) => str(r, "product_id") === product.id)
-          .map((r) => r.key),
-      );
-      if (keys.size === 0) continue;
+      const keys = keysByProduct.get(product.id);
+      if (!keys || keys.size === 0) continue;
       results.push({
         type: "product",
         id: product.id,
         name: product.name,
-        policyCount: countOverrides(overrides, keys),
+        policyCount: countOverrides(counts, keys),
         targetStage: "plant",
       });
     }
@@ -150,7 +182,7 @@ export function usePolicySearchIndex({
         type: "customer",
         id,
         name: id,
-        policyCount: countOverrides(overrides, keys),
+        policyCount: countOverrides(counts, keys),
         targetStage: "customer",
       });
     }
@@ -163,7 +195,7 @@ export function usePolicySearchIndex({
         id: plantName,
         name: plantName,
         sub: "focal plant",
-        policyCount: countOverrides(overrides, keys),
+        policyCount: countOverrides(counts, keys),
         targetStage: "plant",
       });
     }
@@ -173,14 +205,14 @@ export function usePolicySearchIndex({
       const supplierId = str(row, "supplier_id");
       const materialId = str(row, "material_id");
       if (!supplierId || !materialId) continue;
-      const supplierName = suppliers.find((s) => s.id === supplierId)?.name ?? supplierId;
-      const materialName = materials.find((m) => m.id === materialId)?.name ?? materialId;
+      const supplierName = supplierById.get(supplierId)?.name ?? supplierId;
+      const materialName = materialById.get(materialId)?.name ?? materialId;
       results.push({
         type: "lane",
         id: row.key,
         name: `${supplierName} → ${materialName}`,
         sub: "inbound",
-        policyCount: countOverrides(overrides, new Set([row.key])),
+        policyCount: countOverrides(counts, [row.key]),
         targetStage: "supplier",
       });
     }
@@ -188,13 +220,13 @@ export function usePolicySearchIndex({
       const customerId = str(row, "customer_id");
       const productId = str(row, "product_id");
       if (!customerId || !productId) continue;
-      const productName = products.find((p) => p.id === productId)?.name ?? productId;
+      const productName = productById.get(productId)?.name ?? productId;
       results.push({
         type: "lane",
         id: row.key,
         name: `${productName} → ${customerId}`,
         sub: "outbound",
-        policyCount: countOverrides(overrides, new Set([row.key])),
+        policyCount: countOverrides(counts, [row.key]),
         targetStage: "customer",
       });
     }
@@ -217,5 +249,5 @@ export function usePolicySearchIndex({
     }
 
     return results;
-  }, [rowsByStage, overrides, materials, products, suppliers, plantName]);
+  }, [enabled, rowsByStage, overrides, materials, products, suppliers, plantName]);
 }

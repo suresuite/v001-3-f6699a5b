@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { PageLayout } from "@/components/shared/PageLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -198,11 +198,13 @@ export default function ProjectPolicies({ isCollapsed, setIsCollapsed }: Props) 
   const switchStage = async (s: StageKey) => {
     if (s === activeStage) return;
     if (!(await confirmLeave())) return;
-    setActiveStage(s);
+    // The grid is not virtualized: mounting a stage is a long render, so let
+    // React keep the click responsive and swap the stage when it is ready.
+    startTransition(() => setActiveStage(s));
   };
   const switchTab = async (t: "stages" | "guide" | "datamap") => {
     if (t !== "stages" && tab === "stages" && !(await confirmLeave())) return;
-    setTab(t);
+    startTransition(() => setTab(t));
   };
   const [historyOpen, setHistoryOpen] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
@@ -222,6 +224,7 @@ export default function ProjectPolicies({ isCollapsed, setIsCollapsed }: Props) 
   });
   const { materials, products, suppliers } = useItemMasters(projectId);
   const searchIndex = usePolicySearchIndex({
+    enabled: policyQuery.trim().length > 0,
     rowsByStage,
     overrides,
     materials: materials.map((m) => ({ id: m.material_id, name: m.name })),

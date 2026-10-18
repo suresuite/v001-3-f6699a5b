@@ -127,6 +127,10 @@ interface RunQueueConsoleProps {
   selectedRunId?: string | null;
   /** Derived credibility of the model in force (shown on the hero). */
   credibility?: Credibility | null;
+  /** The policy version's name ("s, S 24") by `policy_version_id`, so each row
+   *  names the policy it ran under. A run with no saved version says so rather
+   *  than staying silent. */
+  policyLabels?: Record<string, string>;
   onCancel: (job: SimulationRun) => void;
   onCancelAllActive: (jobs: SimulationRun[]) => void;
   onView: (job: SimulationRun) => void;
@@ -139,6 +143,7 @@ export function RunQueueConsole({
   activeRepsRunId,
   selectedRunId,
   credibility,
+  policyLabels,
   onCancel,
   onCancelAllActive,
   onView,
@@ -263,6 +268,7 @@ export function RunQueueConsole({
                   job={job}
                   reps={job.id === activeRepsRunId ? activeReps : undefined}
                   selected={job.id === selectedRunId}
+                  policyLabel={job.policy_version_id ? policyLabels?.[job.policy_version_id] ?? null : null}
                   queuePos={queuePosition(jobs, job)}
                   onCancel={() => onCancel(job)}
                   onView={() => onView(job)}
@@ -281,6 +287,7 @@ function JobRow({
   job,
   reps,
   selected,
+  policyLabel,
   queuePos,
   onCancel,
   onView,
@@ -289,6 +296,7 @@ function JobRow({
   job: SimulationRun;
   reps?: Replication[];
   selected: boolean;
+  policyLabel: string | null;
   queuePos: number | null;
   onCancel: () => void;
   onView: () => void;
@@ -310,6 +318,12 @@ function JobRow({
       </div>
 
       <div className="flex flex-col gap-0.5 min-w-[7rem]">
+        <span
+          className="text-[11px] font-medium"
+          title={job.policy_version_id ? "The policy version this run used" : "This run was not bound to a saved policy version"}
+        >
+          {job.policy_version_id ? policyLabel ?? "Policy …" : <span className="text-muted-foreground">No saved policy</span>}
+        </span>
         <Link to={engineDocHref(job.code_version)} title="What this engine version changed" className="w-fit">
           <Badge variant="outline" className={cn("text-[10px] w-fit", eng.cls)}>
             <Server className="h-3 w-3 mr-1" />

@@ -1,4 +1,6 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { MemoRow } from "./memoRow";
+import { useLatestCallback } from "./rowMemo";
 import { ProjectRightRefused } from "@/lib/auth/projectRights";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,7 +69,7 @@ import {
 import { stageEmptyMessage, treeFallbackReason } from "@/lib/policies/stageGridState";
 import { groupByKeyA, memberDisplay, summarise } from "@/lib/policies/groupRows";
 import { ENUM_OPTIONS, SCSIM_ENUM_OPTIONS, type FulfillmentStrategy, type PolicyBundle, type PolicyFamily } from "@/lib/policies/schemas";
-import { effectivePolicy, type OverrideRow } from "@/lib/policies/resolve";
+import { effectivePolicy, overridesForTarget, type OverrideRow } from "@/lib/policies/resolve";
 import {
   masterValueFor as masterValueForShared,
   derivedValueFor as derivedValueForShared,
@@ -96,7 +98,7 @@ import {
 import { policyTypeLabel, inventoryParamsForType, paramFeasibility } from "@/lib/policies/registryPolicyTypes";
 import { reviewPeriodDays, reviewPeriodWeeks } from "@/lib/policies/reviewPeriod";
 import { engineClassificationFor } from "@/lib/policies/engineBridge";
-import { groupHasPrimary as groupHasPrimaryFor, groupKeyFor, lineNeedsInput } from "@/lib/policies/stageGuards";
+import { groupHasPrimary as groupHasPrimaryFor, groupKeyFor, lineNeedsInput, primaryGroupKeys } from "@/lib/policies/stageGuards";
 import { ParameterSheet } from "./ParameterSheet";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchProjectLanes } from "@/lib/policies/projectLanes";
@@ -318,7 +320,8 @@ export function StagePolicyTable({
   ruleBar,
 }: Props) {
   const spec = specFor(stageKey);
-  const families = familiesForStage(stageKey);
+  // Memoized: a fresh array every render would move `rowEnv` and repaint every row.
+  const families = useMemo(() => familiesForStage(stageKey), [stageKey]);
   const { rows: dataRows, loading, fallback, reload: reloadRows } = stageRows;
   const { adaptLabel: adaptUnitLabel, isDayField, fromDays } = useTimeUnit(projectId);
   const { user } = useAuth();
@@ -392,7 +395,7 @@ export function StagePolicyTable({
   // Inline "new supplier" input state (per material row).
   const [newSupplierFor, setNewSupplierFor] = useState<string | null>(null);
   const [newSupplierId, setNewSupplierId] = useState("");
-  const assignSupplier = async (materialId: string, supplierId: string) => {
+  const assignSupplier = useLatestCallback(async (materialId: string, supplierId: string) => {
     if (!projectId || !user) return;
     // D230 — assigning a supplier writes the input lanes: "Edit Input Data".
     if (!canEditInputs) {
@@ -478,7 +481,7 @@ export function StagePolicyTable({
     } finally {
       setAssigning(null);
     }
-  };
+  });
 
   const derivedValueFor = (col: ColSpec, r: Record<string, unknown>): number | undefined =>
     derivedValueForShared(col, r, derived);
@@ -507,16 +510,43 @@ export function StagePolicyTable({
   // `resolved` carries the master-backed gate fields AS THE CELL SHOWS THEM
   // (draft → override → item master), so "does this product hold FG stock?"
   // is answered by the same chain the engine reads, not by the bundle.
+  //
+  // INCREMENTAL ON THE DRAFT. A draft replaces ONE row's object (`onCellChange`),
+  // yet this map was rebuilt for every row on every edit — `rowGateCtx` is a
+  // dozen resolver calls per row. A row's context is a function of its own draft
+  // and of the non-draft inputs below, so a row is reused when its draft object
+  // is the one it was built from and none of those inputs moved.
+  const gateCache = useRef<{
+    inputs: readonly unknown[];
+    byKey: Map<string, { draft: RowDraft | undefined; ctx: ColSpecCtx }>;
+  } | null>(null);
   const rowCtxByKey = useMemo(() => {
+    const inputs = [
+      dataRows, fulfillmentStrategy, rowEffective, masterColByField, masterRowById, derived,
+      defaults, overrides, spec.scope, projectFulfillmentMode, stageKey,
+    ];
+    const prev = gateCache.current;
+    const reusable = !!prev && prev.inputs.length === inputs.length && prev.inputs.every((v, i) => Object.is(v, inputs[i]));
+    const built = new Map<string, { draft: RowDraft | undefined; ctx: ColSpecCtx }>();
     const m = new Map<string, ColSpecCtx>();
     for (const r of dataRows) {
       const rowKey = String(r.key);
-      m.set(rowKey, rowGateCtx({
-        rowKey, row: r as Record<string, unknown>, draft: drafts[rowKey], fulfillmentStrategy,
-        effective: rowEffective.get(rowKey), projectFulfillmentMode, families, masterColByField,
-        masterRowById, derived, defaults, overrides, scope: spec.scope,
-      }));
+      const draft = drafts[rowKey];
+      const hit = reusable ? prev!.byKey.get(rowKey) : undefined;
+      let ctx: ColSpecCtx;
+      if (hit && hit.draft === draft) {
+        ctx = hit.ctx;
+      } else {
+        ctx = rowGateCtx({
+          rowKey, row: r as Record<string, unknown>, draft, fulfillmentStrategy,
+          effective: rowEffective.get(rowKey), projectFulfillmentMode, families, masterColByField,
+          masterRowById, derived, defaults, overrides, scope: spec.scope,
+        });
+      }
+      built.set(rowKey, { draft, ctx });
+      m.set(rowKey, ctx);
     }
+    gateCache.current = { inputs, byKey: built };
     return m;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `families` is derived from stageKey
   }, [dataRows, drafts, fulfillmentStrategy, rowEffective, masterColByField, masterRowById, derived, defaults, overrides, spec.scope, projectFulfillmentMode]);
@@ -636,6 +666,23 @@ export function StagePolicyTable({
   // appears, which the fold itself can cause, oscillating).
   const [fitEnabled, setFitEnabled] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Row windowing for the flat grid: only the rows in (or near) the scroll
+  // viewport are mounted; spacer rows keep the scroll height. `rowH` is measured
+  // from a rendered row, so wrapped or taller rows only skew the spacers.
+  const [win, setWin] = useState({ top: 0, h: 700 });
+  const [rowH, setRowH] = useState(27);
+  const winRaf = useRef<number | null>(null);
+  const onGridScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    if (winRaf.current !== null) return;
+    winRaf.current = requestAnimationFrame(() => {
+      winRaf.current = null;
+      setWin((w) => (Math.abs(w.top - el.scrollTop) < rowH * 2 && w.h === el.clientHeight ? w : { top: el.scrollTop, h: el.clientHeight }));
+    });
+  };
+  useEffect(() => () => {
+    if (winRaf.current !== null) cancelAnimationFrame(winRaf.current);
+  }, []);
   const [containerW, setContainerW] = useState(0);
   useEffect(() => {
     const el = scrollRef.current;
@@ -827,6 +874,16 @@ export function StagePolicyTable({
   /** Saved-state + draft resolver shared with the step track's guardrail. */
   const resolveForGuard = (row: Record<string, unknown>, field: string): unknown =>
     getEffective(String(row.key), row, field);
+
+  // Which primary-source groups already have a primary picked, answered ONCE per
+  // change to what the guard resolves from. `groupHasPrimary` used to scan every
+  // row for every multi-source row (rows × rows × overrides per render). The
+  // deps are exactly the inputs of `getEffective`, which `resolveForGuard` reads.
+  const primaryGroups = useMemo(
+    () => primaryGroupKeys(stageKey, dataRows as Record<string, unknown>[], resolveForGuard),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `resolveForGuard` closes over the deps listed
+    [stageKey, dataRows, drafts, families, masterColByField, masterRowById, derived, defaults, overrides, spec.scope],
+  );
 
   // Full field→col map (includes vectorized inventory params hidden from the
   // header) so save/prefill can resolve a param's family even though it renders
@@ -1060,7 +1117,7 @@ export function StagePolicyTable({
 
   // Detect whether a row currently has any existing override (vs default).
   const hasOverride = (rowKey: string): boolean =>
-    overrides.some((o) => o.target_key === rowKey);
+    overridesForTarget(overrides, rowKey).length > 0;
 
   /** Comparable cell value for any column (key col or value col). */
   const cellValueFor = (r: Record<string, unknown>, colId: string): unknown => {
@@ -1238,8 +1295,10 @@ export function StagePolicyTable({
   }, [dirtyKeys.length, onDraftsChange]);
   useEffect(() => () => onDraftsChange?.(0), [onDraftsChange]);
 
-  const onCellChange = (rowKey: string, field: string, v: unknown) => {
-    setDrafts((d) => {
+  const onCellChange = useLatestCallback((rowKey: string, field: string, v: unknown) => {
+    // The grid is not virtualized, so a draft re-renders every row. A transition
+    // lets React yield to the next keystroke / click instead of blocking on it.
+    startTransition(() => setDrafts((d) => {
       const next: Record<string, RowDraft> = {
         ...d,
         [rowKey]: { ...(d[rowKey] ?? {}), [field]: v },
@@ -1263,8 +1322,8 @@ export function StagePolicyTable({
         }
       }
       return next;
-    });
-  };
+    }));
+  });
 
   const saveAll = async () => {
     if (dirtyKeys.length === 0) return;
@@ -1438,7 +1497,10 @@ export function StagePolicyTable({
   );
   // Whether any override already targets a row in this stage.
   const hasOverridesForStage = useMemo(
-    () => overrides.some((o) => dataRows.some((r) => r.key === o.target_key)),
+    () => {
+      const keys = new Set(dataRows.map((r) => r.key));
+      return overrides.some((o) => keys.has(o.target_key));
+    },
     [overrides, dataRows],
   );
 
@@ -1569,7 +1631,7 @@ export function StagePolicyTable({
   }, [hasSeedableData, applying, hasOverridesForStage, prefillSettled]);
 
   /** Reset one row: drop drafts + delete all saved overrides on that row. */
-  const resetRow = async (rowKey: string) => {
+  const resetRow = useLatestCallback(async (rowKey: string) => {
     setDrafts((d) => {
       const next = { ...d };
       delete next[rowKey];
@@ -1581,15 +1643,15 @@ export function StagePolicyTable({
       await deleteOverride(spec.scope, rowKey, o.family);
     }
     if (rowOverrides.length > 0) toast.success("Reverted to project data", TOAST);
-  };
+  });
 
   /** Does the primary-source group for this row already have a chosen primary? */
   const groupHasPrimary = (r: Record<string, unknown>): boolean =>
-    groupHasPrimaryFor(stageKey, r, dataRows as Record<string, unknown>[], resolveForGuard);
+    groupHasPrimaryFor(stageKey, r, dataRows as Record<string, unknown>[], resolveForGuard, primaryGroups);
 
   /** Line needs the user's input — the same rule the step track counts. */
   const rowNeedsAttention = (r: Record<string, unknown>): boolean =>
-    lineNeedsInput(stageKey, r, dataRows as Record<string, unknown>[], resolveForGuard);
+    lineNeedsInput(stageKey, r, dataRows as Record<string, unknown>[], resolveForGuard, primaryGroups);
 
   const imputedLines = useMemo(
     () =>
@@ -1746,6 +1808,37 @@ export function StagePolicyTable({
   };
 
   /** One data row (§5.1 — plain or a group's expanded member). */
+  const WINDOW_MIN_ROWS = 80;
+  const OVERSCAN = 12;
+  const windowRows = (rows: React.ReactNode[]): React.ReactNode[] => {
+    if (rows.length < WINDOW_MIN_ROWS) return rows;
+    const first = Math.max(0, Math.floor(win.top / rowH) - OVERSCAN);
+    const last = Math.min(rows.length, Math.ceil((win.top + win.h) / rowH) + OVERSCAN);
+    const out: React.ReactNode[] = [];
+    if (first > 0) {
+      out.push(
+        <tr key="__win_top" aria-hidden>
+          <td colSpan={colCount} style={{ height: first * rowH, padding: 0, border: 0 }} />
+        </tr>,
+      );
+    }
+    for (let i = first; i < last; i++) out.push(rows[i]);
+    if (last < rows.length) {
+      out.push(
+        <tr key="__win_bot" aria-hidden>
+          <td colSpan={colCount} style={{ height: (rows.length - last) * rowH, padding: 0, border: 0 }} />
+        </tr>,
+      );
+    }
+    return out;
+  };
+  // Measure one real data row once the grid has painted.
+  useEffect(() => {
+    const tr = scrollRef.current?.querySelector<HTMLTableRowElement>("tbody tr.group");
+    const h = tr?.getBoundingClientRect().height;
+    if (h && Math.abs(h - rowH) > 1) setRowH(Math.round(h));
+  }, [rowH, win.top, filtered.length]);
+
   const renderRow = (
     r: Record<string, unknown>,
     groupMeta?: { isFirstOfGroup: boolean; isContinuation: boolean; groupId: string },
@@ -1995,8 +2088,8 @@ export function StagePolicyTable({
           if (col.field === "row_demand_schedule") {
             const draftSched = rowDraft[col.field];
             const schedEdited = draftSched !== undefined;
-            const saved = overrides.some(
-              (o) => o.target_key === rowKey && o.family === "demand" && col.field in (o.patch ?? {}),
+            const saved = overridesForTarget(overrides, rowKey).some(
+              (o) => o.family === "demand" && col.field in (o.patch ?? {}),
             );
             return (
               <td
@@ -2265,6 +2358,52 @@ export function StagePolicyTable({
           );
         })}
       </tr>
+    );
+  };
+
+  // ── Row memoization (flat grid) ──────────────────────────────────────────
+  //
+  // `rowEnv` is an identity token: it moves only when one of the values below
+  // does. These are the things EVERY row reads in common. What is per row goes
+  // in `own`, below. Both lists are held to what `renderRow` reaches by
+  // `stagePolicyTableRowMemo.test.ts`.
+  const hasDeleteOverride = !!deleteOverride;
+  const rowEnv = useMemo(
+    () => ({}),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the list is the point: the object is only an identity token
+    [
+      stageKey, spec, projectId, plantName, defaults, overrides, fulfillmentStrategy,
+      masterRowById, masterColByField, derived, families, keyDefs, visible, fills,
+      flatQty, qtyByMaterial, specColByField, invParamColByField, fgParamColByField,
+      knownSuppliers, scheduleHorizonWeeks, selectedProject, user, canEditInputs,
+      inputEditRefusal, adaptUnitLabel, fromDays, hasDeleteOverride,
+    ],
+  );
+
+  /** `renderRow` for a flat-grid line, repainted only when ITS inputs move. */
+  const renderRowMemo = (
+    r: Record<string, unknown>,
+    groupMeta: { isFirstOfGroup: boolean; isContinuation: boolean; groupId: string },
+  ) => {
+    const rowKey = String(r.key);
+    const editingNewSupplier = newSupplierFor === rowKey;
+    return (
+      <MemoRow
+        key={rowKey}
+        env={rowEnv}
+        // This row's own inputs. The flags are what the row derives from OTHER
+        // rows' state (a sibling's primary, the group's primary) — compared as
+        // the answer, not as the state that produced it, so editing one row
+        // does not repaint its neighbours.
+        own={[
+          r, groupMeta.isFirstOfGroup, groupMeta.isContinuation, groupMeta.groupId,
+          drafts[rowKey], rowEffective.get(rowKey), rowCtxByKey.get(rowKey),
+          rowNeedsAttention(r), groupHasPrimary(r), hasOverride(rowKey),
+          editingNewSupplier, editingNewSupplier ? newSupplierId : "",
+          assigning === String(r.material_id),
+        ]}
+        render={() => renderRow(r, groupMeta)}
+      />
     );
   };
 
@@ -3004,6 +3143,7 @@ export function StagePolicyTable({
           while the value heads (z-30) slid under both. */}
       <div
         ref={scrollRef}
+        onScroll={onGridScroll}
         className="isolate max-h-[614px] overflow-auto rounded-sm border border-[--hair-border] border-t-2 border-t-foreground [scrollbar-gutter:stable]"
       >
         <table
@@ -3209,14 +3349,14 @@ export function StagePolicyTable({
             {!loading && treeActive && renderTreeRows()}
             {!loading &&
               !treeActive &&
-              rowGroups.flatMap((group) => {
+              windowRows(rowGroups.flatMap((group) => {
                 const isCollapsible = group.members.length > 1;
                 const groupId = `${stageKey}::${group.id}`;
                 const isGroupCollapsed = isCollapsible && collapsedGroups.has(groupId);
 
                 if (!isGroupCollapsed) {
                   return group.members.map((m, mi) =>
-                    renderRow(m.row as Record<string, unknown>, {
+                    renderRowMemo(m.row as Record<string, unknown>, {
                       ...memberDisplay(group.members.length, mi),
                       groupId,
                     }),
@@ -3314,7 +3454,7 @@ export function StagePolicyTable({
                     })}
                   </tr>
                 );
-              })}
+              }))}
           </tbody>
         </table>
       </div>

@@ -24,8 +24,8 @@ import {
   type ColSpecCtx,
 } from "@/lib/policies/columnSpecs";
 import { groupByKeyA } from "@/lib/policies/groupRows";
-import { effectivePolicy, type OverrideRow } from "@/lib/policies/resolve";
-import { lineNeedsInput, groupHasPrimary, type ResolveField } from "@/lib/policies/stageGuards";
+import { effectivePolicy, overridesForTarget, type OverrideRow } from "@/lib/policies/resolve";
+import { lineNeedsInput, groupHasPrimary, primaryGroupKeys, type ResolveField } from "@/lib/policies/stageGuards";
 import { inventoryParamsForType, kappaIsRead } from "@/lib/policies/registryPolicyTypes";
 import { reviewPeriodWeeks } from "@/lib/policies/reviewPeriod";
 import {
@@ -175,7 +175,16 @@ export function MobileStagePolicyList({
       scope: spec.scope,
     });
 
-  const hasOverride = (rowKey: string): boolean => overrides.some((o) => o.target_key === rowKey);
+  // Groups that already have a primary, found once per change to what the guard
+  // resolves from — `lineNeedsInput`/`groupHasPrimary` otherwise scan every row
+  // for each multi-source row (the same n² the desktop grid had).
+  const primaryGroups = useMemo(
+    () => primaryGroupKeys(stageKey, dataRows as Record<string, unknown>[], resolveForGuard),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `resolveForGuard` closes over the deps listed
+    [stageKey, dataRows, families, masterColByField, masterRowById, derived, defaults, overrides, spec.scope],
+  );
+
+  const hasOverride = (rowKey: string): boolean => overridesForTarget(overrides, rowKey).length > 0;
 
   const groups = useMemo(
     () => groupByKeyA(dataRows as Record<string, unknown>[], spec.keyCols[0].id),
@@ -224,12 +233,12 @@ export function MobileStagePolicyList({
   const memberRow = ({ row }: { row: Record<string, unknown> }) => {
     const rowKey = String(row.key);
     const keyBLabel = String(row[spec.keyCols[1]?.id ?? ""] ?? "");
-    const attention = lineNeedsInput(stageKey, row, dataRows as Record<string, unknown>[], resolveForGuard);
+    const attention = lineNeedsInput(stageKey, row, dataRows as Record<string, unknown>[], resolveForGuard, primaryGroups);
     const multiSource =
       (stageKey === "supplier" || stageKey === "customer") &&
       Number((row as Record<string, unknown>).__lane_count ?? 0) > 1;
     const isPrimaryMissing =
-      multiSource && !groupHasPrimary(stageKey, row, dataRows as Record<string, unknown>[], resolveForGuard);
+      multiSource && !groupHasPrimary(stageKey, row, dataRows as Record<string, unknown>[], resolveForGuard, primaryGroups);
     const overridden = hasOverride(rowKey);
     // The desktop grid carries the same three states as a 2px left accent;
     // the skin spends colour as a 6px dot instead (§3), so `rowAccent`'s
