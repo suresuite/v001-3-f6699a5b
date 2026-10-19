@@ -34,16 +34,20 @@ A RETIRED PIPELINE'S TABLE, LEFT IN PLACE ON PURPOSE by the 2026-07-02 commit th
 | Minimum project role | `viewer` |
 | Tier transitions audited | **no** — invariant `audit-actor` is not met here yet |
 | Row-level security | enabled |
-| Policies on the table | 2 — all carry a predicate |
+| Policies on the table | 6 — all carry a predicate |
 
 Two policies through the project's organization (`org_is_current_user_org(p.organization_id, p.organization)`): SELECT for any member of that organization, ALL for the project's modeler or an organization admin. Neither is predicate-less, so `write: null` agrees with `governanceEnforcement.test.ts`, and no user-facing write path exists in the repository. A BEFORE INSERT trigger (`set_simulation_job_magnitudes_defaults`) still fires on any insert. Deleting a project removes these rows through `simulation_job_magnitudes_project_fk … ON DELETE CASCADE`, which WP 6.2 added (`20260919000005`, §4 D117) — and the before-reading for that migration is the one production measurement this table has: 35 rows whose project had already been deleted, removed so the key could be added. So production HELD rows; how many remain is not measured. NOT IN PRODUCTION'S CASE: §4 D168 found the legacy writer (`simulation-runner`) and readers (`simulation-availability-checker`, `delete-simulation-job`) still LIVE in production with no source here. NOT AUDITED: tier 5, and `audit-actor` covers tiers 2–4.
 
-<details><summary>2 RLS policies</summary>
+<details><summary>6 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| Simulation job magnitudes: project access modify | ALL | all | `20260915000004_org_identity_dual_read.sql` |
-| Simulation job magnitudes: project access view | SELECT | all | `20260915000004_org_identity_dual_read.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -264,6 +268,6 @@ When the row was last changed. The legacy writer only inserted; no trigger re-st
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
 sidecar `supabase/contract/simulation_job_magnitudes.contract.yaml`, table created by `20250917214434_0124e19b-fd0b-4bb1-9dad-0a449d321c0a.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

@@ -500,6 +500,7 @@ function apply(schema, stmt, migration, guarded = false) {
     }
     t.rls.policies.push({
       name: pid.name,
+      ...(/\bAS\s+RESTRICTIVE\b/i.test(tail) ? { permissive: false } : {}),
       command: /\bFOR\s+(ALL|SELECT|INSERT|UPDATE|DELETE)\b/i.exec(tail)?.[1]?.toUpperCase() ?? "ALL",
       roles: /\bTO\s+([\w", ]+?)(?=\s+(?:USING|WITH\s+CHECK)\b|$)/i.exec(tail)?.[1]?.split(",").map((r) => squash(r)) ?? [],
       using: parenBody(tail, /\bUSING\b/i.exec(tail)?.index ?? -1)?.body?.trim() ?? null,

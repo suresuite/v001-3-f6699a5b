@@ -44,15 +44,20 @@ partially or get corrected — the write fails.
 | Minimum project role | `editor` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
-| Policies on the table | 1 — all carry a predicate |
+| Policies on the table | 6 — all carry a predicate |
 
 RLS reaches the project through the run, the same predicate the staging tables use. The grant is narrower than theirs on purpose — `authenticated` holds SELECT and INSERT and nothing else — because tier 0 is write-once and a grant that permits UPDATE would be a promise the trigger then breaks. The trigger is the backstop the grant cannot be: the service role holds every privilege by definition, and `ingest_files_write_once()` refuses its updates too. `audited: true` SINCE WP 3.2, and by the RPC route rather than by a trigger: `audit_tier_write` is a tier 2/3/4 instrument and a tier-0 table has none. `ingest_land_file` writes exactly one `plane='data'` audit row per landing — action `ingest_file_landed`, target `ingest_files`, the file id as target_id, and the hash, the byte count and the staged/rejected counts in `after`. It NAMES the uploader, and it can, because the actor is a PARAMETER of that function rather than a session GUC read at the far end of a pooled connection (D36's failure mode, avoided rather than inherited). The row is written in the same transaction as the landing, so a landed file without its audit row is not a state this table can reach. `supabase/rehearsal/070` asserts all of that against a real database, and is mutation-tested on it. The previous note said this was WP 3.2's to add; it did.
 
-<details><summary>1 RLS policy</summary>
+<details><summary>6 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| ingest_files: project access | ALL | authenticated | `20260916000013_ingest_files_tier0.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -268,6 +273,6 @@ When the bytes were received. Server-stamped, never the client's clock.
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
 sidecar `supabase/contract/ingest_files.contract.yaml`, table created by `20260916000013_ingest_files_tier0.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

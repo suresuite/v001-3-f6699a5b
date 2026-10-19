@@ -32,28 +32,20 @@ it rather than duplicating it.
 | Minimum project role | `viewer` |
 | Tier transitions audited | **no** — invariant `audit-actor` is not met here yet |
 | Row-level security | enabled |
-| Policies on the table | 2 — **2 with no predicate** |
+| Policies on the table | 6 — all carry a predicate |
 
 `write: simulation_lab` is the capability that gates the only user-facing action which writes this table — running a simulation. It is NOT `null`, and the first draft of this sidecar said it was: `analysis_runs` can claim `write: null` because it has no write policy at all and every write goes through a SECURITY DEFINER RPC, but this table is written by the BROWSER, as a PostgREST upsert from `pyodideEngine.persistEngineResult`, behind two predicate-less policies (`rep_auth_all` and `run_replications_anon_write`). `governanceEnforcement.test.ts` refused the `null` claim on exactly that evidence, and it was right: a policy with no predicate permits any holder of the table grant to write, which is a user-facing write path whether or not a page uses it. So the capability is declared and the exposure is stated rather than implied: this is one of the eleven tables §4 D154 measured as genuinely writable from the browser's `anon` role. That is D28's standing decision (document, do not change) and WP 7.1's to close — `min_project_role` is `viewer` because nothing here enforces a role today, not because a viewer ought to be able to write results. NOT AUDITED, and that is the tier rather than an omission: the audit rule (`audit-actor`) covers tiers 2, 3 and 4, where a write changes the world a later run will see. A replication row is the OUTPUT of one run and an input to nothing; re-running writes new rows rather than mutating these, so there is no tier transition here for an audit row to name.
 
-> **What the database actually permits is wider than the row above.**
-> 2 policies here grant access with
-> **no predicate at all** (`USING (true)`), so the capability named above is what the
-> product intends to check, not what the database enforces:
->
-> - `rep_auth_all` — `ALL` to `authenticated`
-> - `run_replications_anon_write` — `ALL` to `anon`, `authenticated`
->
-> Some of these permit **writes**. See PLAN.md D28: the application runs as the
-> `anon` role with no auth session and the anon key ships in the frontend bundle, so
-> closing these is a migration with an auth model behind it rather than a policy edit.
-
-<details><summary>2 RLS policies</summary>
+<details><summary>6 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| rep_auth_all | ALL | authenticated | `20260607121406_fcbd47e9-93de-4b3b-988f-7f4718159c91.sql` |
-| run_replications_anon_write | ALL | anon, authenticated | `20260919000010_anon_policies_widen.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -291,6 +283,6 @@ When the row was inserted.
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
 sidecar `supabase/contract/run_replications.contract.yaml`, table created by `20260607121406_fcbd47e9-93de-4b3b-988f-7f4718159c91.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

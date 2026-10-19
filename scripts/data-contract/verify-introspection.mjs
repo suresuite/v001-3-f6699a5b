@@ -160,8 +160,9 @@ check(
 // four. The artifact then showed RLS on with no policy — deny-all — which is a
 // louder wrong answer than the one it replaced.
 check(
-  "DO-block DDL after a `--` comment is still read (supply_chain_data_multi_tier)",
-  (T.get("supply_chain_data_multi_tier")?.rls.policies.length ?? 0) === 4,
+  "multi-tier access retains scoped reads and restrictive write fences",
+  ['security_read', 'security_write', 'security_read_fence', 'security_insert_fence', 'security_update_fence', 'security_delete_fence']
+    .every(name => T.get("supply_chain_data_multi_tier")?.rls.policies.some(p => p.name === name && (!name.endsWith('_fence') || p.permissive === false))),
   `${T.get("supply_chain_data_multi_tier")?.rls.policies.length ?? 0} policies`,
 );
 check(

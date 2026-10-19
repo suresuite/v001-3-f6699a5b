@@ -26,26 +26,20 @@
 | Minimum project role | `viewer` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
-| Policies on the table | 1 — **1 with no predicate** |
+| Policies on the table | 6 — all carry a predicate |
 
 Written by the `_build_dataset_snapshot` database function, never by a page — that is the INTENT, and `write: null` records it. **And since WP 11.1 the database enforces it** (§4 D265): from WP 2.4 to WP 11.1 the live policy `dataset_versions_insert_all` was `FOR INSERT ... WITH CHECK (true)` with an INSERT grant to `anon` and `authenticated`, pinned by `governanceEnforcement.test.ts` rather than changed. No path inserted a row directly, and from WP 11.1 a planted row would also have minted level versions, so the policy is dropped and the grant revoked; `snapshot_dataset` (SECURITY DEFINER) and the service role are the writers. Reads stay open to every API role (`dataset_versions_read_all`, part of D28's pinned list).
 
-> **What the database actually permits is wider than the row above.**
-> 1 policy here grants access with
-> **no predicate at all** (`USING (true)`), so the capability named above is what the
-> product intends to check, not what the database enforces:
->
-> - `dataset_versions_read_all` — `SELECT` to `anon`, `authenticated`
->
-> See PLAN.md D28: the application runs as the
-> `anon` role with no auth session and the anon key ships in the frontend bundle, so
-> closing these is a migration with an auth model behind it rather than a policy edit.
-
-<details><summary>1 RLS policy</summary>
+<details><summary>6 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| dataset_versions_read_all | SELECT | anon, authenticated | `20260703000001_dataset_versions.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -54,7 +48,7 @@ Written by the `_build_dataset_snapshot` database function, never by a page — 
 | Page | Via | Evidence | Confirmed |
 |---|---|---|---|
 | `DataManager.tsx` | rpc record_model_validation | `src/hooks/useModelValidation.tsx:547` | yes |
-| `DeveloperApi.tsx` | rpc list_dataset_versions | `src/pages/DeveloperApi.tsx:350` | yes |
+| `DeveloperApi.tsx` | rpc list_dataset_versions | `src/pages/DeveloperApi.tsx:373` | yes |
 | `ProductLevelNetwork.tsx` | rpc project_freshness (GraphVersionChip → FreshnessBadge, WP 10.1) | `src/components/trust/useProjectFreshness.ts:28` | yes |
 | `ProjectPolicies.tsx` | rpc record_validated_model (Save Validated Model, WP 10.3) | `src/hooks/useModelValidation.tsx:594` | yes |
 | `SimulationLab.tsx` | rpc record_model_validation | `src/hooks/useModelValidation.tsx:547` | yes |
@@ -412,6 +406,6 @@ This snapshot's SIMULATION scope version — the `graph_level_versions` row whos
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
 sidecar `supabase/contract/dataset_versions.contract.yaml`, table created by `20260703000001_dataset_versions.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

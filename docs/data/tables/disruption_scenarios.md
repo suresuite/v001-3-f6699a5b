@@ -28,16 +28,20 @@ TWO DISRUPTION MODELS ARE LIVE AT ONCE AND NEITHER READS THE OTHER. This table i
 | Minimum project role | `editor` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
-| Policies on the table | 2 — all carry a predicate |
+| Policies on the table | 6 — all carry a predicate |
 
 Tier 4 — the DECISION plane. These rows are what a person chose, as against the dataset they chose it over and the result it produced, which is why `result-binding` (I8) needs all three. Audited from WP 6.4: the three statement-grain triggers land with this sidecar, because `dataPlaneAudit.test.ts` scopes its rule to tables IN the contract and a deferred table's writes are unaudited with nothing to notice (D54).
 
-<details><summary>2 RLS policies</summary>
+<details><summary>6 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| Disruption scenarios: organization access view | SELECT | all | `20260915000004_org_identity_dual_read.sql` |
-| Disruption scenarios: project access modify | ALL | all | `20260915000004_org_identity_dual_read.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -267,6 +271,6 @@ Whether the scenario was created by clicking a node on a network page (true) or 
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
 sidecar `supabase/contract/disruption_scenarios.contract.yaml`, table created by `20250826180749_e9181074-55e6-4724-98c3-3c4b648aa891.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

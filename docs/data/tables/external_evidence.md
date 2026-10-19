@@ -39,26 +39,20 @@ partially or get corrected — the write fails.
 | Minimum project role | `editor` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
-| Policies on the table | 1 — **1 with no predicate** |
+| Policies on the table | 6 — all carry a predicate |
 
 Tier 4 — the DECISION plane: what a person or an agent CHOSE, as against the dataset they chose it over and the result it produced. `result-binding` (I8) needs all three, which is why WP 6.3 keeps the results and this package takes the decisions. Audited from WP 6.4: the three statement-grain triggers land beside this sidecar, because `dataPlaneAudit.test.ts` scopes its rule to tables IN the contract and a deferred table's writes are unaudited with nothing to notice (D54). **Its writers are edge functions, not the browser** — `project-ai- chat`'s cartographer and sentinel tools — so the audit trigger names whoever the function's transaction has set, and an agent write with no actor is the D28 question this table inherits rather than answers. The dedupe index is what makes a re-read of the same page a no-op instead of a second claim.
 
-> **What the database actually permits is wider than the row above.**
-> 1 policy here grants access with
-> **no predicate at all** (`USING (true)`), so the capability named above is what the
-> product intends to check, not what the database enforces:
->
-> - `external_evidence_read_all` — `SELECT` to `anon`, `authenticated`
->
-> See PLAN.md D28: the application runs as the
-> `anon` role with no auth session and the anon key ships in the frontend bundle, so
-> closing these is a migration with an auth model behind it rather than a policy edit.
-
-<details><summary>1 RLS policy</summary>
+<details><summary>6 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| external_evidence_read_all | SELECT | anon, authenticated | `20260727000001_network_cartographer.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -217,6 +211,6 @@ The Legal Entity Identifier the claim is about, where one resolved. CHECK-constr
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
 sidecar `supabase/contract/external_evidence.contract.yaml`, table created by `20260727000001_network_cartographer.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

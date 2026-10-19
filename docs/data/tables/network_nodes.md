@@ -31,18 +31,20 @@ it rather than duplicating it.
 | Minimum project role | `viewer` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
-| Policies on the table | 4 — all carry a predicate |
+| Policies on the table | 6 — all carry a predicate |
 
 Read follows project reachability (`has_project_access`), uuid-only since WP 3.0. `write: null` is a STATEMENT and not an omission: there is no user-facing write policy. Uploads go through `bulk_insert_network_nodes`, which takes the actor and sets `app.current_user_id` through `set_current_user_context`; the analysis half goes through `analysis_apply_node_metrics` (WP 4.3), which takes the actor and stamps the run's `input_hash`. `audited: true` as of WP 4.3 — the three `audit_tier_write` triggers land in `20260917000007`, and until then this table was deferred in `coverage.yaml`, which is to say OUTSIDE the audit rule with nothing to notice (D54).
 
-<details><summary>4 RLS policies</summary>
+<details><summary>6 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| Network nodes: project access delete | DELETE | all | `20260915000004_org_identity_dual_read.sql` |
-| Network nodes: project access insert | INSERT | all | `20260915000004_org_identity_dual_read.sql` |
-| Network nodes: project access update | UPDATE | all | `20260915000004_org_identity_dual_read.sql` |
-| Network nodes: project access view | SELECT | all | `20260915000004_org_identity_dual_read.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -591,6 +593,6 @@ WP 4.3 · when the run that wrote the computed columns finished. It is provenanc
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
 sidecar `supabase/contract/network_nodes.contract.yaml`, table created by `20250904105527_e00a21a9-0120-48a7-a62d-e2db83fd4cc6.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

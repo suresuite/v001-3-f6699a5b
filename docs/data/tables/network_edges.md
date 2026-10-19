@@ -26,18 +26,20 @@
 | Minimum project role | `viewer` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
-| Policies on the table | 4 — all carry a predicate |
+| Policies on the table | 6 — all carry a predicate |
 
 Read follows project reachability. No user-facing write policy; uploads go through `bulk_insert_network_edges`, which takes the actor. `audited: true` as of WP 4.3 (`20260917000007`); it was deferred and therefore unaudited before that (D54).
 
-<details><summary>4 RLS policies</summary>
+<details><summary>6 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| Network edges: project access delete | DELETE | all | `20260915000004_org_identity_dual_read.sql` |
-| Network edges: project access insert | INSERT | all | `20260915000004_org_identity_dual_read.sql` |
-| Network edges: project access update | UPDATE | all | `20260915000004_org_identity_dual_read.sql` |
-| Network edges: project access view | SELECT | all | `20260915000004_org_identity_dual_read.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -327,6 +329,6 @@ Upstream or downstream relative to the seed, as uploaded.
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
 sidecar `supabase/contract/network_edges.contract.yaml`, table created by `20250904105527_e00a21a9-0120-48a7-a62d-e2db83fd4cc6.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

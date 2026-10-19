@@ -210,8 +210,8 @@ describe("WP 6.2 · D48 · which overload the caller actually reaches", () => {
     // `super_admin` and left the 11-argument one (`20250827171106`) exactly as it was —
     // `20250902084844` drops that signature, so re-creating it would bring the ambiguity back.
     expect(overloads().map((f) => f.defined_by).sort()).toEqual([
-      "20250827171106_00d577a4-5496-4e8d-8775-bbe357746c20.sql",
-      "20261001000017_super_admin_acts_as_admin.sql",
+      "20261019000001_verified_browser_identity.sql",
+      "20261019000001_verified_browser_identity.sql",
     ]);
   });
 

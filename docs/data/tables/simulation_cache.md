@@ -42,16 +42,20 @@ partially or get corrected — the write fails.
 | Minimum project role | `viewer` |
 | Tier transitions audited | **no** — invariant `audit-actor` is not met here yet |
 | Row-level security | enabled |
-| Policies on the table | 2 — all carry a predicate |
+| Policies on the table | 6 — all carry a predicate |
 
 Two policies through the project's organization (`org_is_current_user_org(p.organization_id, p.organization)`): SELECT for any member of that organization, ALL for the project's modeler or an organization admin. Neither is predicate-less, so `write: null` agrees with `governanceEnforcement.test.ts`, and no user-facing write path exists in the repository. `cleanup_simulation_cache()` (SECURITY DEFINER, deletes expired rows) still exists and has no caller; nothing schedules it, so expired rows are not removed — `expires_at` is a statement of intent, not a guarantee. Deleting a project removes its rows through the inline `REFERENCES projects ON DELETE CASCADE`. NOT IN PRODUCTION'S CASE: §4 D168 found `simulation-cache-manager` and `simulation-availability-checker`, the legacy functions that wrote and read this table, still LIVE in production with no source here. NOT AUDITED: tier 5, and `audit-actor` covers tiers 2–4.
 
-<details><summary>2 RLS policies</summary>
+<details><summary>6 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| Simulation cache: project access modify | ALL | all | `20260915000004_org_identity_dual_read.sql` |
-| Simulation cache: project access view | SELECT | all | `20260915000004_org_identity_dual_read.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -274,6 +278,6 @@ The organization's NAME at write time, DEFAULT 'default_org'. Legacy tenancy tex
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
 sidecar `supabase/contract/simulation_cache.contract.yaml`, table created by `20250913085427_4fb4acfc-fb3c-4021-8851-ffe01adf9d76.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

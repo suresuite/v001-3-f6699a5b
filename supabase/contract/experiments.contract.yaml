@@ -211,3 +211,22 @@ fields:
     ingest: {csv_header: null, required: false, validate: null}
     surfaces: []
     resolution: null
+
+  author_user_id:
+    type: uuid
+    unit: null
+    unit_source: none
+    meaning: Verified approved-user author for browser sessions. The legacy auth.users created_by is preserved separately (PLAN.md §4 D309).
+    grain: identifier
+    engine:
+      consumed_by: null
+      transform: null
+      missing_default: null
+    substitutions: []
+    ingest:
+      csv_header: null
+      required: false
+      validate: null
+    surfaces: []
+    resolution: null
+

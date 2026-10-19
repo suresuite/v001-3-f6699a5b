@@ -26,29 +26,20 @@
 | Minimum project role | `editor` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
-| Policies on the table | 4 — **1 with no predicate** |
+| Policies on the table | 6 — all carry a predicate |
 
 Tier 4 — the DECISION plane: what a person or an agent CHOSE, as against the dataset they chose it over and the result it produced. `result-binding` (I8) needs all three, which is why WP 6.3 keeps the results and this package takes the decisions. Audited from WP 6.4: the three statement-grain triggers land beside this sidecar, because `dataPlaneAudit.test.ts` scopes its rule to tables IN the contract and a deferred table's writes are unaudited with nothing to notice (D54). **Two of the six recovery strategies a scenario can name reach no engine plugin (§4 D114)**, so a playbook's `config` can record an intent the run will not act on. The row is stored faithfully either way; what is missing is a reader that says so, and the manual states it meanwhile.
 
-> **What the database actually permits is wider than the row above.**
-> 1 policy here grants access with
-> **no predicate at all** (`USING (true)`), so the capability named above is what the
-> product intends to check, not what the database enforces:
->
-> - `playbooks_select_all_auth` — `SELECT` to `authenticated`
->
-> See PLAN.md D28: the application runs as the
-> `anon` role with no auth session and the anon key ships in the frontend bundle, so
-> closing these is a migration with an auth model behind it rather than a policy edit.
-
-<details><summary>4 RLS policies</summary>
+<details><summary>6 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| playbooks_select_all_auth | SELECT | authenticated | `20260607125247_efb67f7c-335b-482c-8292-59a47554251d.sql` |
-| playbooks_insert_own | INSERT | authenticated | `20260607125247_efb67f7c-335b-482c-8292-59a47554251d.sql` |
-| playbooks_update_own | UPDATE | authenticated | `20260607125247_efb67f7c-335b-482c-8292-59a47554251d.sql` |
-| playbooks_delete_own | DELETE | authenticated | `20260607125247_efb67f7c-335b-482c-8292-59a47554251d.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -80,6 +71,7 @@ that gap is defect D21. A dash means the column has no CSV origin.
 | `created_by` | — | `uuid` | — | — | The user who created it, where one is recorded. NULL on system rows and on anything written before the column existed — unknown, not nobody. |
 | `created_at` | — | `timestamp with time zone` | — | — | When the row was created. Server-stamped, never the client's clock. |
 | `updated_at` | — | `timestamp with time zone` | — | — | When it was last changed, server-stamped. |
+| `author_user_id` | — | `uuid` | — | — | Verified approved-user author for browser sessions. The legacy auth.users created_by is preserved separately (PLAN.md §4 D309). |
 
 ## Each column in full
 
@@ -211,6 +203,21 @@ When it was last changed, server-stamped.
 | Validated at ingest | — |
 | Rendered at | *not yet recorded (WP 5.1)* |
 
+### `author_user_id`
+
+Verified approved-user author for browser sessions. The legacy auth.users created_by is preserved separately (PLAN.md §4 D309).
+
+| | |
+|---|---|
+| Type | `uuid` |
+| Grain | `identifier` |
+| Unit | dimensionless |
+| Added by | `20261019000004_audit_browser_authors.sql` |
+| References | `public.approved_users(id)` ON DELETE SET NULL |
+| Read by the engine | **not traced** |
+| Validated at ingest | — |
+| Rendered at | *not yet recorded (WP 5.1)* |
+
 ## Indexes
 
 | Index | Columns | Unique | Added by |
@@ -220,6 +227,6 @@ When it was last changed, server-stamped.
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
 sidecar `supabase/contract/recovery_playbooks.contract.yaml`, table created by `20260607125247_efb67f7c-335b-482c-8292-59a47554251d.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

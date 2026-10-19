@@ -40,15 +40,20 @@ partially or get corrected — the write fails.
 | Minimum project role | `viewer` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
-| Policies on the table | 1 — all carry a predicate |
+| Policies on the table | 6 — all carry a predicate |
 
 Read follows the parent run's project reachability. No write policy and no user-facing write path: rows arrive only through `analysis_complete_run`. APPEND-ONLY AS A PROPERTY OF THE SCHEMA — `analysis_results_are_immutable` refuses every UPDATE, because a result that can be rewritten makes its run's key a lie: the key says these inputs and this code produced this answer. DELETE is not refused, and that is deliberate rather than an omission: rows cascade from `analysis_runs` and thence from `projects`, and refusing DELETE would make deleting an analysed project fail. Deleting a project is retention, not mutation of a result.
 
-<details><summary>1 RLS policy</summary>
+<details><summary>6 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| analysis_results_select | SELECT | all | `20260917000006_analysis_store.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -161,6 +166,6 @@ Row insert time, maintained by the database.
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
 sidecar `supabase/contract/analysis_results.contract.yaml`, table created by `20260917000006_analysis_store.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

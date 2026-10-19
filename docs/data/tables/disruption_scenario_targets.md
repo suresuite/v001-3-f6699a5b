@@ -28,16 +28,20 @@
 | Minimum project role | `editor` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
-| Policies on the table | 2 — all carry a predicate |
+| Policies on the table | 6 — all carry a predicate |
 
 Tier 4 — the DECISION plane. Audited from WP 6.4. Reached only through its profile: `profile_id` is NOT NULL and CASCADEs, so this table has no rows of its own to govern separately.
 
-<details><summary>2 RLS policies</summary>
+<details><summary>6 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| Scenario targets: organization access view | SELECT | all | `20260915000004_org_identity_dual_read.sql` |
-| Scenario targets: project access modify | ALL | all | `20260915000004_org_identity_dual_read.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -211,6 +215,6 @@ When it was last changed. Server-stamped by the `update_*_updated_at` trigger.
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
 sidecar `supabase/contract/disruption_scenario_targets.contract.yaml`, table created by `20250827171106_00d577a4-5496-4e8d-8775-bbe357746c20.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

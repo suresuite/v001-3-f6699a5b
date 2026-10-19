@@ -26,15 +26,20 @@
 | Minimum project role | `viewer` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
-| Policies on the table | 1 — all carry a predicate |
+| Policies on the table | 6 — all carry a predicate |
 
 No page and no API role writes it. Two writers, both SECURITY DEFINER and both inside somebody else's statement: the statement triggers on the thirteen hashed tables (`_graph_state_touch_*`) raise `dirty`, and `project_graph_hashes` stores a recomputed set — only when `generation` has not moved since it read the row, so a reader that started before a write cannot store the pre-write hash over the flag the write raised. Read through `has_project_access`. Audited at statement grain like every tier-3 table; its audit rows name whoever made the edit that dirtied it.
 
-<details><summary>1 RLS policy</summary>
+<details><summary>6 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| project_graph_state_select | SELECT | all | `20261001000007_graph_levels_compute_once.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -246,6 +251,6 @@ When the row last changed for any reason.
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
 sidecar `supabase/contract/project_graph_state.contract.yaml`, table created by `20261001000007_graph_levels_compute_once.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

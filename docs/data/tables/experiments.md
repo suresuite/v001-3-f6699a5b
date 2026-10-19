@@ -28,26 +28,20 @@ A TABLE WITH A HOOK AND NO PAGE. `src/hooks/useExperiments.tsx` selects, inserts
 | Minimum project role | `viewer` |
 | Tier transitions audited | **no** — invariant `audit-actor` is not met here yet |
 | Row-level security | enabled |
-| Policies on the table | 1 — **1 with no predicate** |
+| Policies on the table | 6 — all carry a predicate |
 
 `write: simulation_lab`, not `null`, because the table's one policy, `experiments_auth_all` (`FOR ALL TO authenticated USING (true) WITH CHECK (true)`), has no predicate, and `governanceEnforcement.test.ts` refuses a `null` write claim on a table any grant-holder may write. The capability is the one that gates designing and running simulations, which is what the unmounted designer does. §4 D154 lists `experiments` among the eleven tables probe 0.8 measured as writable by `anon`, and that listing deserves a qualifier: the probe intersects `anon`'s GRANT with "a write policy that refuses nothing" without asking which ROLES that policy names, and the only policy the migrations give this table is `TO authenticated`. So as far as the repository can see, `anon` holds the grant and RLS refuses it; whether production carries an `anon` policy no migration declares is D158's class of question and only `pg_policies` can answer it. Either way it is D28's standing decision and WP 7.1's to close. `min_project_role` is `viewer` because nothing enforces a role here today, not because a viewer ought to design experiments. Deleting a project removes its experiments (`ON DELETE CASCADE`). A BEFORE UPDATE trigger (`experiments_updated_at`) re-stamps `updated_at`. NOT AUDITED — AND BY MEANING IT SHOULD BE. A row is what a person chose, like `scenarios` and `disruption_scenarios` beside it, and those are tier 4 and audited at statement grain. This one has no audit triggers in any migration, so claiming tier 4 would fail `dataPlaneAudit.test.ts` on the day the contract regenerates. It is held at tier 5 with `audited: false` as the truthful description of the database; moving it to tier 4 means a migration adding the three `audit_tier_write('4')` triggers in the same commit as the tier change — owed by whichever package mounts the designer, because until a page writes it there is no write to attribute.
 
-> **What the database actually permits is wider than the row above.**
-> 1 policy here grants access with
-> **no predicate at all** (`USING (true)`), so the capability named above is what the
-> product intends to check, not what the database enforces:
->
-> - `experiments_auth_all` — `ALL` to `authenticated`
->
-> Some of these permit **writes**. See PLAN.md D28: the application runs as the
-> `anon` role with no auth session and the anon key ships in the frontend bundle, so
-> closing these is a migration with an auth model behind it rather than a policy edit.
-
-<details><summary>1 RLS policy</summary>
+<details><summary>6 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| experiments_auth_all | ALL | authenticated | `20260607121406_fcbd47e9-93de-4b3b-988f-7f4718159c91.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -68,6 +62,7 @@ that gap is defect D21. A dash means the column has no CSV origin.
 | `created_by` | — | `uuid` | — | — | Meant to name the author. `REFERENCES auth.users ON DELETE SET NULL`, and the hook fills it from `supabase.auth.getUser()` — but this application authenticates against `approved_users`, not Supabase Auth, so for a real user the value can only be NULL. |
 | `created_at` | — | `timestamp with time zone` | — | — | When the experiment was created. |
 | `updated_at` | — | `timestamp with time zone` | — | — | When the experiment was last changed — re-stamped by `experiments_updated_at`. |
+| `author_user_id` | — | `uuid` | — | — | Verified approved-user author for browser sessions. The legacy auth.users created_by is preserved separately (PLAN.md §4 D309). |
 
 ## Each column in full
 
@@ -215,6 +210,21 @@ When the experiment was last changed — re-stamped by `experiments_updated_at`.
 | Validated at ingest | — |
 | Rendered at | *not yet recorded (WP 5.1)* |
 
+### `author_user_id`
+
+Verified approved-user author for browser sessions. The legacy auth.users created_by is preserved separately (PLAN.md §4 D309).
+
+| | |
+|---|---|
+| Type | `uuid` |
+| Grain | `identifier` |
+| Unit | dimensionless |
+| Added by | `20261019000004_audit_browser_authors.sql` |
+| References | `public.approved_users(id)` ON DELETE SET NULL |
+| Read by the engine | **not traced** |
+| Validated at ingest | — |
+| Rendered at | *not yet recorded (WP 5.1)* |
+
 ## Indexes
 
 | Index | Columns | Unique | Added by |
@@ -223,6 +233,6 @@ When the experiment was last changed — re-stamped by `experiments_updated_at`.
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
 sidecar `supabase/contract/experiments.contract.yaml`, table created by `20260607121406_fcbd47e9-93de-4b3b-988f-7f4718159c91.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

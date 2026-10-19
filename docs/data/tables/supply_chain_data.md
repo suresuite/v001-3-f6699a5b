@@ -34,18 +34,20 @@
 | Minimum project role | `viewer` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
-| Policies on the table | 4 — all carry a predicate |
+| Policies on the table | 6 — all carry a predicate |
 
 Written by the `combine-project` edge function, never by a page. Invariant I2: pages never write tier 3. `write: null` is therefore a statement, not an omission — there is no user-facing write path and there must not be one. For precision, since WP 2.4 checked it: three PROJECT-SCOPED write policies do exist here, serving that ETL path. They are consistent with `write: null`, which names the capability gating a USER-facing write and not the existence of any policy — and unlike `dataset_versions` they carry a real predicate, so they do not admit an arbitrary holder of the table grant.
 
-<details><summary>4 RLS policies</summary>
+<details><summary>6 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| Supply chain data: project access delete | DELETE | all | `20260915000004_org_identity_dual_read.sql` |
-| Supply chain data: project access insert | INSERT | all | `20260915000004_org_identity_dual_read.sql` |
-| Supply chain data: project access update | UPDATE | all | `20260915000004_org_identity_dual_read.sql` |
-| Supply chain data: project access view | SELECT | all | `20260915000004_org_identity_dual_read.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -55,7 +57,7 @@ Written by the `combine-project` edge function, never by a page. Invariant I2: p
 |---|---|---|---|
 | `DataManager.tsx` | rpc combine_project_into_supply_chain | `src/pages/DataManager.tsx:661` | yes |
 | `ProductLevelNetwork.tsx` | rpc project_freshness (GraphVersionChip → FreshnessBadge, WP 10.1) | `src/components/trust/useProjectFreshness.ts:28` | yes |
-| `ProjectPolicies.tsx` | rpc assign_material_supplier | `src/components/policies/StagePolicyTable.tsx:406` | yes |
+| `ProjectPolicies.tsx` | rpc assign_material_supplier | `src/hooks/useStageRows.tsx:86` | yes |
 | `SimulationLab.tsx` | rpc assign_material_supplier | `src/components/sim/PreRunValidationPanel.tsx:78` | yes |
 
 Each row says the page READS the table by that path, at that line. It does
@@ -435,6 +437,6 @@ WP 4.3 · when the run that wrote the criticality columns finished. It is proven
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
 sidecar `supabase/contract/supply_chain_data.contract.yaml`, table created by `20250815235125_cfc18b38-6bb4-4fc3-9c2a-5247afb7f311.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*
