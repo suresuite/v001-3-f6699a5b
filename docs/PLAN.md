@@ -24646,6 +24646,38 @@ main has ESLint and bundle-ceiling failures; no gate, exception list or bundle b
 relaxed. This entry is implementation evidence, not a deployment claim.
 
 
+
+### WP 7.1 / G15 — final isolated validation and release boundary (candidate)
+
+Source `1f41518f`: 176 Vitest files / **1882 tests pass**; `contract:check` passes with its two
+existing warnings. **All three SQL modes pass all 93 rehearsal files**: eleven new migrations
+apply on the main/fixture paths, the legacy grant-adoption fixture passes, and `--since HEAD`
+reconstructs this branch's own artifact, including storage/realtime and restrictive policies.
+The accepted issuer is protected deployment configuration, never a caller GUC. Browser staging
+builds accept a paired project URL/public key; production defaults remain unchanged.
+
+The requested literal `npm run contract` and `npm run audit` do not exist; both were run and
+failed as missing scripts. The actual contract aggregate and bundle audit were also run.
+Build completes. Lint fails only ESLint (**286 errors / 110 warnings**, versus unchanged main
+**289 / 110**); UI, docs, typecheck ratchet and notebooks pass. Bundle audit remains red:
+**170.5 kB initial / 2161.8 kB total**, versus unchanged main **171.0 / 2162.0**; committed ceilings
+are **163.4 / 1942.6**. No baseline or gate is changed. Dependency audit reports **43 advisories
+(1 low / 9 moderate / 30 high / 3 critical)**; no automatic upgrades were made.
+
+[Implementation review and staged deployment/rollback](security/identity-and-tenant-remediation.md)
+records the finding/fix table, validation digests, isolated acceptance requirements and release
+risks. No SQL, edge, browser, worker or secret deployment was performed. D309–D312 remain OPEN:
+real signing-key acceptance, normal browser requests, Storage signing, active Realtime subscriber
+revocation, scheduled callers and production deployment parity must be accepted before closure.
+Rollback retains the identity boundary and data/audit history; it never restores anon writes or
+GUC-based browser identity. The legacy engine, simulation computations, inputs and frozen run
+bindings remain unchanged.
+
+
+Publication equivalence: GitHub source commit `8d87e6cae9a111de68273dd8f55b7f8f9b5cfc23` has verified Git tree
+`5f58c82b34b60db5a9744567e6d86a3dae7017c3`, identical to tested local `1f41518f6b9de4a1485615eb0851481276e70659`.
+No branch publication changes the deployment status above.
+
 ## 17. Sequencing
 
 | Phase | WPs | Focus | Blocks | Status |
