@@ -13,6 +13,7 @@
 // its messages into callbacks, and keeps the Supabase persistence helpers
 // (which must run on the main thread). The heavy lifting lives in the worker.
 
+import { currentSessionSubject } from "@/lib/auth/sessionState";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface EngineResult {
@@ -339,7 +340,7 @@ export async function persistEngineResult(
     if (result.replications.length > 0) {
       const rows = result.replications.map((r) => ({ ...r, run_id: runId, project_id: projectId }));
       const { error: repErr } = await sb.rpc("persist_browser_result", {
-        p_run_id: runId, p_project_id: projectId, p_replications: rows,
+        p_run_id: runId, p_project_id: projectId, _actor_user_id: currentSessionSubject(), p_replications: rows,
       });
       if (repErr) throw repErr;
     }
@@ -349,13 +350,13 @@ export async function persistEngineResult(
       const rows = result.itemSeries.map((r) => ({ ...r, run_id: runId, project_id: projectId }));
       for (let i = 0; i < rows.length; i += 100) {
         const { error: itemErr } = await sb.rpc("persist_browser_result", {
-          p_run_id: runId, p_project_id: projectId, p_item_series: rows.slice(i, i + 100),
+          p_run_id: runId, p_project_id: projectId, _actor_user_id: currentSessionSubject(), p_item_series: rows.slice(i, i + 100),
         });
         if (itemErr) throw itemErr;
       }
     }
     const { error: runErr } = await sb.rpc("persist_browser_result", {
-      p_run_id: runId, p_project_id: projectId,
+      p_run_id: runId, p_project_id: projectId, _actor_user_id: currentSessionSubject(),
       p_run_update: { ...result.runUpdate, ended_at: new Date().toISOString() },
     });
     if (runErr) throw runErr;

@@ -25,17 +25,9 @@ import { browserIdentity, requireProject } from "../_shared/requestIdentity.ts";
 // Adding a column to an upload is a sidecar edit; it is not a code change, and
 // `contract:generate -- --check` fails if the two drift.
 //
-// IDENTITY, STATED PLAINLY. This application does not use Supabase Auth: it
-// authenticates against `approved_users` and keeps the user in localStorage, so
-// the uploader's id arrives ASSERTED BY THE CLIENT, exactly as it does for
-// `ingest-bom-multi-level` and every other ingest function (PLAN.md §4 D28, a
-// standing decision). What the landing adds is that the assertion is CHECKED
-// against the database: `ingest_land_file` sets `app.current_user_id` to the
-// asserted actor and refuses the landing unless `has_project_access()` answers
-// true for them. A caller therefore cannot land a file into a project its claimed
-// user cannot reach. It can still claim to be another user who can, and that is
-// D28 and not something this package closes — said here so that the audit row
-// this function writes is read for what it is.
+// D309: the signed browser principal is resolved before service-role operations.
+// Submitted actor IDs must match it; project capability and run ownership are
+// checked before landing, diff or promotion. The SQL writer keeps the audit actor.
 
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";

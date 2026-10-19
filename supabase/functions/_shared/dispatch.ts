@@ -712,15 +712,12 @@ export async function dispatchExperimentCancel(
   const { svc, upstash } = deps;
   const runId = String((cmd.payload as Record<string, unknown>).run_id ?? "");
   if (!runId) throw new Error("run_id required");
-  // Service role for the same reason as the run insert: the status flip must
-  // not silently no-op on a database missing the anon-grants migration.
-  // deno-lint-ignore no-explicit-any
-  await (svc as any)
-    .from("simulation_runs")
-    .update({ status: "cancelled", ended_at: new Date().toISOString() })
-    .eq("id", runId)
-    .eq("project_id", cmd.project_id)
-    .in("status", ["queued", "running"]);
+  const actor = (cmd.payload as Record<string, unknown>).actor_user_id;
+  const { error } = await svc.rpc("cancel_authorized_run", {
+    p_project_id: cmd.project_id, p_run_id: runId,
+    _actor_user_id: typeof actor === "string" ? actor : null,
+  });
+  if (error) throw new Error(`cancel refused: ${error.message}`);
   await upstash([
     "XADD",
     `sim.cmd.${cmd.project_id}`,

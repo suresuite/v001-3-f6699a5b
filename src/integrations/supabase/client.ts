@@ -9,7 +9,14 @@ const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+// Separate staging builds use their own project and public key together. The
+// literals above remain the production defaults used by metadata verification.
+const configuredUrl = import.meta.env.VITE_SUPABASE_URL;
+const configuredKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+if (Boolean(configuredUrl) !== Boolean(configuredKey)) {
+  throw new Error('Configure both VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY');
+}
+export const supabase = createClient<Database>(configuredUrl || SUPABASE_URL, configuredKey || SUPABASE_PUBLISHABLE_KEY, {
   accessToken: async () => currentMintedToken(),
   auth: {
     storage: localStorage,

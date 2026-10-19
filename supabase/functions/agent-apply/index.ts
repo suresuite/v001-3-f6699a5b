@@ -1,3 +1,4 @@
+import { validAiResolution } from "../_shared/capabilityResolution.ts";
 import { browserIdentity, requireProject } from "../_shared/requestIdentity.ts";
 // agent-apply — the ONLY writer of proposal apply outcomes (Stage 1;
 // ai-agents.md §4.4, §13.2 checkpoint 5, §8 T9).
@@ -280,7 +281,7 @@ serve(async (req) => {
     }
 
     const { data: caps, error: capsErr } = await svc.rpc("get_my_capabilities", { _user_id: userId });
-    if (capsErr || !caps || typeof caps !== "object") {
+    if (capsErr || !validAiResolution(caps)) {
       return jsonResponse({
         error: "Could not verify your permissions — try again.",
         type: "FORBIDDEN",
@@ -289,7 +290,7 @@ serve(async (req) => {
     const c = caps as Record<string, unknown>;
     const features = (c.features as Record<string, boolean>) ?? {};
     const pages = (c.pages as Record<string, boolean>) ?? {};
-    const isSuper = Boolean(c.is_super_admin);
+    const isSuper = c.is_super_admin === true;
     if (!isSuper) {
       // §13.3: decision_report rides agent_proposals (rendering mutates no
       // project state); every other artifact demands agent_apply.

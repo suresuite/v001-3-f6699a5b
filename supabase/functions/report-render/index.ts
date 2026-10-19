@@ -1,4 +1,4 @@
-import { browserIdentity, requireInternal } from "../_shared/requestIdentity.ts";
+import { browserIdentity, requireInternal, requireProject } from "../_shared/requestIdentity.ts";
 // report-render — the §16 file-workspace edge function (ai-agents.md §16.1
 // apply mapping, §16.2 retention law, §16.3 telemetry; v1.2 Phase 3).
 //
@@ -99,6 +99,7 @@ serve(async (req) => {
         // Not-found and not-owned collapse into one answer — no existence oracle.
         return jsonResponse({ error: "File not found.", type: "NOT_FOUND" });
       }
+      if (file.project_id) await requireProject(svc, who, String(file.project_id));
       const { data: signed, error: signErr } = await storage
         .from("workspace")
         .createSignedUrl(String(file.path), SIGNED_URL_TTL_SECONDS);
