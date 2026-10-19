@@ -30,17 +30,16 @@ it rather than duplicating it.
 | Minimum project role | `viewer` |
 | Tier transitions audited | **no** — invariant `audit-actor` is not met here yet |
 | Row-level security | enabled |
-| Policies on the table | 6 — all carry a predicate |
+| Policies on the table | 5 — all carry a predicate |
 
-No API role reads or writes it: RLS is on with no policy. Written only by the `simulation_runs_drop_series` trigger (SECURITY DEFINER) and drained only by `sweep_expired_run_series`, which is executable by the service role alone. NOT AUDITED: a work queue for one kind of cleanup, each row living from a run's delete to the next sweep; the delete itself is the audited event.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; direct browser mutations are closed and authorized RPCs retain their own role gates. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: No API role reads or writes it: RLS is on with no policy. Written only by the `simulation_runs_drop_series` trigger (SECURITY DEFINER) and drained only by `sweep_expired_run_series`, which is executable by the service role alone. NOT AUDITED: a work queue for one kind of cleanup, each row living from a run's delete to the next sweep; the delete itself is the audited event.
 
-<details><summary>6 RLS policies</summary>
+<details><summary>5 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
 | security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
 | security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
-| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
 | security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 | security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 | security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
@@ -119,6 +118,6 @@ When the run was deleted; the sweep hands objects over oldest first.
 
 ---
 
-*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/run_series_orphans.contract.yaml`, table created by `20261001000014_series_sweep_via_storage_api.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

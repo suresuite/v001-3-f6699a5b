@@ -49,17 +49,16 @@ partially or get corrected — the write fails.
 | Minimum project role | `viewer` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
-| Policies on the table | 6 — all carry a predicate |
+| Policies on the table | 5 — all carry a predicate |
 
-No page and no API role writes it — `anon`, `authenticated` and `service_role` hold SELECT only. ONE writer: `_graph_level_register`, called by a row trigger on `dataset_versions` (insert, and the level-hash backfill `snapshot_dataset` takes on a row frozen before WP 10.1), so every capture point registers its levels and no second capture path exists. It runs inside the statement that froze the snapshot and names that statement's actor, or the snapshot's author when the statement named nobody. Immutable by trigger: the one change a row takes is the cascade that forgets its first snapshot when that snapshot is deleted. Read through `has_project_access`.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; direct browser mutations are closed and authorized RPCs retain their own role gates. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: No page and no API role writes it — `anon`, `authenticated` and `service_role` hold SELECT only. ONE writer: `_graph_level_register`, called by a row trigger on `dataset_versions` (insert, and the level-hash backfill `snapshot_dataset` takes on a row frozen before WP 10.1), so every capture point registers its levels and no second capture path exists. It runs inside the statement that froze the snapshot and names that statement's actor, or the snapshot's author when the statement named nobody. Immutable by trigger: the one change a row takes is the cascade that forgets its first snapshot when that snapshot is deleted. Read through `has_project_access`.
 
-<details><summary>6 RLS policies</summary>
+<details><summary>5 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
 | security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
 | security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
-| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
 | security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 | security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 | security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
@@ -230,6 +229,6 @@ When the project's level first had this content — the first snapshot's `create
 
 ---
 
-*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/graph_level_versions.contract.yaml`, table created by `20261001000019_graph_level_versions.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

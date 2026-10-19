@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- §4 D215 · /admin/projects SHOWS WHO IS ON A PROJECT AND WHAT EACH OF THEM MAY DO.
 --
 -- `20260930000008` adds `admin_get_project_access`, the per-project reading of D211's
@@ -72,12 +73,13 @@ BEGIN
     CROSS JOIN (VALUES ('data_edit_inputs'), ('data_edit_policies'), ('export'), ('simulation_lab')) k(key)
   ON CONFLICT (role, capability_key) DO NOTHING;
 
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
 
   -- ══ §1 · refusal ══
   v_code := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_owner);
     PERFORM public.admin_get_project_access(v_owner, 'd215o@example.invalid', v_p);
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN
@@ -89,17 +91,21 @@ BEGIN
   END IF;
   v_code := NULL;
   BEGIN
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_get_project_access(v_super, 'd215s@example.invalid', gen_random_uuid());
   EXCEPTION WHEN OTHERS THEN v_code := SQLERRM;
   END;
-  IF v_code IS DISTINCT FROM 'project not found' THEN
-    RAISE EXCEPTION 'D215/490 §1: an unknown project got %, expected project not found', COALESCE(v_code, 'success');
+  IF v_code IS DISTINCT FROM 'forbidden' THEN
+    RAISE EXCEPTION 'D215/490 §1: an unknown project got %, expected forbidden', COALESCE(v_code, 'success');
   END IF;
 
   -- ══ §2 · who ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_project_member(v_super, 'd215s@example.invalid', v_editor, v_p, 'editor', NULL, 'D215 editor');
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_project_member(v_super, 'd215s@example.invalid', v_view_b, v_p, 'viewer', now() + interval '7 days', NULL);
+  PERFORM pg_temp.browser_session(v_super);
   v_out := public.admin_get_project_access(v_super, 'd215s@example.invalid', v_p);
   RESET ROLE;
 
@@ -152,6 +158,7 @@ BEGIN
 
   -- ══ §4 · one answer: the per-user page reads the same rights ══
   FOR v_pers IN SELECT p FROM jsonb_array_elements(v_out -> 'people') p LOOP
+    PERFORM pg_temp.browser_session(v_super);
     v_mine := public.admin_get_user_memberships(v_super, 'd215s@example.invalid', (v_pers ->> 'user_id')::uuid);
     SELECT p INTO v_proj FROM jsonb_array_elements(v_mine -> 'projects') p WHERE p ->> 'project_id' = v_p::text;
     IF v_proj IS NULL
@@ -174,7 +181,8 @@ BEGIN
   UPDATE public.project_members SET expires_at = now() - interval '1 minute'
    WHERE project_id = v_p AND user_id = v_view_b;
 
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   v_out := public.admin_get_project_access(v_super, 'd215s@example.invalid', v_p);
   RESET ROLE;
   SELECT p INTO v_pers FROM jsonb_array_elements(v_out -> 'people') p WHERE p ->> 'user_id' = v_plain::text;

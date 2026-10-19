@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- WP 10.5 follow-up · blueprint §8.4, §9.5 — VERSION CODES: `2026Q3 - Data 20260915 - Policy 20261004`.
 --
 -- What only a running database can settle (`20261004000002`):
@@ -41,7 +42,7 @@ BEGIN
     ON CONFLICT (slug) DO NOTHING;
   INSERT INTO public.approved_users (id, email, name, password_hash) VALUES (v_user, 'r830@example.invalid', 'R830', 'x');
   INSERT INTO public.projects (id, name, modeler_id, plant_name) VALUES (v_proj, 'R830', v_user, 'P');
-  PERFORM set_config('app.current_user_id', v_user::text, true);
+  PERFORM pg_temp.browser_session(v_user);
 
   -- ══ §1 · policy codes ══
   -- 22:00 at UTC-5 is 03:00 UTC the NEXT day: the code is the UTC day.
@@ -71,11 +72,13 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM public.policy_defaults WHERE project_id = v_proj) THEN
     INSERT INTO public.policy_defaults (project_id) VALUES (v_proj);
   END IF;
+  PERFORM pg_temp.browser_session(v_user);
   v_pv := public.snapshot_policy(v_proj, 'R830', v_user);
   SELECT version_code INTO v_code FROM public.policy_versions WHERE id = v_pv;
   IF v_code IS NULL OR v_code !~ ('^' || to_char(now() AT TIME ZONE 'UTC', 'YYYYMMDD') || '(-[0-9]+)?$') THEN
     RAISE EXCEPTION 'R830 §1: snapshot_policy saved a version coded %, expected today (UTC)', v_code;
   END IF;
+  PERFORM pg_temp.browser_session(v_user);
   IF public.snapshot_policy(v_proj, 'R830 again', v_user) IS DISTINCT FROM v_pv THEN
     RAISE EXCEPTION 'R830 §1: a repeat save of one content made a second version';
   END IF;
@@ -105,8 +108,10 @@ BEGIN
     VALUES (v_proj, 'P', 'S1', 'M1', 4, 100, 'week');
   INSERT INTO public.bom_single_level (project_id, plant_name, product_id, material_id, consumption_rate)
     VALUES (v_proj, 'P', 'P1', 'M1', 2);
+  PERFORM pg_temp.browser_session(v_user);
   v_ds1 := public.snapshot_dataset(v_proj, NULL, v_user);
   UPDATE public.materials SET cost = 25 WHERE project_id = v_proj AND material_id = 'M1';
+  PERFORM pg_temp.browser_session(v_user);
   v_ds2 := public.snapshot_dataset(v_proj, NULL, v_user);
   SELECT array_agg(g.version_code ORDER BY g.version_no) INTO v_codes
     FROM public.graph_level_versions g WHERE g.project_id = v_proj AND g.level = 'simulation';
@@ -128,13 +133,16 @@ BEGIN
   END IF;
 
   -- ══ §4 · the model's planning period ══
+  PERFORM pg_temp.browser_session(v_user);
   v_m1 := public.record_validated_model(v_proj, v_pv, v_ds2, v_scen, 'R830 model', k_proto, 'mser5',
             '{"confidence":0.95}'::jsonb, k_pass, '[]'::jsonb, 'statistical', NULL, NULL, '{}'::jsonb, v_user,
             NULL, '2026Q3');
+  PERFORM pg_temp.browser_session(v_user);
   v_m2 := public.record_validated_model(v_proj, v_pv, v_ds2, v_scen, 'R830 model', k_proto, 'mser5',
             '{"confidence":0.95}'::jsonb, k_pass, '[]'::jsonb, 'statistical', NULL, NULL, '{}'::jsonb, v_user,
             NULL, '2026Q3');
   -- The positional call every caller made before this migration: no period, no code.
+  PERFORM pg_temp.browser_session(v_user);
   v_m3 := public.record_validated_model(v_proj, v_pv, v_ds2, v_scen, 'R830 model', k_proto, 'mser5',
             '{"confidence":0.95}'::jsonb, k_pass, '[]'::jsonb, 'statistical', NULL, NULL, '{}'::jsonb, v_user);
   SELECT array_agg(COALESCE(model_code, '∅') ORDER BY version_no) INTO v_codes
@@ -144,6 +152,7 @@ BEGIN
   END IF;
 
   SELECT model_hash INTO v_hash FROM public.model_validations WHERE id = v_m3;
+  PERFORM pg_temp.browser_session(v_user);
   v_code := public.set_model_planning_period(v_m3, '2026Q3', v_user);
   IF v_code IS DISTINCT FROM '2026Q3-3' THEN
     RAISE EXCEPTION 'R830 §4: setting a period on a model without one gave %, expected 2026Q3-3', v_code;
@@ -154,6 +163,7 @@ BEGIN
 
   v_state := NULL;
   BEGIN
+    PERFORM pg_temp.browser_session(v_user);
     PERFORM public.set_model_planning_period(v_m3, '2026Q4', v_user);
   EXCEPTION WHEN check_violation THEN v_state := 'refused';
   END;
@@ -171,10 +181,12 @@ BEGIN
 
   -- A period that is not a quarter, and a write that names nobody, are refused.
   UPDATE public.model_validations SET status = 'superseded' WHERE id = v_m1;   -- lifecycle stays writable
+  PERFORM pg_temp.browser_session(v_user);
   v_m3 := public.record_validated_model(v_proj, v_pv, v_ds1, v_scen, 'R830 bad period', k_proto, 'mser5',
             '{"confidence":0.95}'::jsonb, k_pass, '[]'::jsonb, 'statistical', NULL, NULL, '{}'::jsonb, v_user);
   v_state := NULL;
   BEGIN
+    PERFORM pg_temp.browser_session(v_user);
     PERFORM public.set_model_planning_period(v_m3, '2026Q5', v_user);
   EXCEPTION WHEN check_violation THEN v_state := 'refused';
   END;
@@ -183,8 +195,9 @@ BEGIN
   END IF;
   v_state := NULL;
   BEGIN
+    PERFORM pg_temp.browser_session(NULL);
     PERFORM public.set_model_planning_period(v_m3, '2026Q2', NULL);
-  EXCEPTION WHEN null_value_not_allowed THEN v_state := 'refused';
+  EXCEPTION WHEN insufficient_privilege THEN v_state := 'refused';
   END;
   IF v_state IS NULL THEN
     RAISE EXCEPTION 'R830 §4: a planning period was set by a call that names no actor';

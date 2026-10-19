@@ -43,9 +43,9 @@ partially or get corrected — the write fails.
 | Minimum project role | `editor` |
 | Tier transitions audited | **no** — invariant `audit-actor` is not met here yet |
 | Row-level security | **cannot be determined from the migrations** |
-| Policies on the table | 6 — all carry a predicate |
+| Policies on the table | 5 — all carry a predicate |
 
-One FOR ALL policy — `has_project_access(project_id)` — so reading and writing a link are the same permission: whoever can administer the project can connect it to a source and disconnect it. That is deliberate and it is also the loosest thing on this page, because `min_project_role: owner` is the intent and nothing enforces a project role yet (WP 2.2 landed the resolver; no policy here calls it). `audited: false` is the one that should be uncomfortable: creating a link grants an external system standing access to a project's data and revoking one takes it away, and neither writes an audit row. It is not a tier transition, so G4 does not formally cover it; it is a governance event by any reading of §5, and it is recorded here as a named gap rather than left to be noticed. The table's own honesty is elsewhere and it is real: `status`, `status_detail`, `last_verified_at` and `revoked_at` mean a revoked link says when and why. NO `rls_enabled` FIELD, and its absence is the point. The connector migration enables RLS on this table in a plain statement and creates its policy in another — but the same file also builds the staging policies inside a `DO $$ EXECUTE format(...) $$` loop whose SQL mentions this table, so the introspector marks its RLS indeterminate: "the migrations do not say", which is a different claim from "off" and may not be rendered as one. Only the live database can answer (§15), and a sidecar may not assert what the schema does not settle.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; direct browser mutations are closed and authorized RPCs retain their own role gates. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: One FOR ALL policy — `has_project_access(project_id)` — so reading and writing a link are the same permission: whoever can administer the project can connect it to a source and disconnect it. That is deliberate and it is also the loosest thing on this page, because `min_project_role: owner` is the intent and nothing enforces a project role yet (WP 2.2 landed the resolver; no policy here calls it). `audited: false` is the one that should be uncomfortable: creating a link grants an external system standing access to a project's data and revoking one takes it away, and neither writes an audit row. It is not a tier transition, so G4 does not formally cover it; it is a governance event by any reading of §5, and it is recorded here as a named gap rather than left to be noticed. The table's own honesty is elsewhere and it is real: `status`, `status_detail`, `last_verified_at` and `revoked_at` mean a revoked link says when and why. NO `rls_enabled` FIELD, and its absence is the point. The connector migration enables RLS on this table in a plain statement and creates its policy in another — but the same file also builds the staging policies inside a `DO $$ EXECUTE format(...) $$` loop whose SQL mentions this table, so the introspector marks its RLS indeterminate: "the migrations do not say", which is a different claim from "off" and may not be rendered as one. Only the live database can answer (§15), and a sidecar may not assert what the schema does not settle.
 
 > **The migrations do not settle whether RLS is on here.**
 > `20260829120000_erp_connector_phase1_2.sql` sets it with
@@ -55,13 +55,12 @@ One FOR ALL policy — `has_project_access(project_id)` — so reading and writi
 > "unprotected" is as wrong as one that starts from an invented "protected".
 > Only reading the live database answers it (PLAN.md §15).
 
-<details><summary>6 RLS policies</summary>
+<details><summary>5 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
 | security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
 | security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
-| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
 | security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 | security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 | security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
@@ -335,6 +334,6 @@ Whether the schedule is live. Two fields rather than one because a paused schedu
 
 ---
 
-*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/project_erp_links.contract.yaml`, table created by `20260829120000_erp_connector_phase1_2.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

@@ -32,13 +32,13 @@ partially or get corrected — the write fails.
 | | |
 |---|---|
 | Read capability | any project member |
-| Write capability | `data_edit_policies` |
+| Write capability | `simulation_lab` |
 | Minimum project role | `editor` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
 | Policies on the table | 6 — all carry a predicate |
 
-Tier 4 — the DECISION plane: what a person or an agent CHOSE, as against the dataset they chose it over and the result it produced. `result-binding` (I8) needs all three, which is why WP 6.3 keeps the results and this package takes the decisions. Audited from WP 6.4: the three statement-grain triggers land beside this sidecar, because `dataPlaneAudit.test.ts` scopes its rule to tables IN the contract and a deferred table's writes are unaudited with nothing to notice (D54). **This is the widest decision row in the product** — twenty-two columns, seven of them the engine reads directly — and it is the one a reproducibility record quotes rather than summarises, because a scenario summarised is a scenario that cannot be re-run. **Three settings are a name rather than an id** (`primary_kpi`, `time_step`, `warmup_mode`), which is legitimate for an enum and is the reason D113's KPI vocabulary mattered: a `primary_kpi` naming a measure the engine never emits is a scenario whose objective no run can report.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; browser writes require `simulation_lab` on the project. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: Tier 4 — the DECISION plane: what a person or an agent CHOSE, as against the dataset they chose it over and the result it produced. `result-binding` (I8) needs all three, which is why WP 6.3 keeps the results and this package takes the decisions. Audited from WP 6.4: the three statement-grain triggers land beside this sidecar, because `dataPlaneAudit.test.ts` scopes its rule to tables IN the contract and a deferred table's writes are unaudited with nothing to notice (D54). **This is the widest decision row in the product** — twenty-two columns, seven of them the engine reads directly — and it is the one a reproducibility record quotes rather than summarises, because a scenario summarised is a scenario that cannot be re-run. **Three settings are a name rather than an id** (`primary_kpi`, `time_step`, `warmup_mode`), which is legitimate for an enum and is the reason D113's KPI vocabulary mattered: a `primary_kpi` naming a measure the engine never emits is a scenario whose objective no run can report.
 
 <details><summary>6 RLS policies</summary>
 
@@ -434,6 +434,6 @@ What the scenario is for — `experiment`, a what-if a person set up in the Lab 
 
 ---
 
-*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/scenarios.contract.yaml`, table created by `20260607121406_fcbd47e9-93de-4b3b-988f-7f4718159c91.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

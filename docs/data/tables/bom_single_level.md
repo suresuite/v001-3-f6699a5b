@@ -33,13 +33,13 @@ it rather than duplicating it.
 | | |
 |---|---|
 | Read capability | any project member |
-| Write capability | `data_editing` |
+| Write capability | `data_edit_inputs` |
 | Minimum project role | `editor` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
 | Policies on the table | 6 — all carry a predicate |
 
-`write` names the capability that exists today. WP 2.2 splits `data_editing` into `data_edit_inputs` (tier 2) and `data_edit_policies` (tier 4); this row becomes `data_edit_inputs` then, and all twelve sidecars change together.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; browser writes require `data_edit_inputs` on the project. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: `write` names the capability that exists today. WP 2.2 splits `data_editing` into `data_edit_inputs` (tier 2) and `data_edit_policies` (tier 4); this row becomes `data_edit_inputs` then, and all twelve sidecars change together.
 
 <details><summary>6 RLS policies</summary>
 
@@ -271,6 +271,6 @@ The tier-1 staged row this was promoted from (WP 3.3). Its `source_row_number` i
 
 ---
 
-*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/bom_single_level.contract.yaml`, table created by `20250820145837_5a2d95f1-7a5f-4bbb-8ac8-995d53011bce.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

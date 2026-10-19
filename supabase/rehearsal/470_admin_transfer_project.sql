@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- §4 D212 · TRANSFERRING A PROJECT TO ANOTHER ORGANIZATION AND NAMING A NEW OWNER MOVES
 -- THE OWNERSHIP, NOT JUST THE COLUMN THAT DISPLAYS IT.
 --
@@ -76,12 +77,13 @@ BEGIN
   END IF;
 
   -- The browser's shape: no GUC, no session.
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
 
   -- ══ §1 · a non-super-admin is refused ══
   v_code := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_ua);
     PERFORM public.admin_transfer_project(v_ua, 'd212ua@example.invalid', v_p, v_org_b, v_ub);
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN
@@ -95,8 +97,9 @@ BEGIN
   -- ══ §2 · refusals change nothing ══
   FOREACH v_case IN ARRAY ARRAY['outsider','keep_outsider','suspended','nothing','full'] LOOP
     v_code := NULL;
+    PERFORM pg_temp.browser_session(v_super);
     BEGIN
-      SET LOCAL ROLE anon;
+      SET LOCAL ROLE authenticated;
       CASE v_case
         WHEN 'outsider'      THEN PERFORM public.admin_transfer_project(v_super, 'd212s@example.invalid', v_p, v_org_b, v_uc);
         WHEN 'keep_outsider' THEN PERFORM public.admin_transfer_project(v_super, 'd212s@example.invalid', v_p, v_org_b, NULL);
@@ -124,7 +127,8 @@ BEGIN
   END LOOP;
 
   -- ══ §3 · the transfer ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   v_out := public.admin_transfer_project(v_super, 'd212s@example.invalid', v_p, v_org_b, v_ub);
   RESET ROLE;
 
@@ -163,7 +167,8 @@ BEGIN
   END IF;
 
   -- ══ §4 · a new owner in place, working in another organization ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   v_out := public.admin_transfer_project(v_super, 'd212s@example.invalid', v_p, v_org_b, v_eab);
   RESET ROLE;
   IF (SELECT modeler_id FROM public.projects WHERE id = v_p) IS DISTINCT FROM v_eab
@@ -186,7 +191,8 @@ BEGIN
   END IF;
 
   -- ══ §5 · the picker's directory ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   SELECT count(*) INTO v_n FROM public.admin_list_users_basic(v_super, 'd212s@example.invalid') u
    WHERE u.id = v_eab AND u.organization_id = v_org_a AND u.org_ids @> ARRAY[v_org_a, v_org_b]
      AND cardinality(u.org_ids) = 2;

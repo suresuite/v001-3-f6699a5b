@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- WP 3.1 · AN MRP SYNC STILL STAGES, DIFFS AND PROMOTES.
 --
 -- §10 asks for this test and says to write it BEFORE the rename. It is here
@@ -131,7 +132,7 @@ BEGIN
   -- original routed every staging read through `project_erp_links`, and a run
   -- that has no link — which is what `source_kind = 'csv'` means — cannot be
   -- reached that way at all.
-  PERFORM set_config('app.current_user_id', v_user::text, true);
+  PERFORM pg_temp.browser_session(v_user);
   SET LOCAL ROLE authenticated;
   SELECT count(*) INTO v_n FROM public.ingest_staged_products WHERE ingest_run_id = v_run;
   RESET ROLE;
@@ -139,7 +140,7 @@ BEGIN
     RAISE EXCEPTION 'WP 3.1: the project''s own modeler reads % of 3 staged rows — the rename revoked access', v_n;
   END IF;
 
-  PERFORM set_config('app.current_user_id', v_other::text, true);
+  PERFORM pg_temp.browser_session(v_other);
   SET LOCAL ROLE authenticated;
   SELECT count(*) INTO v_n FROM public.ingest_staged_products WHERE ingest_run_id = v_run;
   RESET ROLE;
@@ -147,7 +148,7 @@ BEGIN
     RAISE EXCEPTION 'WP 3.1: a stranger reads % staged row(s) of somebody else''s project', v_n;
   END IF;
 
-  PERFORM set_config('app.current_user_id', v_other::text, true);
+  PERFORM pg_temp.browser_session(v_other);
   SET LOCAL ROLE authenticated;
   SELECT count(*) INTO v_n FROM public.ingest_runs WHERE id = v_run;
   RESET ROLE;

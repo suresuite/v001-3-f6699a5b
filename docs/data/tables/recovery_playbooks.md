@@ -28,7 +28,7 @@
 | Row-level security | enabled |
 | Policies on the table | 6 — all carry a predicate |
 
-Tier 4 — the DECISION plane: what a person or an agent CHOSE, as against the dataset they chose it over and the result it produced. `result-binding` (I8) needs all three, which is why WP 6.3 keeps the results and this package takes the decisions. Audited from WP 6.4: the three statement-grain triggers land beside this sidecar, because `dataPlaneAudit.test.ts` scopes its rule to tables IN the contract and a deferred table's writes are unaudited with nothing to notice (D54). **Two of the six recovery strategies a scenario can name reach no engine plugin (§4 D114)**, so a playbook's `config` can record an intent the run will not act on. The row is stored faithfully either way; what is missing is a reader that says so, and the manual states it meanwhile.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; browser writes require `data_edit_policies` on the project. System catalog rows remain readable to authenticated users. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: Tier 4 — the DECISION plane: what a person or an agent CHOSE, as against the dataset they chose it over and the result it produced. `result-binding` (I8) needs all three, which is why WP 6.3 keeps the results and this package takes the decisions. Audited from WP 6.4: the three statement-grain triggers land beside this sidecar, because `dataPlaneAudit.test.ts` scopes its rule to tables IN the contract and a deferred table's writes are unaudited with nothing to notice (D54). **Two of the six recovery strategies a scenario can name reach no engine plugin (§4 D114)**, so a playbook's `config` can record an intent the run will not act on. The row is stored faithfully either way; what is missing is a reader that says so, and the manual states it meanwhile.
 
 <details><summary>6 RLS policies</summary>
 
@@ -227,6 +227,6 @@ Verified approved-user author for browser sessions. The legacy auth.users create
 
 ---
 
-*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/recovery_playbooks.contract.yaml`, table created by `20260607125247_efb67f7c-335b-482c-8292-59a47554251d.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- WP 3.1 · THE WIDENING — what the rename was FOR.
 --
 -- `050` proves the connector path is unchanged. This file proves the three
@@ -37,7 +38,7 @@ BEGIN
     (ingest_run_id, link_id, source_kind, fact_class, external_id, sku, raw, diff_state)
   VALUES (v_run, NULL, 'csv', 'master', 'ROW-1', 'SKU-CSV', '{"sku":"SKU-CSV"}'::jsonb, 'new');
 
-  PERFORM set_config('app.current_user_id', v_user::text, true);
+  PERFORM pg_temp.browser_session(v_user);
   SET LOCAL ROLE authenticated;
   SELECT count(*) INTO v_n FROM public.ingest_staged_products WHERE ingest_run_id = v_run;
   RESET ROLE;
@@ -45,7 +46,7 @@ BEGIN
     RAISE EXCEPTION 'WP 3.1: the uploader cannot read their own link-less run''s staged rows (% of 1)', v_n;
   END IF;
 
-  PERFORM set_config('app.current_user_id', v_other::text, true);
+  PERFORM pg_temp.browser_session(v_other);
   SET LOCAL ROLE authenticated;
   SELECT count(*) INTO v_n FROM public.ingest_staged_products WHERE ingest_run_id = v_run;
   RESET ROLE;

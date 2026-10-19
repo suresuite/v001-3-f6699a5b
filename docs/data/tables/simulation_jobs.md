@@ -43,17 +43,16 @@ partially or get corrected — the write fails.
 | Minimum project role | `viewer` |
 | Tier transitions audited | **no** — invariant `audit-actor` is not met here yet |
 | Row-level security | enabled |
-| Policies on the table | 6 — all carry a predicate |
+| Policies on the table | 5 — all carry a predicate |
 
-Two policies through the project's organization (`org_is_current_user_org(p.organization_id, p.organization)`): SELECT for any member of that organization, ALL for the project's modeler or an organization admin — recreated in that form by WP 2.1's `20260915000004`, which is why the duplicate-policy question of §4 D30 no longer leaves the end state in doubt. Neither policy is predicate-less, so `write: null` agrees with `governanceEnforcement.test.ts`, and no user-facing write path exists in the repository. Two BEFORE triggers still fire on any write (`simulation_jobs_defaults`, `simulation_job_timing_trigger`); the AFTER trigger that once posted every new job to `external-simulation-processor` was dropped on 2025-09-19, so the database no longer calls out on a write. Deleting a project removes its jobs through the inline `REFERENCES projects ON DELETE CASCADE`. NOT IN PRODUCTION'S CASE: §4 D168 found the legacy functions that wrote this queue (`simulation-runner`, `external-simulation-processor`, `simulation-status`, `delete-simulation-job`) still LIVE in production with no source here. "Dormant" is true of the repository; whether those endpoints are still called is D168's production question (WP 7.1). NOT AUDITED: tier 5, and `audit-actor` covers tiers 2–4.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; direct browser mutations are closed and authorized RPCs retain their own role gates. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: Two policies through the project's organization (`org_is_current_user_org(p.organization_id, p.organization)`): SELECT for any member of that organization, ALL for the project's modeler or an organization admin — recreated in that form by WP 2.1's `20260915000004`, which is why the duplicate-policy question of §4 D30 no longer leaves the end state in doubt. Neither policy is predicate-less, so `write: null` agrees with `governanceEnforcement.test.ts`, and no user-facing write path exists in the repository. Two BEFORE triggers still fire on any write (`simulation_jobs_defaults`, `simulation_job_timing_trigger`); the AFTER trigger that once posted every new job to `external-simulation-processor` was dropped on 2025-09-19, so the database no longer calls out on a write. Deleting a project removes its jobs through the inline `REFERENCES projects ON DELETE CASCADE`. NOT IN PRODUCTION'S CASE: §4 D168 found the legacy functions that wrote this queue (`simulation-runner`, `external-simulation-processor`, `simulation-status`, `delete-simulation-job`) still LIVE in production with no source here. "Dormant" is true of the repository; whether those endpoints are still called is D168's production question (WP 7.1). NOT AUDITED: tier 5, and `audit-actor` covers tiers 2–4.
 
-<details><summary>6 RLS policies</summary>
+<details><summary>5 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
 | security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
 | security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
-| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
 | security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 | security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 | security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
@@ -466,6 +465,6 @@ A human-readable stage label the external service reported while the job ran ("I
 
 ---
 
-*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/simulation_jobs.contract.yaml`, table created by `20250913085427_4fb4acfc-fb3c-4021-8851-ffe01adf9d76.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

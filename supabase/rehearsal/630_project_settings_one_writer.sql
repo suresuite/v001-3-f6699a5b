@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- §4 D255 · A PROJECT'S SETTINGS HAVE ONE WRITER PER VERB.
 --
 -- "Enable Deep Tier Network Analysis" did not save from the project's edit form: the
@@ -39,12 +40,14 @@ BEGIN
     (v_owner, 'D255 owner', 'd255o@example.invalid', 'x', 'modeler', 'D255 Org', v_org, true);
 
   -- ══ §2 · create ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_owner);
   v_p1 := public.create_project(p_name => 'D255 one', p_plant => 'D255 plant', p_model => 'Make-To-Order',
             p_bom_level => 'single', p_user_id => v_owner, p_user_email => 'd255o@example.invalid',
             p_user_name => 'D255 owner', p_simulation_start => DATE '2026-01-01',
             p_simulation_end => DATE '2026-12-31', p_data_type => 'uncurated',
             p_deep_tier_enabled => true);
+  PERFORM pg_temp.browser_session(v_owner);
   v_p2 := public.create_project(p_name => 'D255 two', p_plant => 'D255 plant', p_model => 'Make-To-Order',
             p_bom_level => 'single', p_user_id => v_owner, p_user_email => 'd255o@example.invalid',
             p_user_name => 'D255 owner');
@@ -61,7 +64,8 @@ BEGIN
   END IF;
 
   -- ══ §3 · the defect: the edit form's call ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_owner);
   PERFORM public.update_project(p_project_id => v_p2, p_name => 'D255 two', p_plant => 'D255 plant',
             p_model => 'Make-To-Stock', p_bom_level => 'multi', p_user_id => v_owner,
             p_user_email => 'd255o@example.invalid', p_simulation_start => DATE '2026-01-01',
@@ -75,7 +79,8 @@ BEGIN
   IF v_row.supply_chain_model <> 'Make-To-Stock' OR v_row.bom_level <> 'multi' THEN
     RAISE EXCEPTION 'D255/630 §3: the other settings of the same call were not stored';
   END IF;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_owner);
   PERFORM public.update_project(p_project_id => v_p2, p_name => 'D255 two', p_plant => 'D255 plant',
             p_model => 'Make-To-Stock', p_bom_level => 'multi', p_user_id => v_owner,
             p_user_email => 'd255o@example.invalid', p_simulation_start => DATE '2026-01-01',
@@ -88,7 +93,8 @@ BEGIN
   END IF;
 
   -- ══ §4 · omission keeps ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_owner);
   PERFORM public.update_project(p_project_id => v_p1, p_name => 'D255 one renamed', p_plant => 'D255 plant',
             p_model => 'Make-To-Order', p_bom_level => 'single', p_user_id => v_owner,
             p_user_email => 'd255o@example.invalid');

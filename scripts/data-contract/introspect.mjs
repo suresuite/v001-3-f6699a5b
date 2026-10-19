@@ -55,6 +55,9 @@ const OUT = process.env.CONTRACT_INTROSPECT_OUT
 class Schema {
   constructor() {
     this.tables = new Map();      // name -> table
+    // Platform tables stay outside the application table contract, but their
+    // declared policies must survive artifact reconstruction (D310).
+    this.platformRelations = new Map();
     this.enums = new Map();       // name -> { values, defined_by }
     this.views = new Map();
     this.functions = new Map();   // signature -> { name, args, returns, defined_by }
@@ -462,8 +465,17 @@ function apply(schema, stmt, migration, guarded = false) {
     const onAt = /\bON\s+/i.exec(s.slice(pid?.end ?? m[0].length));
     if (!pid || !onAt) return note(schema, migration, s, "CREATE POLICY without a readable name/table");
     const tid = readQualifiedName(s, (pid.end) + onAt.index + onAt[0].length);
-    if (tid && foreignSchema(tid)) return;
-    const t = tid && schema.table(tid.name);
+    let t;
+    if (tid && foreignSchema(tid)) {
+      const key = `${tid.schema}.${tid.name}`;
+      if (!["storage.objects", "realtime.messages"].includes(key)) return;
+      if (!schema.platformRelations.has(key)) schema.platformRelations.set(key, {
+        schema: tid.schema, name: tid.name,
+        columns: (key === "storage.objects" ? ["id", "bucket_id", "name"] : ["id", "topic", "extension"]).map(name => ({ name })),
+        rls: { enabled: true, policies: [] },
+      });
+      t = schema.platformRelations.get(key);
+    } else t = tid && schema.table(tid.name);
     if (!t) return note(schema, migration, s, `CREATE POLICY on unknown table "${tid?.name}"`);
     const tail = s.slice(tid.end);
     // §4 D99 · THE FOURTH DETECTOR, AND IT IS DELIBERATELY NARROW.
@@ -515,7 +527,9 @@ function apply(schema, stmt, migration, guarded = false) {
     const onAt = /\bON\s+/i.exec(s.slice(pid.end));
     if (!onAt) return;
     const tid = readQualifiedName(s, pid.end + onAt.index + onAt[0].length);
-    const t = tid && schema.table(tid.name);
+    const t = tid && (foreignSchema(tid)
+      ? schema.platformRelations.get(`${tid.schema}.${tid.name}`)
+      : schema.table(tid.name));
     if (t) t.rls.policies = t.rls.policies.filter((p) => p.name !== pid.name);
     return;
   }
@@ -1436,6 +1450,9 @@ function build() {
     views: Object.fromEntries([...schema.views.entries()].sort()),
     enums: Object.fromEntries([...schema.enums.entries()].sort()),
     functions: [...schema.functions.values()].sort((a, b) => a.signature.localeCompare(b.signature)),
+    platform_relations: [...schema.platformRelations.values()]
+      .map(({ columns, ...relation }) => relation)
+      .sort((a, b) => `${a.schema}.${a.name}`.localeCompare(`${b.schema}.${b.name}`)),
     extensions: [...schema.extensions].sort(),
     dropped_tables: schema.dropped,
     aborted_migrations: schema.aborted_migrations,

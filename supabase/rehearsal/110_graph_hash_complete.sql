@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- WP 4.1 · THE TRUST ANCHOR COVERS WHAT THE ENGINE READS, AND THE WRITE NAMES
 -- ITS ACTOR.
 --
@@ -59,6 +60,9 @@ BEGIN
   INSERT INTO public.projects (id, name, modeler_id, plant_name)
     VALUES (v_project, 'WP41 graph hash', v_owner, 'WP41P');
 
+  INSERT INTO public.project_members(project_id,user_id,project_role) VALUES
+    (v_project,v_editor,'editor'),(v_project,v_analyst,'analyst') ON CONFLICT(project_id,user_id) DO UPDATE SET project_role=EXCLUDED.project_role;
+
   -- A multi-level project: the single-level BOM the v1 hash covers is EMPTY,
   -- and the whole bill of materials lives in `bom_multi_level`. That is not a
   -- contrived fixture — it is what an upload through `ingest-bom-multi-level`
@@ -115,10 +119,13 @@ BEGIN
   -- The hash is the mechanism; this is the consequence a user sees. Freeze a
   -- version, edit the deep BOM, freeze again: the second call must INSERT a new
   -- version rather than dedup against the latest and hand back the first id.
+  PERFORM pg_temp.browser_session(v_owner);
   v_v1 := public.snapshot_dataset(v_project, 'WP41 before', v_owner, 'wp41owner@example.invalid');
 
   UPDATE public.bom_multi_level SET consumption_rate = 9
    WHERE project_id = v_project AND material_id = 'M2' AND level = 2;
+
+  PERFORM pg_temp.browser_session(v_owner);
 
   v_v2 := public.snapshot_dataset(v_project, 'WP41 after', v_owner, 'wp41owner@example.invalid');
 
@@ -352,13 +359,14 @@ BEGIN
   -- So every write below is made by v_editor while the GUC holds v_analyst. A
   -- row naming v_editor can only have come from the RPC setting it. The poison
   -- is re-applied before each call because each RPC overwrites it.
-  PERFORM set_config('app.current_user_id', v_analyst::text, true);
+  PERFORM pg_temp.browser_session(v_analyst);
 
   -- 7a · the three legacy lane writers, through one RPC ---------------------
   SELECT count(*) INTO v_before FROM public.audit_logs
    WHERE plane = 'data' AND target_type = 'inbound_logistics';
 
-  PERFORM set_config('app.current_user_id', v_analyst::text, true);
+  PERFORM pg_temp.browser_session(v_analyst);
+  PERFORM pg_temp.browser_session(v_editor);
   v_res := public.ingest_legacy_upsert_lane(
     v_project, v_editor, 'inbound_logistics',
     jsonb_build_array(
@@ -400,52 +408,29 @@ BEGIN
       'made, so a row naming that user is the RPC NOT setting it.', v_editor, v_analyst;
   END IF;
 
-  -- THE RPC AUTHENTICATES AND DOES NOT AUTHORIZE, and this assertion pins that
-  -- as a DECISION rather than leaving it as an absence somebody later reads as
-  -- an oversight (`20260917000005`).
-  --
-  -- An earlier draft refused below project role `editor` here. It came out: an
-  -- ORGANIZATION admin who is not a project member resolves to NULL from
-  -- `effective_project_role` — `is_super_admin` reads `role = 'super_admin'` —
-  -- while `combine-project` has always permitted exactly that user, so the gate
-  -- would have silently refused the ETL for a class of caller who can run it
-  -- today. §11 asks for no such check, and WP 3.3's precedent on the identical
-  -- fix (`assign_material_supplier`) added none.
-  --
-  -- So an analyst IS accepted here, deliberately, and each caller keeps the
-  -- authorization it already had. Making `min_project_role` the one live answer
-  -- is D66, and it is WP 6.2's per table. The day somebody adds a gate here,
-  -- this assertion fails and points at that decision instead of looking like a
-  -- hole they have just closed.
-  PERFORM set_config('app.current_user_id', v_owner::text, true);
-  v_res := public.ingest_legacy_upsert_lane(
-    v_project, v_analyst, 'inbound_logistics',
-    jsonb_build_array(jsonb_build_object('supplier_id','S9','material_id','M3','volume',1)));
-  IF (v_res ->> 'rows_written')::int <> 1 THEN
-    RAISE EXCEPTION
-      'WP 4.1: the legacy RPC refused an analyst, or wrote % rows instead of 1. The RPC '
-      'authenticates and does NOT authorize (`20260917000005`); if a role gate has been '
-      'added here, read that migration''s header before keeping it — it refuses an '
-      'organization admin on `combine-project`''s live path. (%)',
-      COALESCE(v_res ->> 'rows_written','(null)'), v_res;
+  -- D28 closes the formerly unguarded analyst input-write path. Derived
+  -- analysis writes retain their separate project-read authorization below.
+  BEGIN
+    PERFORM pg_temp.browser_session(v_analyst);
+    PERFORM public.ingest_legacy_upsert_lane(v_project,v_analyst,'inbound_logistics',
+      '[{"supplier_id":"S9","material_id":"M3","volume":1}]'::jsonb);
+    RAISE EXCEPTION 'Analyst wrote input data';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  PERFORM pg_temp.browser_session(v_editor);
+  v_res := public.ingest_legacy_upsert_lane(v_project,v_editor,'inbound_logistics',
+    '[{"supplier_id":"S9","material_id":"M3","volume":1}]'::jsonb);
+  IF (v_res->>'rows_written')::int<>1 OR NOT EXISTS
+    (SELECT 1 FROM public.inbound_logistics WHERE project_id=v_project AND supplier_id='S9') THEN
+    RAISE EXCEPTION 'Verified editor lost lane write';
   END IF;
 
-  -- …and the row it just wrote names the ANALYST, not the owner the GUC held a
-  -- line ago. Same poison, same reason.
-  SELECT count(*) INTO v_n FROM public.audit_logs a
-   WHERE a.plane = 'data' AND a.target_type = 'inbound_logistics'
-     AND a.actor_user_id IS NOT DISTINCT FROM v_analyst
-     AND COALESCE((a.after ->> 'actor_known')::boolean, false);
-  IF v_n < 1 THEN
-    RAISE EXCEPTION
-      'WP 4.1: the analyst''s lane write wrote no audit row naming %. The GUC held % '
-      'when the call was made.', v_analyst, v_owner;
-  END IF;
+  IF (SELECT actor_user_id FROM public.audit_logs WHERE plane='data' AND target_type='inbound_logistics' ORDER BY seq DESC LIMIT 1) IS DISTINCT FROM v_editor THEN RAISE EXCEPTION 'Lane write lost verified audit actor'; END IF;
 
   -- …and it refuses a target outside the whitelist rather than interpolating it
   -- into `format()`. A dynamic INSERT whose table name came from a caller is an
   -- injection with a migration around it.
   BEGIN
+    PERFORM pg_temp.browser_session(v_editor);
     PERFORM public.ingest_legacy_upsert_lane(
       v_project, v_editor, 'approved_users',
       jsonb_build_array(jsonb_build_object('email','x@example.invalid')));
@@ -457,11 +442,12 @@ BEGIN
   -- …and a NULL actor is refused outright, which is `audit-actor` as a
   -- constraint rather than as an intention.
   BEGIN
+    PERFORM pg_temp.browser_session(NULL);
     PERFORM public.ingest_legacy_upsert_lane(
       v_project, NULL, 'inbound_logistics',
       jsonb_build_array(jsonb_build_object('supplier_id','S9','material_id','M4','volume',1)));
     RAISE EXCEPTION 'WP 4.1: a lane write with no actor succeeded.';
-  EXCEPTION WHEN null_value_not_allowed THEN
+  EXCEPTION WHEN insufficient_privilege THEN
     NULL;
   END;
 
@@ -483,7 +469,8 @@ BEGIN
   SELECT count(*) INTO v_before FROM public.audit_logs
    WHERE plane = 'data' AND target_type = 'products';
 
-  PERFORM set_config('app.current_user_id', v_analyst::text, true);
+  PERFORM pg_temp.browser_session(v_analyst);
+  PERFORM pg_temp.browser_session(v_editor);
   v_res := public.mrp_apply_staged_products('00000000-0000-4000-8000-000000041206', v_editor);
 
   IF (v_res ->> 'rows_promoted')::int <> 2 THEN
@@ -534,7 +521,8 @@ BEGIN
   SELECT count(*) INTO v_lane_before FROM public.supply_chain_data
    WHERE project_id = v_project;
 
-  PERFORM set_config('app.current_user_id', v_analyst::text, true);
+  PERFORM pg_temp.browser_session(v_analyst);
+  PERFORM pg_temp.browser_session(v_editor);
   v_res := public.etl_replace_supply_chain(
     v_project, v_editor,
     jsonb_build_array(
@@ -583,7 +571,8 @@ BEGIN
     INTO v_scores
     FROM public.supply_chain_data d WHERE d.project_id = v_project;
 
-  PERFORM set_config('app.current_user_id', v_analyst::text, true);
+  PERFORM pg_temp.browser_session(v_analyst);
+  PERFORM pg_temp.browser_session(v_editor);
   v_res := public.analysis_mark_critical_nodes(v_editor, v_scores, NULL::uuid);  -- WP 10.1: the two-argument shim is dropped (D240)
   IF (v_res ->> 'rows_updated')::int <> 2 THEN
     RAISE EXCEPTION 'WP 4.1: the critical-node write updated % row(s), expected 2 (%).',
@@ -611,12 +600,14 @@ BEGIN
 
   -- …and it refuses a score set spanning two projects rather than writing half
   -- of it under one project's authority.
+  PERFORM pg_temp.database_maintenance();
   INSERT INTO public.projects (id, name, modeler_id, plant_name)
     VALUES ('00000000-0000-4000-8000-000000041207', 'WP41 other', v_owner, 'WP41Q');
   INSERT INTO public.supply_chain_data (id, project_id, plant_name, data_source, from_location, to_location, weighted)
     VALUES ('00000000-0000-4000-8000-000000041208',
             '00000000-0000-4000-8000-000000041207', 'WP41Q', 'inbound', 'X', 'Y', 1);
   BEGIN
+    PERFORM pg_temp.browser_session(v_editor);
     PERFORM public.analysis_mark_critical_nodes(
       v_editor,
       v_scores || jsonb_build_array(jsonb_build_object(

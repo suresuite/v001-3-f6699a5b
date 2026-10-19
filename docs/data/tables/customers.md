@@ -36,13 +36,13 @@ it rather than duplicating it.
 | | |
 |---|---|
 | Read capability | `project_member` |
-| Write capability | `project_modeler_or_admin` |
+| Write capability | `data_edit_inputs` |
 | Minimum project role | `editor` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
 | Policies on the table | 6 — all carry a predicate |
 
-Adopted with RLS enabled and no `anon` policy. The logistics lanes carry an `*_anon_read` policy because the public network pages render them (D28, a standing decision); nothing reads this table at all, so there was no reader to keep working and no reason to widen that exposure. `audited: true` was NOT the first draft. The adoption was written with the three WP 2.3 triggers left off — the table had had no migration when they were written, so it had never had them — and `dataPlaneAudit.test.ts` failed on the same commit that put the table in the contract. Its rule is derived from the contract's own tier, not from a list, so a tier-2 table without its triggers is a failure by construction. The triggers are in `20260916000003_adopt_customers_drop_product_code_map.sql` and R9 holds this field to them.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; browser writes require `data_edit_inputs` on the project. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: Adopted with RLS enabled and no `anon` policy. The logistics lanes carry an `*_anon_read` policy because the public network pages render them (D28, a standing decision); nothing reads this table at all, so there was no reader to keep working and no reason to widen that exposure. `audited: true` was NOT the first draft. The adoption was written with the three WP 2.3 triggers left off — the table had had no migration when they were written, so it had never had them — and `dataPlaneAudit.test.ts` failed on the same commit that put the table in the contract. Its rule is derived from the contract's own tier, not from a list, so a tier-2 table without its triggers is a failure by construction. The triggers are in `20260916000003_adopt_customers_drop_product_code_map.sql` and R9 holds this field to them.
 
 <details><summary>6 RLS policies</summary>
 
@@ -230,6 +230,6 @@ The tier-1 staged row this was promoted from (WP 6.2). Its `source_row_number` i
 
 ---
 
-*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/customers.contract.yaml`, table created by `20260916000003_adopt_customers_drop_product_code_map.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

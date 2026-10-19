@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- WP 3.4 · THE DIFF EXISTS BEFORE THE DECISION, AND THE PROMOTION HAS A ROLE.
 --
 -- §10's exit checks for this package are three sentences and two of them are
@@ -78,6 +79,7 @@ BEGIN
   -- supplied the way `ingest-file` supplies one), and one line repeating the
   -- first arc with a different volume — so every state the review screen has to
   -- render exists in ONE run: new, held back, and superseded-by-a-later-line.
+  PERFORM pg_temp.browser_session(v_owner);
   v_landed := public.ingest_land_file(
     v_project, v_owner, 'csv', 'transactional', 'inbound_logistics',
     'inbound-wp34.csv', 'ingest', 'p/wp34/1.csv', 'text/csv', 2048,
@@ -120,6 +122,8 @@ BEGIN
       'WP 3.4: % staged row(s) carry a diff_state before anything computed one. '
       'The NOT NULL DEFAULT ''new'' is back (§4 D62).', v_n;
   END IF;
+
+  PERFORM pg_temp.browser_session(v_owner);
 
   v_diff := public.ingest_diff_run(v_run1, v_owner);
 
@@ -205,6 +209,7 @@ BEGIN
   -- Landing, the review screen, and `ingest_apply_run` itself. A second pass
   -- that appended a second `superseded_by_later_line` would show the user the
   -- same sentence twice and inflate `rows_superseded` on every refresh.
+  PERFORM pg_temp.browser_session(v_owner);
   v_diff := public.ingest_diff_run(v_run1, v_owner);
   SELECT count(*) INTO v_n
     FROM public.ingest_staged_rows s, jsonb_array_elements(s.findings) f
@@ -223,12 +228,14 @@ BEGIN
   -- a stranger being turned away by `has_project_access`, it is the rank being
   -- read. WP 3.3's `ingest_apply_run` checked project ACCESS and never a role,
   -- so this promotion succeeded (§4 D65).
+  PERFORM pg_temp.browser_session(v_analyst);
   IF (public.ingest_diff_run(v_run1, v_analyst) ->> 'actor_may_promote')::boolean THEN
     RAISE EXCEPTION 'WP 3.4: the diff told an ANALYST they may promote; the screen would '
       'have offered them a button the database then refuses';
   END IF;
 
   BEGIN
+    PERFORM pg_temp.browser_session(v_analyst);
     PERFORM public.ingest_apply_run(v_run1, v_analyst);
     RAISE EXCEPTION 'WP 3.4: an ANALYST promoted a run. §10''s exit check is "promotion by '
       'an analyst is refused" and the database did not refuse it (§4 D65).';
@@ -251,6 +258,7 @@ BEGIN
   END IF;
 
   -- ── 4 · AN EDITOR MAY, and the promotion reports the diff's split ─────────
+  PERFORM pg_temp.browser_session(v_editor);
   v_applied := public.ingest_apply_run(v_run1, v_editor);
   IF (v_applied ->> 'rows_promoted')::int <> 2 THEN
     RAISE EXCEPTION 'WP 3.4: the editor''s promotion moved % row(s), expected 2',
@@ -292,6 +300,7 @@ BEGIN
   -- not: an UPDATE that writes identical values is still an UPDATE, so
   -- `rows_updated` cannot tell `changed` from `unchanged` and this is the number
   -- the review screen actually needs (§4 D63).
+  PERFORM pg_temp.browser_session(v_owner);
   v_landed := public.ingest_land_file(
     v_project, v_owner, 'csv', 'transactional', 'inbound_logistics',
     'inbound-wp34.csv', 'ingest', 'p/wp34/2.csv', 'text/csv', 2048,
@@ -316,6 +325,7 @@ BEGIN
                                        'lead_time', 2, 'unit_price', 3),
         'findings', '[]'::jsonb)));
   v_run2 := (v_landed ->> 'run_id')::uuid;
+  PERFORM pg_temp.browser_session(v_owner);
   v_diff := public.ingest_diff_run(v_run2, v_owner);
 
   -- One arc restated identically, one whose volume moved, one the table has
@@ -344,6 +354,7 @@ BEGIN
   -- tier 2 holds 11 per week; the diff must call that CHANGED for the value and
   -- not for the unit. The inverse case is the one that bites, so it is asserted
   -- directly below with a monthly restatement of the SAME weekly number.
+  PERFORM pg_temp.browser_session(v_editor);
   v_applied := public.ingest_apply_run(v_run2, v_editor);
   IF (v_applied ->> 'rows_changed')::int <> 1 OR (v_applied ->> 'rows_unchanged')::int <> 1 THEN
     RAISE EXCEPTION 'WP 3.4: the promotion returned changed=% unchanged=%, expected 1/1',
@@ -355,6 +366,8 @@ BEGIN
     RAISE EXCEPTION 'WP 3.4: after the second promotion the run holds new=% changed=% '
       'unchanged=%, expected 1/1/1 (§4 D63)', v_a, v_b, v_c;
   END IF;
+
+  PERFORM pg_temp.browser_session(v_owner);
 
   v_landed := public.ingest_land_file(
     v_project, v_owner, 'csv', 'transactional', 'inbound_logistics',
@@ -372,6 +385,7 @@ BEGIN
                                        'lead_time', 14, 'lead_time_unit', 'day', 'unit_price', 3),
         'findings', '[]'::jsonb)));
   v_run3 := (v_landed ->> 'run_id')::uuid;
+  PERFORM pg_temp.browser_session(v_owner);
   v_diff := public.ingest_diff_run(v_run3, v_owner);
   IF (v_diff ->> 'rows_unchanged')::int <> 1 THEN
     RAISE EXCEPTION 'WP 3.4: the same arc restated in days diffed as '
@@ -390,22 +404,25 @@ BEGIN
   -- promotion disagreeing about the same row. `ingest_apply_run`'s cross-check
   -- turns that disagreement into a refusal, so this section fails LOUDLY rather
   -- than quietly if the predicate regresses to `=`.
-  PERFORM public.ingest_apply_run(
-    (public.ingest_land_file(
+  PERFORM pg_temp.browser_session(v_owner);
+  v_landed := public.ingest_land_file(
        v_project, v_owner, 'csv', 'transactional', 'bom_multi_level',
        'bom-root.csv', 'ingest', 'p/wp34/4.csv', 'text/csv', 512, repeat('e', 64),
        jsonb_build_array(jsonb_build_object('source_row_number', 2,
          'raw',    jsonb_build_object('material_id','MAT-ROOT','level','1'),
          'parsed', jsonb_build_object('material_id','MAT-ROOT', 'level', 1,
                                       'consumption_rate', 1),
-         'findings', '[]'::jsonb))) ->> 'run_id')::uuid,
-    v_editor);
+         'findings', '[]'::jsonb)));
+  PERFORM pg_temp.browser_session(v_editor);
+  PERFORM public.ingest_apply_run((v_landed ->> 'run_id')::uuid, v_editor);
 
   SELECT count(*) INTO v_n FROM public.bom_multi_level
    WHERE project_id = v_project AND higher_level_component_id IS NULL;
   IF v_n <> 1 THEN
     RAISE EXCEPTION 'WP 3.4: the BOM root did not promote (% row(s))', v_n;
   END IF;
+
+  PERFORM pg_temp.browser_session(v_owner);
 
   v_landed := public.ingest_land_file(
     v_project, v_owner, 'csv', 'transactional', 'bom_multi_level',
@@ -415,6 +432,7 @@ BEGIN
       'parsed', jsonb_build_object('material_id','MAT-ROOT', 'level', 1,
                                    'consumption_rate', 1),
       'findings', '[]'::jsonb)));
+  PERFORM pg_temp.browser_session(v_owner);
   v_diff := public.ingest_diff_run((v_landed ->> 'run_id')::uuid, v_owner);
   IF (v_diff ->> 'rows_unchanged')::int <> 1 THEN
     RAISE EXCEPTION 'WP 3.4: re-uploading a BOM ROOT — whose natural key contains a NULL — '
@@ -423,6 +441,7 @@ BEGIN
       v_diff ->> 'rows_new', v_diff ->> 'rows_changed', v_diff ->> 'rows_unchanged';
   END IF;
   -- And the promotion agrees with it, which is the cross-check firing green.
+  PERFORM pg_temp.browser_session(v_editor);
   v_applied := public.ingest_apply_run((v_landed ->> 'run_id')::uuid, v_editor);
   IF (v_applied ->> 'rows_updated')::int <> 1 THEN
     RAISE EXCEPTION 'WP 3.4: the BOM root re-upload inserted rather than updated (% updated)',

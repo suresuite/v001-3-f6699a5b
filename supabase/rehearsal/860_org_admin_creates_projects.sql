@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- §4 D303 · AN ORGANIZATION ADMIN OR OWNER MAY CREATE A PROJECT IN THAT ORGANIZATION,
 -- WHATEVER THE ACCOUNT ROLE.
 --
@@ -59,10 +60,13 @@ BEGIN
     (v_member, 'd303m@example.invalid', 'D303 Member', 'x', 'user',        'D303 Org A', v_org_a, true),
     (v_model,  'd303d@example.invalid', 'D303 Model',  'x', 'modeler',     'D303 Org A', v_org_a, true);
 
+  PERFORM pg_temp.browser_session(v_super);
+
   PERFORM public.admin_add_org_member(v_super, 'd303s@example.invalid', v_admin, v_org_a, 'admin');
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_user_org_role(v_super, 'd303s@example.invalid', v_owner, v_org_a, 'owner');
   -- The browser's shape: no GUC.
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
 
   IF (SELECT organization_id FROM public.approved_users WHERE id = v_admin) IS DISTINCT FROM v_org_b
      OR (SELECT org_role FROM public.organization_members WHERE user_id = v_admin AND org_id = v_org_a) IS DISTINCT FROM 'admin'
@@ -71,6 +75,7 @@ BEGIN
   END IF;
 
   -- ── §1 the rule ──────────────────────────────────────────────────────────
+  PERFORM pg_temp.browser_session(v_admin);
   v_r := public.project_creation_right(v_admin);
   IF (v_r ->> 'allowed')::boolean OR v_r ->> 'decided_by' IS DISTINCT FROM 'none'
      OR v_r ->> 'organization_id' IS DISTINCT FROM v_org_b::text
@@ -79,10 +84,12 @@ BEGIN
     RAISE EXCEPTION 'D303/860 §1: an admin of A working in B (a member there) got %', v_r;
   END IF;
 
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_admin);
   PERFORM public.switch_my_organization(v_org_a, v_admin);
   RESET ROLE;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
+  PERFORM pg_temp.browser_session(v_admin);
   v_r := public.project_creation_right(v_admin);
   IF NOT (v_r ->> 'allowed')::boolean OR v_r ->> 'decided_by' IS DISTINCT FROM 'organization_role'
      OR v_r ->> 'organization_id' IS DISTINCT FROM v_org_a::text
@@ -90,18 +97,23 @@ BEGIN
     RAISE EXCEPTION 'D303/860 §1: the admin, working in A, got %', v_r;
   END IF;
 
+  PERFORM pg_temp.browser_session(v_owner);
+
   v_r := public.project_creation_right(v_owner);
   IF NOT (v_r ->> 'allowed')::boolean OR v_r ->> 'decided_by' IS DISTINCT FROM 'organization_role' THEN
     RAISE EXCEPTION 'D303/860 §1: an organization owner got %', v_r;
   END IF;
+  PERFORM pg_temp.browser_session(v_member);
   v_r := public.project_creation_right(v_member);
   IF (v_r ->> 'allowed')::boolean OR v_r ->> 'decided_by' IS DISTINCT FROM 'none' THEN
     RAISE EXCEPTION 'D303/860 §1: an organization member with a user account got %', v_r;
   END IF;
+  PERFORM pg_temp.browser_session(v_model);
   v_r := public.project_creation_right(v_model);
   IF NOT (v_r ->> 'allowed')::boolean OR v_r ->> 'decided_by' IS DISTINCT FROM 'account_role' THEN
     RAISE EXCEPTION 'D303/860 §1: a modeler account got %', v_r;
   END IF;
+  PERFORM pg_temp.browser_session(v_super);
   v_r := public.project_creation_right(v_super);
   IF NOT (v_r ->> 'allowed')::boolean OR v_r ->> 'decided_by' IS DISTINCT FROM 'super_admin' THEN
     RAISE EXCEPTION 'D303/860 §1: a super admin got %', v_r;
@@ -112,12 +124,14 @@ BEGIN
   END IF;
 
   -- ── §2 the page, through the browser's read ──────────────────────────────
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_admin);
   v_caps := public.get_my_capabilities(v_admin);
   RESET ROLE;
   IF NOT COALESCE((v_caps -> 'pages' ->> '/project-manager')::boolean, false) THEN
     RAISE EXCEPTION 'D303/860 §2: /project-manager is shut for an organization admin (pages %)', v_caps -> 'pages';
   END IF;
+  PERFORM pg_temp.browser_session(v_admin);
   IF v_caps -> 'project_creation' IS DISTINCT FROM public.project_creation_right(v_admin) THEN
     RAISE EXCEPTION 'D303/860 §2: project_creation % is not the rule''s answer %',
       v_caps -> 'project_creation', public.project_creation_right(v_admin);
@@ -134,12 +148,15 @@ BEGIN
   END IF;
 
   -- Back in B, where the admin is a member: the page shuts again.
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_admin);
   PERFORM public.switch_my_organization(v_org_b, v_admin);
+  PERFORM pg_temp.browser_session(v_admin);
   v_caps := public.get_my_capabilities(v_admin);
+  PERFORM pg_temp.browser_session(v_admin);
   PERFORM public.switch_my_organization(v_org_a, v_admin);
   RESET ROLE;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
   IF COALESCE((v_caps -> 'pages' ->> '/project-manager')::boolean, true)
      OR COALESCE((v_caps -> 'project_creation' ->> 'allowed')::boolean, true) THEN
     RAISE EXCEPTION 'D303/860 §2: an admin of A working in B still holds the page or the right (%)', v_caps -> 'project_creation';
@@ -158,7 +175,8 @@ BEGIN
   DELETE FROM public.user_capabilities WHERE user_id = v_member AND capability_key = '/project-manager';
 
   -- ── §4 the create ────────────────────────────────────────────────────────
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_admin);
   v_p := public.create_project(p_name => 'D303 by an organization admin', p_plant => 'D303 plant',
            p_model => 'Make-To-Order', p_bom_level => 'single', p_user_id => v_admin,
            p_user_email => 'd303a@example.invalid', p_user_name => 'D303 Admin');

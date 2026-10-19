@@ -32,17 +32,16 @@ it rather than duplicating it.
 | Minimum project role | `viewer` |
 | Tier transitions audited | **no** — invariant `audit-actor` is not met here yet |
 | Row-level security | enabled |
-| Policies on the table | 6 — all carry a predicate |
+| Policies on the table | 5 — all carry a predicate |
 
-`write: simulation_lab` is the capability that gates the only user-facing action which writes this table — running a simulation. It is NOT `null`, and the first draft of this sidecar said it was: `analysis_runs` can claim `write: null` because it has no write policy at all and every write goes through a SECURITY DEFINER RPC, but this table is written by the BROWSER, as a PostgREST upsert from `pyodideEngine.persistEngineResult`, behind two predicate-less policies (`rep_auth_all` and `run_replications_anon_write`). `governanceEnforcement.test.ts` refused the `null` claim on exactly that evidence, and it was right: a policy with no predicate permits any holder of the table grant to write, which is a user-facing write path whether or not a page uses it. So the capability is declared and the exposure is stated rather than implied: this is one of the eleven tables §4 D154 measured as genuinely writable from the browser's `anon` role. That is D28's standing decision (document, do not change) and WP 7.1's to close — `min_project_role` is `viewer` because nothing here enforces a role today, not because a viewer ought to be able to write results. NOT AUDITED, and that is the tier rather than an omission: the audit rule (`audit-actor`) covers tiers 2, 3 and 4, where a write changes the world a later run will see. A replication row is the OUTPUT of one run and an input to nothing; re-running writes new rows rather than mutating these, so there is no tier transition here for an audit row to name.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; direct browser mutations are closed and authorized RPCs retain their own role gates. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: `write: simulation_lab` is the capability that gates the only user-facing action which writes this table — running a simulation. It is NOT `null`, and the first draft of this sidecar said it was: `analysis_runs` can claim `write: null` because it has no write policy at all and every write goes through a SECURITY DEFINER RPC, but this table is written by the BROWSER, as a PostgREST upsert from `pyodideEngine.persistEngineResult`, behind two predicate-less policies (`rep_auth_all` and `run_replications_anon_write`). `governanceEnforcement.test.ts` refused the `null` claim on exactly that evidence, and it was right: a policy with no predicate permits any holder of the table grant to write, which is a user-facing write path whether or not a page uses it. So the capability is declared and the exposure is stated rather than implied: this is one of the eleven tables §4 D154 measured as genuinely writable from the browser's `anon` role. That is D28's standing decision (document, do not change) and WP 7.1's to close — `min_project_role` is `viewer` because nothing here enforces a role today, not because a viewer ought to be able to write results. NOT AUDITED, and that is the tier rather than an omission: the audit rule (`audit-actor`) covers tiers 2, 3 and 4, where a write changes the world a later run will see. A replication row is the OUTPUT of one run and an input to nothing; re-running writes new rows rather than mutating these, so there is no tier transition here for an audit row to name.
 
-<details><summary>6 RLS policies</summary>
+<details><summary>5 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
 | security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
 | security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
-| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
 | security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 | security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 | security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
@@ -283,6 +282,6 @@ When the row was inserted.
 
 ---
 
-*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/run_replications.contract.yaml`, table created by `20260607121406_fcbd47e9-93de-4b3b-988f-7f4718159c91.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

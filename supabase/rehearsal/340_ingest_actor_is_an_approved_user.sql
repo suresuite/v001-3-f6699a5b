@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- WP 6.5a precondition · A REAL UPLOADER CAN LAND A FILE — AND COULD NOT BEFORE.
 --
 -- This file reproduces production's shape rather than the rehearsal's habit, which is the
@@ -44,6 +45,7 @@ BEGIN
   -- Positional, matching the other landing rehearsals: the signature is
   -- (project, actor, source_kind, fact_class, target, filename, bucket, path,
   --  content_type, bytes, sha256, rows).
+  PERFORM pg_temp.browser_session(v_user);
   v_landed := public.ingest_land_file(
     v_project, v_user, 'csv', 'master', 'suppliers',
     'wp65.csv', 'ingest', 'wp65/wp65.csv', 'text/csv', 42,
@@ -154,6 +156,7 @@ BEGIN
     FROM public.ingest_files f JOIN public.ingest_runs r ON r.id = f.ingest_run_id
    WHERE r.id = v_run;
 
+  PERFORM pg_temp.database_maintenance();
   DELETE FROM public.approved_users WHERE id = v_user;
 
   SELECT count(*) INTO v_rows

@@ -22,13 +22,13 @@
 | | |
 |---|---|
 | Read capability | any project member |
-| Write capability | **no user-facing write path** |
+| Write capability | `data_edit_inputs` |
 | Minimum project role | `viewer` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
 | Policies on the table | 6 — all carry a predicate |
 
-Read follows project reachability. No user-facing write policy; uploads go through `bulk_insert_network_edges`, which takes the actor. `audited: true` as of WP 4.3 (`20260917000007`); it was deferred and therefore unaudited before that (D54).
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; browser writes require `data_edit_inputs` on the project. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: Read follows project reachability. No user-facing write policy; uploads go through `bulk_insert_network_edges`, which takes the actor. `audited: true` as of WP 4.3 (`20260917000007`); it was deferred and therefore unaudited before that (D54).
 
 <details><summary>6 RLS policies</summary>
 
@@ -329,6 +329,6 @@ Upstream or downstream relative to the seed, as uploaded.
 
 ---
 
-*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/network_edges.contract.yaml`, table created by `20250904105527_e00a21a9-0120-48a7-a62d-e2db83fd4cc6.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- §4 D305 · DELETING A DEEP-TIER DATASET FITS IN THE BROWSER'S STATEMENT TIMEOUT.
 --
 -- `20261009000002` replaces the per-ROW completion trigger on `network_nodes`,
@@ -60,12 +61,13 @@ BEGIN
   -- ── §1 the delete, as the browser makes it ──────────────────────────────
   INSERT INTO public.network_edges (project_id, plant_name, organization, src_uid, dst_uid, depth)
   SELECT v_p, 'D305P', 'D305 Org', 'd305-s' || g, 'd305-d' || g, 1 FROM generate_series(1, 10000) g;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
 
   -- `statement_timeout` is armed when a top-level statement starts, so setting it inside
   -- this block would never fire; the elapsed time is measured instead, against the same 3 s.
   v_t0 := clock_timestamp();
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_user);
   v_n := public.delete_project_dataset(v_p, 'network_edges', v_user, 'd305@example.invalid');
   RESET ROLE;
   IF clock_timestamp() - v_t0 > interval '3 seconds' THEN

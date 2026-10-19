@@ -28,17 +28,16 @@ A RETIRED PIPELINE'S TELEMETRY, LEFT IN PLACE ON PURPOSE by the 2026-07-02 commi
 | Minimum project role | `viewer` |
 | Tier transitions audited | **no** — invariant `audit-actor` is not met here yet |
 | Row-level security | enabled |
-| Policies on the table | 6 — all carry a predicate |
+| Policies on the table | 5 — all carry a predicate |
 
-Two policies through the project's organization (`org_is_current_user_org(p.organization_id, p.organization)`): SELECT for any member of that organization, ALL for the project's modeler or an organization admin. Neither is predicate-less, so `write: null` agrees with `governanceEnforcement.test.ts`, and no user-facing write path exists in the repository. Deleting a project, or a legacy job, removes these rows through the inline `REFERENCES … ON DELETE CASCADE` on `project_id` and `simulation_job_id`. The `ml-service` that wrote it ran on Render, outside this repository and outside D168's function list; the 2026-07-02 removal commit asks for that service to be deleted by hand, and the repository does not record whether it was. §4 D168 does list `delete-simulation-job` — which deleted these rows — among the legacy edge functions still LIVE in production with no source here. NOT AUDITED: tier 5, and `audit-actor` covers tiers 2–4.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; direct browser mutations are closed and authorized RPCs retain their own role gates. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: Two policies through the project's organization (`org_is_current_user_org(p.organization_id, p.organization)`): SELECT for any member of that organization, ALL for the project's modeler or an organization admin. Neither is predicate-less, so `write: null` agrees with `governanceEnforcement.test.ts`, and no user-facing write path exists in the repository. Deleting a project, or a legacy job, removes these rows through the inline `REFERENCES … ON DELETE CASCADE` on `project_id` and `simulation_job_id`. The `ml-service` that wrote it ran on Render, outside this repository and outside D168's function list; the 2026-07-02 removal commit asks for that service to be deleted by hand, and the repository does not record whether it was. §4 D168 does list `delete-simulation-job` — which deleted these rows — among the legacy edge functions still LIVE in production with no source here. NOT AUDITED: tier 5, and `audit-actor` covers tiers 2–4.
 
-<details><summary>6 RLS policies</summary>
+<details><summary>5 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
 | security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
 | security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
-| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
 | security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 | security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 | security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
@@ -287,6 +286,6 @@ The organization's NAME at write time, DEFAULT 'default_org'. Legacy tenancy tex
 
 ---
 
-*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/simulation_performance_metrics.contract.yaml`, table created by `20250913085427_4fb4acfc-fb3c-4021-8851-ffe01adf9d76.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

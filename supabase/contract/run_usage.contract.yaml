@@ -28,6 +28,11 @@ governance:
   audited: false
   rls_enabled: true
   note: >-
+    D309/D310 candidate (not deployed): browser reads require a verified active
+    principal and scoped project/owner access. Anonymous tenant grants are revoked;
+    direct browser mutations are closed and authorized RPCs retain their own role gates.
+    The generated schema owns the exact policies; D310 owns live-grant evidence.
+    Historical context before this candidate:
     No API role reads or writes it: RLS is on with no policy. Written only by
     SECURITY DEFINER code — `create_simulation_run` (the reservation, in the same
     statement as the run row it reserves for), the `simulation_runs_usage_complete`

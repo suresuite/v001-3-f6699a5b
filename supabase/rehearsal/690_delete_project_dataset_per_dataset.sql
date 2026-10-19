@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- ONE DATASET AT A TIME — `20261001000024`, §4 D266.
 --
 -- `delete_project_dataset` gained the deep tier and the node list's uploaded fields, so
@@ -57,16 +58,18 @@ BEGIN
       (v_p, 'D690 plant', 'D690 A', 'P-100', NULL, NULL, NULL, NULL);
   END LOOP;
 
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
 
   -- ══ §5 · who may ══ (first, so a refusal is proven against full tables)
   BEGIN
+    PERFORM pg_temp.browser_session(v_other);
     PERFORM public.delete_project_dataset(v_a, 'network_nodes', v_other, 'd690x@example.invalid');
     RAISE EXCEPTION 'D690/690 §5: a modeler who is not the owner deleted the deep-tier nodes';
   EXCEPTION WHEN raise_exception THEN
     IF SQLERRM <> 'forbidden' THEN RAISE; END IF;
   END;
   BEGIN
+    PERFORM pg_temp.browser_session(v_super_b);
     PERFORM public.delete_project_dataset(v_a, 'deep_tier', v_super_b, 'd690sb@example.invalid');
     RAISE EXCEPTION 'D690/690 §5: a super admin active in ANOTHER organization deleted the deep tier';
   EXCEPTION WHEN raise_exception THEN
@@ -75,6 +78,7 @@ BEGIN
 
   -- ══ §7 · an unknown dataset ══
   BEGIN
+    PERFORM pg_temp.browser_session(v_owner);
     PERFORM public.delete_project_dataset(v_a, 'everything', v_owner, 'd690o@example.invalid');
     RAISE EXCEPTION 'D690/690 §7: an unknown dataset name was accepted';
   EXCEPTION WHEN raise_exception THEN
@@ -82,6 +86,7 @@ BEGIN
   END;
 
   -- ══ §4 · 'all' leaves the deep tier and the node list alone ══
+  PERFORM pg_temp.browser_session(v_owner);
   PERFORM public.delete_project_dataset(v_a, 'all', v_owner, 'd690o@example.invalid');
   RESET ROLE;
   SELECT (SELECT count(*) FROM public.network_nodes   WHERE project_id = v_a)
@@ -95,14 +100,17 @@ BEGIN
   SELECT count(*) INTO v_audit FROM public.audit_logs
    WHERE plane = 'data' AND target_type = 'network_edges' AND actor_user_id = v_owner;
   PERFORM set_config('app.current_user_id', v_other::text, true);  -- POISON
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
 
   -- ══ §1 · each deep-tier branch ══
+  PERFORM pg_temp.browser_session(v_owner);
   v_n := public.delete_project_dataset(v_a, 'network_edges', v_owner, 'd690o@example.invalid');
   IF v_n <> 2 THEN RAISE EXCEPTION 'D690/690 §1: network_edges reported %, want 2', v_n; END IF;
+  PERFORM pg_temp.browser_session(v_owner);
   v_n := public.delete_project_dataset(v_a, 'deep_nodes', v_owner, 'd690o@example.invalid');
   IF v_n <> 3 THEN RAISE EXCEPTION 'D690/690 §1: deep_nodes reported %, want 3', v_n; END IF;
   -- An admin of the organization may too.
+  PERFORM pg_temp.browser_session(v_admin);
   v_n := public.delete_project_dataset(v_a, 'network_summary', v_admin, 'd690a@example.invalid');
   IF v_n <> 1 THEN RAISE EXCEPTION 'D690/690 §1: network_summary reported %, want 1', v_n; END IF;
   RESET ROLE;
@@ -123,7 +131,8 @@ BEGIN
   END IF;
 
   -- ══ §2 · 'deep_tier' on project B ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_owner);
   v_n := public.delete_project_dataset(v_b, 'deep_tier', v_owner, 'd690o@example.invalid');
   RESET ROLE;
   IF v_n <> 6 THEN RAISE EXCEPTION 'D690/690 §2: deep_tier reported %, want 6', v_n; END IF;
@@ -133,7 +142,8 @@ BEGIN
   IF v_n <> 0 THEN RAISE EXCEPTION 'D690/690 §2: % deep-tier rows of project B survived deep_tier', v_n; END IF;
 
   -- ══ §3 · node_list_uploads ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_owner);
   v_n := public.delete_project_dataset(v_a, 'node_list_uploads', v_owner, 'd690o@example.invalid');
   RESET ROLE;
   IF v_n <> 2 THEN

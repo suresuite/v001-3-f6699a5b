@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- EVERY USER MAY CREATE A PERSONAL, READ-ONLY KEY — `20261002000005`, Phase 12 / WP 12.7.
 --
 -- Each section calls the key RPCs as /developer does (`anon`, the user as a
@@ -47,9 +48,11 @@ BEGIN
     (v_orphan, 'D730 orphan',  'd730n@example.invalid', 'x', 'user',    'D730 nowhere', NULL, true);
 
   -- §1
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_viewer);
   SELECT id INTO v_vkey FROM public.create_api_key(v_viewer, 'd730v@example.invalid', 'my notebook',
     ARRAY['read:data','read:policies','read:runs'], 'test', NULL, NULL, NULL, 'personal');
+  PERFORM pg_temp.browser_session(v_other);
   SELECT id INTO v_okey FROM public.create_api_key(v_other, 'd730o@example.invalid', 'theirs',
     ARRAY['read:data'], 'test', NULL, NULL, NULL, 'personal');
   RESET ROLE;
@@ -61,7 +64,8 @@ BEGIN
   -- §2
   v_refused := false;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_viewer);
     PERFORM public.create_api_key(v_viewer, 'd730v@example.invalid', 'writer',
       ARRAY['read:data','write:runs'], 'test', NULL, NULL, NULL, 'personal');
   EXCEPTION WHEN raise_exception THEN
@@ -71,7 +75,8 @@ BEGIN
   IF NOT v_refused THEN RAISE EXCEPTION '§2: a plain user minted a write scope'; END IF;
   v_refused := false;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_viewer);
     PERFORM public.create_api_key(v_viewer, 'd730v@example.invalid', 'org',
       ARRAY['read:data'], 'test', NULL, NULL, NULL, 'org');
   EXCEPTION WHEN raise_exception THEN
@@ -81,9 +86,11 @@ BEGIN
   IF NOT v_refused THEN RAISE EXCEPTION '§2: a plain user minted an organization key'; END IF;
 
   -- the modeler's keys: one org key with a write scope, one personal write key
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_mod);
   SELECT id INTO v_mkey FROM public.create_api_key(v_mod, 'd730m@example.invalid', 'ci',
     ARRAY['read:data','write:runs'], 'test');
+  PERFORM pg_temp.browser_session(v_mod);
   SELECT id INTO v_wkey FROM public.create_api_key(v_mod, 'd730m@example.invalid', 'mine',
     ARRAY['read:data','write:runs'], 'test', NULL, NULL, NULL, 'personal');
   RESET ROLE;
@@ -91,11 +98,13 @@ BEGIN
   -- §3
   INSERT INTO public.api_request_logs (api_key_id, org_id, method, route, status)
   VALUES (v_vkey, v_org, 'GET', '/v1/projects', 200), (v_mkey, v_org, 'GET', '/v1/projects', 200);
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_viewer);
   SELECT count(*) INTO v_n FROM public.list_api_keys(v_viewer, 'd730v@example.invalid');
   RESET ROLE;
   IF v_n <> 1 THEN RAISE EXCEPTION '§3: a plain user lists % keys (want only their own, 1)', v_n; END IF;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_viewer);
   SELECT count(*) INTO v_n FROM public.api_key_usage(v_viewer, 'd730v@example.invalid') u
    WHERE u.api_key_id <> v_vkey;
   RESET ROLE;
@@ -104,7 +113,8 @@ BEGIN
   -- §4
   v_refused := false;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_viewer);
     PERFORM public.revoke_api_key(v_viewer, 'd730v@example.invalid', v_okey);
   EXCEPTION WHEN raise_exception THEN
     v_refused := SQLERRM LIKE '%forbidden%';
@@ -113,14 +123,16 @@ BEGIN
   IF NOT v_refused THEN RAISE EXCEPTION '§4: a plain user revoked a colleague''s key'; END IF;
   v_refused := false;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_viewer);
     PERFORM public.revoke_api_key(v_viewer, 'd730v@example.invalid', v_mkey);
   EXCEPTION WHEN raise_exception THEN
     v_refused := SQLERRM LIKE '%forbidden%';
   END;
   RESET ROLE;
   IF NOT v_refused THEN RAISE EXCEPTION '§4: a plain user revoked the organization''s key'; END IF;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_other);
   PERFORM public.revoke_api_key(v_other, 'd730o@example.invalid', v_okey);
   RESET ROLE;
   IF (SELECT status FROM public.api_keys WHERE id = v_okey) <> 'revoked' THEN
@@ -128,7 +140,8 @@ BEGIN
   END IF;
 
   -- §5
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_viewer);
   SELECT id INTO v_rot FROM public.rotate_api_key(v_viewer, 'd730v@example.invalid', v_vkey, 0);
   RESET ROLE;
   IF public.api_personal_key_actor(v_rot) IS DISTINCT FROM v_viewer THEN
@@ -137,7 +150,8 @@ BEGIN
   UPDATE public.approved_users SET role = 'user' WHERE id = v_mod;      -- the modeler is demoted
   v_refused := false;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_mod);
     PERFORM public.rotate_api_key(v_mod, 'd730m@example.invalid', v_wkey, 0);
   EXCEPTION WHEN raise_exception THEN
     v_refused := SQLERRM LIKE '%revoke it and create a read-only key%';
@@ -164,7 +178,8 @@ BEGIN
   IF (SELECT scopes FROM public.api_keys WHERE id = v_mkey) <> ARRAY['read:data','write:runs']::text[] THEN
     RAISE EXCEPTION '§7: the modeler''s org key was not stored as asked';
   END IF;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_mod);
   SELECT count(*) INTO v_n FROM public.list_api_keys(v_mod, 'd730m@example.invalid');
   RESET ROLE;
   IF v_n < 5 THEN RAISE EXCEPTION '§7: a modeler lists % of the organization''s 5 keys', v_n; END IF;
@@ -173,10 +188,13 @@ BEGIN
   FOREACH v_actor IN ARRAY ARRAY[v_idle, v_orphan] LOOP
     v_refused := false;
     BEGIN
-      SET LOCAL ROLE anon;
+      SET LOCAL ROLE authenticated;
+      PERFORM pg_temp.browser_session(v_actor);
       PERFORM public.create_api_key(v_actor, 'x@example.invalid', 'nope',
         ARRAY['read:data'], 'test', NULL, NULL, NULL, 'personal');
-    EXCEPTION WHEN raise_exception THEN
+    EXCEPTION WHEN insufficient_privilege THEN
+      v_refused := true;
+    WHEN raise_exception THEN
       v_refused := SQLERRM LIKE '%forbidden%';
     END;
     RESET ROLE;
@@ -184,14 +202,16 @@ BEGIN
   END LOOP;
 
   -- §9
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_viewer);
   SELECT c.can_manage, c.self_service_scopes INTO v_manage, v_scopes
     FROM public.api_key_caller(v_viewer, 'd730v@example.invalid') c;
   RESET ROLE;
   IF v_manage OR NOT ('read:data' = ANY (v_scopes)) OR 'write:runs' = ANY (v_scopes) THEN
     RAISE EXCEPTION '§9: api_key_caller tells a viewer manage=% scopes=%', v_manage, v_scopes;
   END IF;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_mod);
   SELECT c.can_manage INTO v_manage FROM public.api_key_caller(v_mod, 'd730m@example.invalid') c;
   RESET ROLE;
   IF NOT v_manage THEN RAISE EXCEPTION '§9: api_key_caller tells a modeler they cannot manage keys'; END IF;

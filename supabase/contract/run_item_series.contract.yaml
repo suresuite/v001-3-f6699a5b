@@ -39,6 +39,11 @@ governance:
   audited: false
   rls_enabled: true
   note: >-
+    D309/D310 candidate (not deployed): browser reads require a verified active
+    principal and scoped project/owner access. Anonymous tenant grants are revoked;
+    direct browser mutations are closed and authorized RPCs retain their own role gates.
+    The generated schema owns the exact policies; D310 owns live-grant evidence.
+    Historical context before this candidate:
     `write: simulation_lab` because the table has two PREDICATE-LESS write
     policies — `run_item_series_auth_all` (authenticated) and
     `run_item_series_anon_write` (anon and authenticated, widened by WP 7.1 stage

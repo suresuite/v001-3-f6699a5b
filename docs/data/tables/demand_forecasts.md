@@ -41,13 +41,13 @@ partially or get corrected — the write fails.
 | | |
 |---|---|
 | Read capability | `project_member` |
-| Write capability | `project_modeler_or_admin` |
+| Write capability | `data_edit_inputs` |
 | Minimum project role | `editor` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
 | Policies on the table | 6 — all carry a predicate |
 
-RLS with NO `anon` policy: §4 D28's list of unconditional policies is meant to shrink, and nothing needs one. The run reads through the snapshot (SECURITY DEFINER), the worker as service role, and /policies and the Data map through `get_project_demand_forecasts`, which names its caller. Writes: the project's modeler or an admin, as on `customers`. The three WP 2.3 audit triggers and the WP 10.1 graph-state triggers are created with the table.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; browser writes require `data_edit_inputs` on the project. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: RLS with NO `anon` policy: §4 D28's list of unconditional policies is meant to shrink, and nothing needs one. The run reads through the snapshot (SECURITY DEFINER), the worker as service role, and /policies and the Data map through `get_project_demand_forecasts`, which names its caller. Writes: the project's modeler or an admin, as on `customers`. The three WP 2.3 audit triggers and the WP 10.1 graph-state triggers are created with the table.
 
 <details><summary>6 RLS policies</summary>
 
@@ -304,6 +304,6 @@ When the row last changed. Server-set.
 
 ---
 
-*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/demand_forecasts.contract.yaml`, table created by `20261003000001_demand_per_row.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

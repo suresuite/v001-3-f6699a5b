@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- §4 D292 · THE ENGINE BUILD LEDGER (Phase 15 / WP 15.2, `20261004000001`).
 --
 -- §1 a boot report records its build: the same build twice is ONE row whose
@@ -104,14 +105,15 @@ BEGIN
   IF EXISTS (SELECT 1 FROM public.sim_engine_builds WHERE code_version = '') THEN
     RAISE EXCEPTION 'R820 §4: a queued run with no code version recorded a build';
   END IF;
-  SET LOCAL ROLE anon;
-  UPDATE public.simulation_runs SET code_version = k_run, status = 'done' WHERE id = v_run;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_user);
+  PERFORM public.persist_browser_result(v_run,v_proj,p_run_update => jsonb_build_object('code_version',k_run,'status','done'), _actor_user_id => v_user);
   RESET ROLE;
   SELECT * INTO v_b1 FROM public.sim_engine_builds WHERE engine_id = v_scsim AND code_version = k_run;
   IF NOT FOUND OR v_b1.first_seen_by <> 'run' THEN
     RAISE EXCEPTION 'R820 §4: a run written as anon did not record the build that computed it';
   END IF;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
   v_state := NULL;
   BEGIN INSERT INTO public.sim_engine_builds (engine_id, code_version, first_seen_by) VALUES (v_scsim, 'scsim-x+y', 'run');
   EXCEPTION WHEN insufficient_privilege THEN v_state := 'refused'; END;
@@ -120,13 +122,16 @@ BEGIN
 
   -- ══ §5 · withdrawal ══
   v_state := NULL;
+  PERFORM pg_temp.browser_session(v_user);
   BEGIN PERFORM public.sim_engine_build_withdraw(v_b2.id, 'wrong', v_user);
   EXCEPTION WHEN insufficient_privilege THEN v_state := 'refused'; END;
   IF v_state IS NULL THEN RAISE EXCEPTION 'R820 §5: a non-super-admin withdrew a build'; END IF;
   v_state := NULL;
+  PERFORM pg_temp.browser_session(v_super);
   BEGIN PERFORM public.sim_engine_build_withdraw(v_b2.id, '  ', v_super);
   EXCEPTION WHEN check_violation THEN v_state := 'refused'; END;
   IF v_state IS NULL THEN RAISE EXCEPTION 'R820 §5: a withdrawal without a reason was accepted'; END IF;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.sim_engine_build_withdraw(v_b2.id, 'R820: MRP horizon off by one', v_super);
   SELECT * INTO v_b2 FROM public.sim_engine_builds WHERE id = v_b2.id;
   IF v_b2.withdrawn_at IS NULL OR v_b2.withdrawn_by IS DISTINCT FROM v_super THEN

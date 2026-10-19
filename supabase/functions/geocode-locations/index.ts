@@ -245,14 +245,11 @@ serve(async (req) => {
 
       for (const update of updates) {
         console.log('Updating database for node:', update!.id);
-        const { error: updateError } = await supabaseClient
-          .from('node_list')
-          .update({
-            location_text: update!.location_text,
-            latitude: update!.latitude,
-            longitude: update!.longitude
-          })
-          .eq('id', update!.id);
+        const { error: updateError } = await supabaseClient.rpc('apply_geocode', {
+          p_project_id: projectId, p_node_id: update!.id,
+          p_location_text: update!.location_text, p_latitude: update!.latitude,
+          p_longitude: update!.longitude, _actor_user_id: who.id,
+        });
 
         if (updateError) {
           console.error('Update error:', updateError);
@@ -291,14 +288,11 @@ serve(async (req) => {
         console.log('Plant geocoding result:', plantCoords);
         
         if (plantCoords) {
-          const { error: plantUpdateErr } = await supabaseClient
-            .from('projects')
-            .update({
-              plant_location_text: plantLocationText,
-              plant_latitude: plantCoords.latitude,
-              plant_longitude: plantCoords.longitude
-            })
-            .eq('id', projectId);
+          const { error: plantUpdateErr } = await supabaseClient.rpc('apply_geocode', {
+            p_project_id: projectId, p_node_id: null, p_location_text: plantLocationText,
+            p_latitude: plantCoords.latitude, p_longitude: plantCoords.longitude,
+            _actor_user_id: who.id, p_plant: true,
+          });
           
           if (plantUpdateErr) {
             console.error('Plant update error:', plantUpdateErr);

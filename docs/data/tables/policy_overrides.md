@@ -38,13 +38,13 @@ partially or get corrected — the write fails.
 | | |
 |---|---|
 | Read capability | any project member |
-| Write capability | `data_editing` |
+| Write capability | `data_edit_policies` |
 | Minimum project role | `editor` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
 | Policies on the table | 6 — all carry a predicate |
 
-`write` names the capability that exists today. WP 2.2 splits `data_editing` into `data_edit_inputs` (tier 2) and `data_edit_policies` (tier 4); this row becomes `data_edit_policies` then.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; browser writes require `data_edit_policies` on the project. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: `write` names the capability that exists today. WP 2.2 splits `data_editing` into `data_edit_inputs` (tier 2) and `data_edit_policies` (tier 4); this row becomes `data_edit_policies` then.
 
 <details><summary>6 RLS policies</summary>
 
@@ -255,6 +255,6 @@ WP 4.4 · the `current_graph_hash` of the moment this override was SEEDED from p
 
 ---
 
-*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/policy_overrides.contract.yaml`, table created by `20260607055908_b3e74750-d55a-4eb6-8bdc-460bc4cb90a6.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

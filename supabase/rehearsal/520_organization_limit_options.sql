@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- Organization plan · more limit options · D218 — an organization's project limit and
 -- user limit may each be 1, 2, 3, 5, 10, 20, 50 or 100, or NULL for unlimited
 -- (`20260930000012`; D207's `420` covers what the limits COUNT and how they are enforced).
@@ -35,7 +36,7 @@ BEGIN
   INSERT INTO public.approved_users (id, name, email, password_hash, role, organization, organization_id, force_password_change, password_expires_at) VALUES
     (v_super, 'D218 super', 'd218s@example.invalid', extensions.crypt('pw-super-1', extensions.gen_salt('bf')), 'super_admin', 'D218 Org', v_org, false, now() + interval '30 days'),
     (v_a1,    'D218 a1',    'd218a1@example.invalid', extensions.crypt('pw-a1-1', extensions.gen_salt('bf')),   'user',        'D218 Org', v_org, false, now() + interval '30 days');
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
 
   -- ══ §1 · the CHECKs ══
   FOREACH v_limit IN ARRAY ARRAY[1, 2, 3, 5, 10, 20, 50, 100] LOOP
@@ -55,7 +56,8 @@ BEGIN
 
   -- ══ §2 · admin_set_org_limits ══
   FOREACH v_limit IN ARRAY ARRAY[10, 20, 50, 100] LOOP
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_set_org_limits(v_super, 'd218s@example.invalid', v_org, v_limit, v_limit);
     RESET ROLE;
     SELECT project_limit, user_limit INTO r FROM public.organizations WHERE id = v_org;
@@ -64,7 +66,8 @@ BEGIN
     END IF;
   END LOOP;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_set_org_limits(v_super, 'd218s@example.invalid', v_org, 25, NULL);
     RESET ROLE;
     RAISE EXCEPTION 'D218/520 §2: the verb accepted project limit 25';
@@ -74,7 +77,8 @@ BEGIN
     IF v_msg NOT LIKE 'invalid project limit 25%' THEN RAISE; END IF;
   END;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_set_org_limits(v_super, 'd218s@example.invalid', v_org, NULL, 1000);
     RESET ROLE;
     RAISE EXCEPTION 'D218/520 §2: the verb accepted user limit 1000';
@@ -85,7 +89,8 @@ BEGIN
   END;
 
   -- ══ §3 · admin_create_organization ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   v_org_n := public.admin_create_organization(v_super, 'd218s@example.invalid', 'D218 New', NULL, 'year', 50, 100);
   RESET ROLE;
   SELECT project_limit, user_limit INTO r FROM public.organizations WHERE id = v_org_n;
@@ -93,7 +98,8 @@ BEGIN
     RAISE EXCEPTION 'D218/520 §3: created with 50/100, stored %/%', r.project_limit, r.user_limit;
   END IF;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_create_organization(v_super, 'd218s@example.invalid', 'D218 Bad', NULL, NULL, NULL, 25);
     RESET ROLE;
     RAISE EXCEPTION 'D218/520 §3: admin_create_organization accepted user limit 25';
@@ -104,9 +110,11 @@ BEGIN
   END;
 
   -- ══ §4 · a limit of 10 is enforced ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_org_limits(v_super, 'd218s@example.invalid', v_org, 10, NULL);
   FOR v_i IN 1..10 LOOP
+    PERFORM pg_temp.browser_session(v_a1);
     PERFORM public.create_project(p_name => 'D218 project ' || v_i, p_plant => 'D218 plant', p_model => 'Make-To-Order',
               p_bom_level => 'single', p_user_id => v_a1, p_user_email => 'd218a1@example.invalid',
               p_user_name => 'D218 a1', p_data_type => 'curated');
@@ -116,7 +124,8 @@ BEGIN
     RAISE EXCEPTION 'D218/520 §4: a limit of 10 did not admit ten projects';
   END IF;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_a1);
     PERFORM public.create_project(p_name => 'D218 project 11', p_plant => 'D218 plant', p_model => 'Make-To-Order',
               p_bom_level => 'single', p_user_id => v_a1, p_user_email => 'd218a1@example.invalid',
               p_user_name => 'D218 a1', p_data_type => 'curated');

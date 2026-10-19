@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- §4 D251 · FORGOTTEN PASSWORDS: THE PERSON ASKS, A SUPER ADMIN RESETS.
 --
 -- `20261001000011` adds `password_reset_requests`, `request_password_reset`, the super
@@ -40,10 +41,10 @@ BEGIN
     (v_user,  'pwr-u@example.invalid', 'Pwr User',  'x', 'user',        'PWR Org', v_org, true),
     (v_gone,  'pwr-g@example.invalid', 'Pwr Gone',  'x', 'user',        'PWR Org', v_org, false);
 
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
 
   -- ══ §1 · the same answer ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
   PERFORM public.request_password_reset('pwr-u@example.invalid');
   PERFORM public.request_password_reset('pwr-nobody@example.invalid');
   PERFORM public.request_password_reset('pwr-g@example.invalid');
@@ -57,7 +58,7 @@ BEGIN
   SELECT id INTO v_req FROM public.password_reset_requests WHERE user_id = v_user AND status = 'open';
 
   -- ══ §2 · one open ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
   PERFORM public.request_password_reset('  PWR-U@Example.Invalid ');
   RESET ROLE;
   SELECT count(*) INTO v_n FROM public.password_reset_requests WHERE user_id = v_user;
@@ -77,7 +78,7 @@ BEGIN
   IF v_n <> 0 THEN RAISE EXCEPTION 'D251/610 §3: anon read % rows directly', v_n; END IF;
   v_code := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
     INSERT INTO public.password_reset_requests (user_id, status) VALUES (v_gone, 'open');
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN RESET ROLE; v_code := SQLSTATE;
@@ -87,7 +88,8 @@ BEGIN
   -- ══ §4 · refusal ══
   v_code := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_admin);
     PERFORM count(*) FROM public.admin_list_password_reset_requests(v_admin, 'pwr-a@example.invalid');
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN RESET ROLE; v_code := SQLERRM;
@@ -97,7 +99,8 @@ BEGIN
   END IF;
   v_code := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_admin);
     PERFORM public.admin_dismiss_password_reset_request(v_admin, 'pwr-a@example.invalid', v_req);
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN RESET ROLE; v_code := SQLERRM;
@@ -107,7 +110,8 @@ BEGIN
   END IF;
   v_code := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_admin);
     PERFORM public.admin_reset_user_password(v_admin, 'pwr-a@example.invalid', v_user, 'Temp-Pass-1234');
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN RESET ROLE; v_code := SQLERRM;
@@ -119,7 +123,8 @@ BEGIN
   IF v_code <> 'open' THEN RAISE EXCEPTION 'D251/610 §4: a refused call moved the request to %', v_code; END IF;
 
   -- ══ §5 · the list ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   SELECT * INTO v_row FROM public.admin_list_password_reset_requests(v_super, 'pwr-s@example.invalid')
    WHERE user_id = v_user;
   RESET ROLE;
@@ -128,7 +133,8 @@ BEGIN
   END IF;
 
   -- ══ §6 · the reset resolves it ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_reset_user_password(v_super, 'pwr-s@example.invalid', v_user, 'Temp-Pass-1234');
   RESET ROLE;
   SELECT * INTO v_row FROM public.approved_users WHERE id = v_user;
@@ -149,21 +155,23 @@ BEGIN
    WHERE action = 'user.reset_password' AND target_id = v_user::text AND actor_user_id = v_super
      AND after ->> 'resolved_request_id' = v_req::text;
   IF v_n <> 1 THEN RAISE EXCEPTION 'D251/610 §6: % reset audit rows naming the request, expected 1', v_n; END IF;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   SELECT count(*) INTO v_n FROM public.admin_list_password_reset_requests(v_super, 'pwr-s@example.invalid')
    WHERE user_id = v_user;
   RESET ROLE;
   IF v_n <> 0 THEN RAISE EXCEPTION 'D251/610 §6: a resolved request is still listed'; END IF;
 
   -- ══ §7 · dismiss ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
   PERFORM public.request_password_reset('pwr-u@example.invalid');
   RESET ROLE;
   SELECT id INTO v_req2 FROM public.password_reset_requests WHERE user_id = v_user AND status = 'open';
   IF v_req2 IS NULL OR v_req2 = v_req THEN
     RAISE EXCEPTION 'D251/610 §7: asking after a resolved request opened no new one';
   END IF;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_dismiss_password_reset_request(v_super, 'pwr-s@example.invalid', v_req2);
   RESET ROLE;
   SELECT status INTO v_code FROM public.password_reset_requests WHERE id = v_req2;
@@ -173,7 +181,8 @@ BEGIN
   IF v_n <> 1 THEN RAISE EXCEPTION 'D251/610 §7: % dismiss audit rows, expected 1', v_n; END IF;
   v_code := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_dismiss_password_reset_request(v_super, 'pwr-s@example.invalid', v_req2);
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN RESET ROLE; v_code := SQLERRM;

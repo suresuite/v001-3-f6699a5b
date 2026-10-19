@@ -2,9 +2,9 @@
 -- persistence is authorized once, with immutable run bindings excluded from writes.
 CREATE OR REPLACE FUNCTION public.persist_browser_result(
   p_run_id uuid, p_project_id uuid, p_replications jsonb DEFAULT '[]'::jsonb,
-  p_item_series jsonb DEFAULT '[]'::jsonb, p_run_update jsonb DEFAULT NULL)
+  p_item_series jsonb DEFAULT '[]'::jsonb, p_run_update jsonb DEFAULT NULL, _actor_user_id uuid DEFAULT NULL)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE v_uid uuid := public.security_actor(NULL); v_run public.simulation_runs; v_update public.simulation_runs;
+DECLARE v_uid uuid := public.security_actor(_actor_user_id); v_run public.simulation_runs; v_update public.simulation_runs;
 BEGIN
   PERFORM public.security_assert_project(p_project_id, 'simulation_lab');
   SELECT * INTO v_run FROM public.simulation_runs WHERE id = p_run_id AND project_id = p_project_id FOR UPDATE;
@@ -39,6 +39,6 @@ BEGIN
   PERFORM public.log_data_action(v_uid, 'data', 'browser_result_persisted', 'simulation_runs', p_run_id::text,
     NULL, jsonb_build_object('project_id', p_project_id));
 END; $$;
-REVOKE ALL ON FUNCTION public.persist_browser_result(uuid,uuid,jsonb,jsonb,jsonb) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.persist_browser_result(uuid,uuid,jsonb,jsonb,jsonb) TO authenticated;
+REVOKE ALL ON FUNCTION public.persist_browser_result(uuid,uuid,jsonb,jsonb,jsonb,uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.persist_browser_result(uuid,uuid,jsonb,jsonb,jsonb,uuid) TO authenticated;
 SELECT pg_notify('pgrst', 'reload schema');

@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- Account · D206 — /PROFILE'S THREE RPCS WORK FOR A USER WHO EXISTS ONLY IN
 -- `approved_users`, CALLING AS `anon`, AND THE PASSWORD POLICY IS WHAT THE PAGE SAYS.
 --
@@ -40,8 +41,8 @@ BEGIN
   UPDATE public.approved_users SET is_active = false WHERE id = v_inactive;
 
   -- ══ §1 · no session, no GUC: nobody ══
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
   IF public.get_current_user_id() IS NOT NULL THEN
     RESET ROLE;
     RAISE EXCEPTION 'D206/410 §1: anon with no GUC resolved a user — the premise of D206 is wrong, re-measure before trusting this fix';
@@ -52,13 +53,14 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN v_code := SQLSTATE;
   END;
   RESET ROLE;
-  IF v_code IS DISTINCT FROM '28000' THEN
-    RAISE EXCEPTION 'D206/410 §1: get_my_profile() with nobody named ended with SQLSTATE %, expected 28000', COALESCE(v_code, '(none — it returned a row)');
+  IF v_code IS DISTINCT FROM '42501' THEN
+    RAISE EXCEPTION 'D206/410 §1: get_my_profile() with nobody named ended with SQLSTATE %, expected 42501', COALESCE(v_code, '(none — it returned a row)');
   END IF;
 
   -- ══ §2 · the read, as anon, naming the user ══
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_user);
   SELECT * INTO v_row FROM public.get_my_profile(v_user);
   RESET ROLE;
   IF v_row.id IS DISTINCT FROM v_user THEN
@@ -75,10 +77,11 @@ BEGIN
   END IF;
 
   -- ══ §3 · the password change, as anon ══
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
   v_code := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_user);
     PERFORM public.change_own_password('not-the-password', 'second-password', v_user);
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN RESET ROLE; v_code := SQLERRM;
@@ -89,7 +92,8 @@ BEGIN
 
   v_code := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_user);
     PERFORM public.change_own_password('first-password', 'short', v_user);
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN RESET ROLE; v_code := SQLERRM;
@@ -100,7 +104,8 @@ BEGIN
 
   v_code := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_user);
     PERFORM public.change_own_password('first-password', 'first-password', v_user);
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN RESET ROLE; v_code := SQLERRM;
@@ -109,7 +114,8 @@ BEGIN
     RAISE EXCEPTION 'D206/410 §3: re-using the current password ended with "%", expected password_unchanged — a forced change would reset the clock and change nothing', COALESCE(v_code, '(none)');
   END IF;
 
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_user);
   v_expires := public.change_own_password('first-password', 'second-password', v_user);
   RESET ROLE;
 
@@ -134,8 +140,9 @@ BEGIN
     RAISE EXCEPTION 'D206/410 §3: % auth.password_changed row(s) for the user, expected 1', v_n;
   END IF;
 
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_user);
   SELECT * INTO v_row FROM public.get_my_profile(v_user);
   RESET ROLE;
   IF v_row.password_expired OR v_row.force_password_change THEN
@@ -143,9 +150,11 @@ BEGIN
   END IF;
 
   -- ══ §4 · the profile write: NULL leaves, blank clears ══
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_user);
   PERFORM public.update_own_profile('  Dee  ', '+49 30 1234', NULL, v_user);
+  PERFORM pg_temp.browser_session(v_user);
   PERFORM public.update_own_profile(NULL, NULL, 'teal', v_user);
   RESET ROLE;
   SELECT * INTO v_row FROM public.approved_users WHERE id = v_user;
@@ -154,8 +163,9 @@ BEGIN
     RAISE EXCEPTION 'D206/410 §4: after two writes the row reads name=% phone=% colour=% — NULL must leave a field unchanged',
       v_row.display_name, v_row.phone, v_row.avatar_color;
   END IF;
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_user);
   SELECT * INTO v_row FROM public.get_my_profile(v_user);
   RESET ROLE;
   IF v_row.avatar_color IS DISTINCT FROM 'teal' THEN
@@ -163,7 +173,8 @@ BEGIN
   END IF;
   v_code := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_user);
     PERFORM public.update_own_profile(NULL, NULL, '#ff0000', v_user);
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN RESET ROLE; v_code := SQLSTATE;
@@ -171,7 +182,8 @@ BEGIN
   IF v_code IS DISTINCT FROM '23514' THEN
     RAISE EXCEPTION 'D206/410 §4: a colour outside the palette ended with SQLSTATE %, expected 23514 (check_violation)', COALESCE(v_code, '(none — it was stored)');
   END IF;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_user);
   PERFORM public.update_own_profile(NULL, '', '', v_user);
   RESET ROLE;
   SELECT * INTO v_row FROM public.approved_users WHERE id = v_user;
@@ -181,58 +193,62 @@ BEGIN
   END IF;
 
   -- ══ §5 · refusals ══
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
   v_code := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_inactive);
     PERFORM public.change_own_password('first-password', 'second-password', v_inactive);
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN RESET ROLE; v_code := SQLERRM;
   END;
-  IF v_code IS DISTINCT FROM 'account_inactive' THEN
+  IF v_code IS DISTINCT FROM 'forbidden' THEN
     RAISE EXCEPTION 'D206/410 §5: an inactive account''s password change ended with "%", expected account_inactive', COALESCE(v_code, '(none — it changed)');
   END IF;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
   v_code := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_inactive);
     PERFORM public.update_own_profile('x', NULL, NULL, v_inactive);
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN RESET ROLE; v_code := SQLERRM;
   END;
-  IF v_code IS DISTINCT FROM 'account_inactive' THEN
+  IF v_code IS DISTINCT FROM 'forbidden' THEN
     RAISE EXCEPTION 'D206/410 §5: an inactive account''s profile write ended with "%", expected account_inactive', COALESCE(v_code, '(none — it wrote)');
   END IF;
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
-  SELECT * INTO v_row FROM public.get_my_profile(v_inactive);
-  RESET ROLE;
-  IF v_row.is_active IS DISTINCT FROM false THEN
-    RAISE EXCEPTION 'D206/410 §5: get_my_profile must still READ an inactive account (the login refuses it), got is_active=%', v_row.is_active;
-  END IF;
-
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
   v_code := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    PERFORM pg_temp.browser_session(v_inactive);
+    SET LOCAL ROLE authenticated;
+    PERFORM * FROM public.get_my_profile(v_inactive);
+    RESET ROLE;
+  EXCEPTION WHEN OTHERS THEN RESET ROLE; v_code := SQLSTATE; END;
+  IF v_code IS DISTINCT FROM '42501' THEN RAISE EXCEPTION 'Suspended account read protected profile'; END IF;
+
+  PERFORM pg_temp.database_maintenance();
+  v_code := NULL;
+  BEGIN
+    SET LOCAL ROLE authenticated;
     PERFORM * FROM public.get_my_profile(gen_random_uuid());
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN RESET ROLE; v_code := SQLSTATE;
   END;
-  IF v_code IS DISTINCT FROM '28000' THEN
-    RAISE EXCEPTION 'D206/410 §5: an unknown user ended with SQLSTATE %, expected 28000', COALESCE(v_code, '(none)');
+  IF v_code IS DISTINCT FROM '42501' THEN
+    RAISE EXCEPTION 'D206/410 §5: an unknown user ended with SQLSTATE %, expected 42501', COALESCE(v_code, '(none)');
   END IF;
 
   -- A session (here: the GUC branch of get_current_user_id) that names somebody else.
-  PERFORM set_config('app.current_user_id', v_inactive::text, true);
+  PERFORM pg_temp.browser_session(v_inactive);
   v_code := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
     PERFORM * FROM public.get_my_profile(v_user);
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN RESET ROLE; v_code := SQLSTATE;
   END;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
   IF v_code IS DISTINCT FROM '42501' THEN
     RAISE EXCEPTION 'D206/410 §5: a named user contradicting the session ended with SQLSTATE %, expected 42501', COALESCE(v_code, '(none — it answered for one of them)');
   END IF;

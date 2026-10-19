@@ -24,6 +24,11 @@ governance:
   audited: false
   rls_enabled: true
   note: >-
+    D309/D310 candidate (not deployed): browser reads require a verified active
+    principal and scoped project/owner access. Anonymous tenant grants are revoked;
+    direct browser mutations are closed and authorized RPCs retain their own role gates.
+    The generated schema owns the exact policies; D310 owns live-grant evidence.
+    Historical context before this candidate:
     `write: null` again literal. SELECT is limited to the grantor, the grantee and
     super admins; there is NO write policy, so RLS denies writes and
     `grant_project_delegation()` / `revoke_project_delegation()` are the only way

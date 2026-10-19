@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- Phase 16 / WP 16.2 · A LANE'S OWN LEAD-TIME SPREAD LANDS, NORMALIZES AND
 -- REACHES THE SNAPSHOT.
 --
@@ -57,10 +58,12 @@ BEGIN
       'parsed', jsonb_build_object('supplier_id', 'S3', 'material_id', 'M1',
         'volume', 10, 'time_unit', 'week', 'unit_price', 5, 'lead_time', 2),
       'findings', '[]'::jsonb));
+  PERFORM pg_temp.browser_session(v_user);
   v_res := public.ingest_land_file(
     v_project, v_user, 'csv', 'transactional', 'inbound_logistics',
     'inbound.csv', 'ingest', 'p/wp152/in.csv', 'text/csv', 256, repeat('b', 64), v_rows);
   v_run := (v_res ->> 'run_id')::uuid;
+  PERFORM pg_temp.browser_session(v_user);
   v_res := public.ingest_apply_run(v_run, v_user);
   IF (v_res ->> 'rows_promoted')::int <> 3 THEN
     RAISE EXCEPTION 'WP 16.2: the inbound promotion moved % row(s), expected 3 — %',
@@ -84,9 +87,11 @@ BEGIN
   END IF;
 
   -- ── 2 · re-promotion is idempotent ──────────────────────────────────────
+  PERFORM pg_temp.browser_session(v_user);
   v_res := public.ingest_land_file(
     v_project, v_user, 'csv', 'transactional', 'inbound_logistics',
     'inbound.csv', 'ingest', 'p/wp152/in2.csv', 'text/csv', 256, repeat('c', 64), v_rows);
+  PERFORM pg_temp.browser_session(v_user);
   v_res := public.ingest_apply_run((v_res ->> 'run_id')::uuid, v_user);
   SELECT count(*) INTO v_n FROM public.inbound_logistics
    WHERE project_id = v_project AND supplier_id = 'S1'
@@ -102,6 +107,7 @@ BEGIN
   -- ── 3 · the CHECK refuses a bad ordering and an unknown shape ───────────
   v_failed := false;
   BEGIN
+    PERFORM pg_temp.browser_session(v_user);
     v_res := public.ingest_land_file(
       v_project, v_user, 'csv', 'transactional', 'inbound_logistics',
       'bad.csv', 'ingest', 'p/wp152/bad.csv', 'text/csv', 64, repeat('d', 64),
@@ -110,6 +116,7 @@ BEGIN
           'volume', 1, 'time_unit', 'week', 'unit_price', 1, 'lead_time', 3,
           'lead_time_dist', 'uniform', 'lead_time_min', 6, 'lead_time_max', 2),
         'findings', '[]'::jsonb)));
+    PERFORM pg_temp.browser_session(v_user);
     v_res := public.ingest_apply_run((v_res ->> 'run_id')::uuid, v_user);
   EXCEPTION WHEN check_violation THEN
     v_failed := true;

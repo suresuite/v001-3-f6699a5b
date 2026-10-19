@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- §4 D211 · /admin/users/:userId SHOWS AN ACCOUNT'S ORGANIZATIONS, PROJECTS AND RIGHTS,
 -- AND A SUPER ADMIN CAN CHANGE THEM THERE.
 --
@@ -81,13 +82,14 @@ BEGIN
   ON CONFLICT (role, capability_key) DO NOTHING;
 
   -- The browser's shape: no GUC, no session.
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
 
   -- ══ §1 · refusals ══
   FOREACH v_fn IN ARRAY ARRAY['read','org_role','member','remove'] LOOP
     v_code := NULL;
+    PERFORM pg_temp.browser_session(v_user);
     BEGIN
-      SET LOCAL ROLE anon;
+      SET LOCAL ROLE authenticated;
       CASE v_fn
         WHEN 'read'     THEN PERFORM public.admin_get_user_memberships(v_user, 'd211u@example.invalid', v_user);
         WHEN 'org_role' THEN PERFORM public.admin_set_user_org_role(v_user, 'd211u@example.invalid', v_user, v_org_a, 'owner');
@@ -105,9 +107,12 @@ BEGIN
   END LOOP;
 
   -- ══ §2 · the read ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_project_member(v_super, 'd211s@example.invalid', v_user, v_p2, 'editor', NULL, 'D211 editor');
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_project_member(v_super, 'd211s@example.invalid', v_user, v_p3, 'analyst', now() + interval '7 days', NULL);
+  PERFORM pg_temp.browser_session(v_super);
   v_out := public.admin_get_user_memberships(v_super, 'd211s@example.invalid', v_user);
   RESET ROLE;
 
@@ -157,6 +162,7 @@ BEGIN
   -- ══ §3 · the modeler stays a standing owner ══
   FOREACH v_fn IN ARRAY ARRAY['demote','expire','remove'] LOOP
     v_code := NULL;
+    PERFORM pg_temp.browser_session(v_super);
     BEGIN
       CASE v_fn
         WHEN 'demote' THEN PERFORM public.admin_set_project_member(v_super, 'd211s@example.invalid', v_user, v_p1, 'viewer');
@@ -178,6 +184,7 @@ BEGIN
   -- ══ §4 · expiry ══
   v_code := NULL;
   BEGIN
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_set_project_member(v_super, 'd211s@example.invalid', v_user, v_p2, 'viewer', now() - interval '1 day');
   EXCEPTION WHEN OTHERS THEN v_code := SQLERRM;
   END;
@@ -186,6 +193,7 @@ BEGIN
   END IF;
   UPDATE public.project_members SET expires_at = now() - interval '1 minute'
    WHERE project_id = v_p3 AND user_id = v_user;
+  PERFORM pg_temp.browser_session(v_super);
   v_out := public.admin_get_user_memberships(v_super, 'd211s@example.invalid', v_user);
   SELECT p INTO v_proj FROM jsonb_array_elements(v_out -> 'projects') p WHERE p ->> 'project_id' = v_p3::text;
   IF v_proj IS NULL OR (v_proj -> 'member' ->> 'expired')::boolean IS NOT TRUE OR v_proj ->> 'effective_role' IS NOT NULL THEN
@@ -193,8 +201,10 @@ BEGIN
   END IF;
 
   -- ══ §5 · removal ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_remove_project_member(v_super, 'd211s@example.invalid', v_user, v_p3);
+  PERFORM pg_temp.browser_session(v_super);
   v_out := public.admin_get_user_memberships(v_super, 'd211s@example.invalid', v_user);
   RESET ROLE;
   IF EXISTS (SELECT 1 FROM jsonb_array_elements(v_out -> 'projects') p WHERE p ->> 'project_id' = v_p3::text) THEN
@@ -202,6 +212,7 @@ BEGIN
   END IF;
   v_code := NULL;
   BEGIN
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_remove_project_member(v_super, 'd211s@example.invalid', v_user, v_p3);
   EXCEPTION WHEN OTHERS THEN v_code := SQLERRM;
   END;
@@ -210,7 +221,9 @@ BEGIN
   END IF;
 
   -- ══ §6 · a second organization: listed; its rights are the rights in the project (D231) ══
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_add_org_member(v_super, 'd211s@example.invalid', v_user, v_org_b, 'member');
+  PERFORM pg_temp.browser_session(v_super);
   v_out := public.admin_get_user_memberships(v_super, 'd211s@example.invalid', v_user);
   IF jsonb_array_length(v_out -> 'organizations') IS DISTINCT FROM 2
      OR v_out ->> 'active_organization_id' IS DISTINCT FROM v_org_a::text THEN
@@ -224,10 +237,12 @@ BEGIN
 
   -- The account's own act, in the browser's shape: no session actor left over from the
   -- admin calls above (the self-service resolver refuses a session naming someone else).
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_user);
   PERFORM public.switch_my_organization(v_org_b, v_user);
   RESET ROLE;
+  PERFORM pg_temp.browser_session(v_super);
   v_out := public.admin_get_user_memberships(v_super, 'd211s@example.invalid', v_user);
   SELECT p INTO v_proj FROM jsonb_array_elements(v_out -> 'projects') p WHERE p ->> 'project_id' = v_p3::text;
   IF v_proj IS NULL OR (v_proj ->> 'visible')::boolean IS NOT TRUE OR (v_proj ->> 'in_active_org')::boolean IS NOT TRUE THEN
@@ -241,9 +256,12 @@ BEGIN
   END IF;
 
   -- ══ §7 · org role, per organization ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_user_org_role(v_super, 'd211s@example.invalid', v_user, v_org_a, 'admin');
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_user_org_role(v_super, 'd211s@example.invalid', v_user, v_org_b, 'owner');
+  PERFORM pg_temp.browser_session(v_super);
   v_out := public.admin_get_user_memberships(v_super, 'd211s@example.invalid', v_user);
   RESET ROLE;
   IF (SELECT o ->> 'org_role' FROM jsonb_array_elements(v_out -> 'organizations') o WHERE o ->> 'id' = v_org_a::text) IS DISTINCT FROM 'admin'
@@ -252,6 +270,7 @@ BEGIN
   END IF;
   v_code := NULL;
   BEGIN
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_set_user_org_role(v_super, 'd211s@example.invalid', v_user, v_org_a, 'overlord');
   EXCEPTION WHEN OTHERS THEN v_code := SQLERRM;
   END;
@@ -260,6 +279,7 @@ BEGIN
   END IF;
   v_code := NULL;
   BEGIN
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_set_user_org_role(v_super, 'd211s@example.invalid', v_other, v_org_a, 'owner');
   EXCEPTION WHEN OTHERS THEN v_code := SQLERRM;
   END;

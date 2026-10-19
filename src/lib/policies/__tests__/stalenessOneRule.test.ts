@@ -174,6 +174,6 @@ describe("WP 4.4 · `seeded_from_hash` and the badge", () => {
   it("it refuses a project the caller cannot reach", () => {
     // SECURITY DEFINER, returning per-table row counts. Unguarded, it reports a
     // dataset's size to anyone who asks.
-    expect(fn("project_freshness").sql).toContain("has_project_access");
+    expect(fn("project_freshness").sql).toContain("security_project_allowed(p_project_id, NULL)");
   });
 });

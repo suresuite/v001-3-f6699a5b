@@ -23,7 +23,7 @@ BEGIN
     v_id := NULLIF(current_setting('app.current_user_id', true), '')::uuid;
   ELSE
     IF c->>'role' IS DISTINCT FROM 'authenticated' OR c->>'aud' IS DISTINCT FROM 'authenticated'
-      OR c->>'iss' IS DISTINCT FROM 'https://wckdrutwkytwcomrlpib.supabase.co/auth/v1'
+      OR c->>'iss' IS DISTINCT FROM (SELECT issuer FROM public.browser_session_config WHERE singleton)
       OR c->>'app_identity' IS DISTINCT FROM 'approved_users'
       OR jsonb_typeof(c->'exp') IS DISTINCT FROM 'number'
       OR (c->>'exp')::numeric <= extract(epoch from now()) THEN RETURN NULL; END IF;
@@ -38,9 +38,9 @@ CREATE OR REPLACE FUNCTION public.security_actor(p_asserted uuid DEFAULT NULL)
 RETURNS uuid LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_uid uuid := public.get_current_user_id();
 BEGIN
-  IF public.security_is_service() THEN RETURN COALESCE(p_asserted, v_uid); END IF;
+  IF public.security_is_service() THEN RETURN p_asserted; END IF;
   IF v_uid IS NULL OR (p_asserted IS NOT NULL AND p_asserted <> v_uid) THEN
-    RAISE EXCEPTION 'not_authenticated: verified session required' USING ERRCODE = '42501';
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = '42501';
   END IF;
   RETURN v_uid;
 END; $$;
@@ -90,7 +90,7 @@ CREATE OR REPLACE FUNCTION public.security_assert_project(p_project_id uuid, p_c
 RETURNS void LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
 BEGIN
   IF NOT public.security_is_service() AND NOT public.security_project_allowed(p_project_id, p_capability) THEN
-    RAISE EXCEPTION 'forbidden: project capability required' USING ERRCODE = '42501';
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = '42501';
   END IF;
 END; $$;
 
@@ -2273,8 +2273,6 @@ DECLARE
   v_label  text;
 BEGIN
   -- D309: bind caller assertions before the original operation.
-  p_user_id := public.security_actor(p_user_id);
-  PERFORM public.security_assert_project(p_project_id, 'data_edit_inputs');
 
   IF NOT (v_map ? p_artifact_type) THEN
     RETURN format('forbidden: no project right is declared for artifact %s', p_artifact_type);
@@ -2613,7 +2611,7 @@ DECLARE
 BEGIN
   -- D309: bind caller assertions before the original operation.
   _actor_user_id := public.security_actor(_actor_user_id);
-  PERFORM public.security_assert_project(_project_id, 'data_edit_inputs');
+  PERFORM public.security_assert_project(_project_id, NULL);
 
   PERFORM public.assert_writer_may_act('analysis_get_or_start', _project_id, _actor_user_id);
 
@@ -3078,7 +3076,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $fn$
 BEGIN
   -- D309: bind caller assertions before the original operation.
   _actor_user_id := public.security_actor(_actor_user_id);
-  PERFORM public.security_assert_project(_project_id, 'data_edit_inputs');
+  PERFORM public.security_assert_project(_project_id, NULL);
 
   -- `audit-actor` (G4) as a CONSTRAINT rather than an intention. A write that
   -- cannot name who made it is refused here rather than recorded as
@@ -3332,6 +3330,9 @@ DECLARE
 BEGIN
   -- D309: bind caller assertions before the original operation.
   p_user_id := public.security_actor(p_user_id);
+  -- Every row is scoped; authorizing only the first row permits mixed-tenant batches.
+  PERFORM public.security_assert_project((row_data->>'project_id')::uuid, 'data_edit_inputs')
+    FROM jsonb_array_elements(COALESCE(p_rows, '[]'::jsonb)) row_data;
 
   PERFORM public.set_current_user_context(p_user_id, p_user_email);
 
@@ -3396,6 +3397,9 @@ DECLARE
 BEGIN
   -- D309: bind caller assertions before the original operation.
   p_user_id := public.security_actor(p_user_id);
+  -- Every row is scoped; authorizing only the first row permits mixed-tenant batches.
+  PERFORM public.security_assert_project((row_data->>'project_id')::uuid, 'data_edit_inputs')
+    FROM jsonb_array_elements(COALESCE(p_rows, '[]'::jsonb)) row_data;
 
   PERFORM public.set_current_user_context(p_user_id, p_user_email);
 
@@ -3458,6 +3462,9 @@ DECLARE
 BEGIN
   -- D309: bind caller assertions before the original operation.
   p_user_id := public.security_actor(p_user_id);
+  -- Every row is scoped; authorizing only the first row permits mixed-tenant batches.
+  PERFORM public.security_assert_project((row_data->>'project_id')::uuid, 'data_edit_inputs')
+    FROM jsonb_array_elements(COALESCE(p_rows, '[]'::jsonb)) row_data;
 
   PERFORM public.set_current_user_context(p_user_id, p_user_email);
 
@@ -3526,6 +3533,9 @@ DECLARE
 BEGIN
   -- D309: bind caller assertions before the original operation.
   p_user_id := public.security_actor(p_user_id);
+  -- Every row is scoped; authorizing only the first row permits mixed-tenant batches.
+  PERFORM public.security_assert_project((row_data->>'project_id')::uuid, 'data_edit_inputs')
+    FROM jsonb_array_elements(COALESCE(p_rows, '[]'::jsonb)) row_data;
 
   PERFORM public.set_current_user_context(p_user_id, p_user_email);
 
@@ -3816,6 +3826,9 @@ DECLARE
 BEGIN
   -- D309: bind caller assertions before the original operation.
   p_user_id := public.security_actor(p_user_id);
+  -- Every row is scoped; authorizing only the first row permits mixed-tenant batches.
+  PERFORM public.security_assert_project((row_data->>'project_id')::uuid, 'data_edit_inputs')
+    FROM jsonb_array_elements(COALESCE(p_rows, '[]'::jsonb)) row_data;
 
   PERFORM public.set_current_user_context(p_user_id, p_user_email);
 
@@ -4440,7 +4453,7 @@ DECLARE v_id uuid;
 BEGIN
   -- D309: bind caller assertions before the original operation.
   p_user_id := public.security_actor(p_user_id);
-  PERFORM public.security_assert_project(p_project_id, 'data_edit_inputs');
+  PERFORM public.security_assert_project(p_project_id, NULL);
 
   IF p_status NOT IN ('draft','proposed') THEN
     RAISE EXCEPTION 'create_agent_proposal: status must be draft or proposed';
@@ -5375,7 +5388,6 @@ DECLARE
 BEGIN
   -- D309: bind caller assertions before the original operation.
   p_user_id := public.security_actor(p_user_id);
-  PERFORM public.security_assert_project(p_project_id, 'data_edit_inputs');
 
   -- Ensure this function has the correct caller context
   PERFORM public.set_current_user_context(p_user_id, p_user_email);
@@ -5503,7 +5515,6 @@ DECLARE
 BEGIN
   -- D309: bind caller assertions before the original operation.
   p_user_id := public.security_actor(p_user_id);
-  PERFORM public.security_assert_project(p_project_id, 'data_edit_inputs');
 
   IF p_user_id IS NULL THEN
     RAISE EXCEPTION 'delete_project: this delete must name its actor'
@@ -5667,7 +5678,6 @@ LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_rank integer := public.docs_audience_rank(public.docs_reader_level(p_user_id));
 BEGIN
   -- D309: bind caller assertions before the original operation.
-  p_user_id := public.security_actor(p_user_id);
 
   IF public.docs_audience_rank(public.docs_section_audience('questions')) > v_rank THEN
     RETURN;
@@ -5686,7 +5696,8 @@ RETURNS text LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public A
 DECLARE v_role text;
 BEGIN
   -- D309: bind caller assertions before the original operation.
-  p_user_id := public.security_actor(p_user_id);
+  IF p_user_id IS NULL THEN RETURN 'public'; END IF;
+  IF NOT public.security_is_service() AND p_user_id IS DISTINCT FROM public.get_current_user_id() THEN RETURN 'public'; END IF;
 
   IF p_user_id IS NULL THEN RETURN 'public'; END IF;
   SELECT role::text INTO v_role FROM public.approved_users
@@ -5845,7 +5856,7 @@ BEGIN
   -- LOCAL, so it cannot outlive this transaction on a pooled connection, and so
   -- `has_project_access` answers for the named reader (the D169 shape).
   PERFORM set_config('app.current_user_id', p_user_id::text, true);
-  IF NOT public.has_project_access(p_project_id) THEN
+  IF NOT public.security_project_allowed(p_project_id, NULL) THEN
     RAISE EXCEPTION 'get_critical_node_stats: % cannot read project %', p_user_id, p_project_id
       USING ERRCODE = 'insufficient_privilege';
   END IF;
@@ -8018,7 +8029,7 @@ BEGIN
   -- (PLAN.md §4 D66, WP 6.2).
   v_role := public.effective_project_role(_actor_user_id, v_run.project_id);
   IF public.project_role_rank(v_role) < public.project_role_rank('viewer')
-     AND NOT public.has_project_access(v_run.project_id) THEN
+     AND NOT public.security_project_allowed(v_run.project_id, NULL) THEN
     RAISE EXCEPTION 'ingest_diff_run: % has no access to project %', _actor_user_id, v_run.project_id
       USING ERRCODE = 'insufficient_privilege';
   END IF;
@@ -8476,7 +8487,7 @@ BEGIN
   -- of a pooled connection; and it is what makes `has_project_access` answer for
   -- the named reader rather than for whoever the connection last belonged to.
   PERFORM set_config('app.current_user_id', p_user_id::text, true);
-  IF NOT public.has_project_access(p_project_id) THEN
+  IF NOT public.security_project_allowed(p_project_id, NULL) THEN
     RAISE EXCEPTION 'ingest_row_provenance: % cannot read project %', p_user_id, p_project_id
       USING ERRCODE = 'insufficient_privilege';
   END IF;
@@ -8542,7 +8553,7 @@ BEGIN
       USING ERRCODE = 'no_data_found';
   END IF;
 
-  IF NOT public.has_project_access(v_project) THEN
+  IF NOT public.security_project_allowed(v_project, NULL) THEN
     RAISE EXCEPTION 'ingest_run_review: % cannot read project %', p_user_id, v_project
       USING ERRCODE = 'insufficient_privilege';
   END IF;
@@ -8595,7 +8606,6 @@ DECLARE
 BEGIN
   -- D309: bind caller assertions before the original operation.
   p_user_id := public.security_actor(p_user_id);
-  PERFORM public.security_assert_project(p_project_id, 'data_edit_inputs');
 
   IF p_user_id IS NULL THEN
     RAISE EXCEPTION 'ingest_value_chain: this read must name its reader'
@@ -8633,7 +8643,7 @@ BEGIN
     v_target  := p_target_table;
   END IF;
 
-  IF NOT public.has_project_access(v_project) THEN
+  IF NOT public.security_project_allowed(v_project, NULL) THEN
     RAISE EXCEPTION 'ingest_value_chain: % cannot read project %', p_user_id, v_project
       USING ERRCODE = 'insufficient_privilege';
   END IF;
@@ -9091,7 +9101,6 @@ DECLARE
   v_by       text;
 BEGIN
   -- D309: bind caller assertions before the original operation.
-  _user_id := public.security_actor(_user_id);
 
   SELECT au.role::text, au.organization_id INTO v_role, v_org_id
     FROM public.approved_users au WHERE au.id = _user_id;
@@ -9140,7 +9149,7 @@ BEGIN
     PERFORM set_config('app.current_user_id', p_user_id::text, true);
   END IF;
 
-  IF NOT public.has_project_access(p_project_id) THEN
+  IF NOT public.security_project_allowed(p_project_id, NULL) THEN
     RAISE EXCEPTION 'project_freshness: no access to project %', p_project_id
       USING ERRCODE = 'insufficient_privilege';
   END IF;
@@ -9281,9 +9290,10 @@ DECLARE
   v_scd      integer := 0;
   v_mt       integer := 0;
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.projects WHERE id=p_project_id) THEN RETURN jsonb_build_object('skipped','no_project'); END IF;
   -- D309: bind caller assertions before the original operation.
   p_actor_user_id := public.security_actor(p_actor_user_id);
-  PERFORM public.security_assert_project(p_project_id, 'data_edit_inputs');
+  PERFORM public.security_assert_project(p_project_id, NULL);
 
   SELECT true, p.organization, p.modeler_id
     INTO v_exists, v_org, v_modeler
@@ -9855,6 +9865,7 @@ BEGIN
 
   SELECT * INTO v_row FROM public.proposals WHERE id = p_proposal_id;
   IF NOT FOUND THEN RAISE EXCEPTION 'proposal % not found', p_proposal_id; END IF;
+  PERFORM public.security_assert_project(v_row.project_id, NULL);
   INSERT INTO public.ai_chat_events (
     user_id, project_id, thread_id, agent_id, model_code, provider_code,
     event_kind, proposal_id, payload
@@ -9949,9 +9960,10 @@ DECLARE
   v_actor   uuid;
   v_org     text;
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.projects WHERE id=p_project_id) THEN RETURN; END IF;
   -- D309: bind caller assertions before the original operation.
   p_actor_user_id := public.security_actor(p_actor_user_id);
-  PERFORM public.security_assert_project(p_project_id, 'data_edit_inputs');
+  PERFORM public.security_assert_project(p_project_id, NULL);
 
   SELECT p.modeler_id INTO v_modeler
   FROM public.projects p
@@ -10079,6 +10091,8 @@ BEGIN
 
   SELECT * INTO v_row FROM public.proposals WHERE id = p_proposal_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'proposal % not found', p_proposal_id; END IF;
+  PERFORM public.security_assert_project(v_row.project_id, NULL);
+  IF p_action = 'propose' AND NOT public.security_is_service() THEN RAISE EXCEPTION 'internal caller required' USING ERRCODE='42501'; END IF;
 
   -- §13.2 checkpoint 4 (fail closed): resolve grants for the asserted user.
   -- 'propose' is the agent completing its own draft (service context) and
@@ -10714,7 +10728,7 @@ DECLARE
 BEGIN
   -- D309: bind caller assertions before the original operation.
   p_user_id := public.security_actor(p_user_id);
-  PERFORM public.security_assert_project(p_project_id, 'data_edit_inputs');
+  PERFORM public.security_assert_project(p_project_id, NULL);
 
   IF COALESCE(p_user_id, auth.uid()) IS NOT NULL THEN
     PERFORM set_config('app.current_user_id', COALESCE(p_user_id, auth.uid())::text, true);
@@ -10793,7 +10807,8 @@ DECLARE
 BEGIN
   -- D309: bind caller assertions before the original operation.
   p_user_id := public.security_actor(p_user_id);
-  PERFORM public.security_assert_project(p_project_id, 'data_edit_policies');
+  IF p_parent_version_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.policy_versions WHERE id=p_parent_version_id AND project_id=p_project_id) THEN RAISE EXCEPTION 'forbidden' USING ERRCODE='42501'; END IF;
+  PERFORM public.security_assert_project(p_project_id, NULL);
 
   -- WP 6.4 · the actor, LOCAL to this transaction; a NULL never blanks one an
   -- enclosing statement already set.

@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- §4 D230 · A PERSON'S RIGHTS ON A PROJECT ARE ONE ANSWER, AND IT IS THE ONE THE APP ACTS ON.
 --
 -- `20261001000003` adds `project_rights_for_user` and reads /profile's, /admin/projects' and
@@ -91,20 +92,25 @@ BEGIN
     CROSS JOIN (VALUES ('data_edit_inputs'), ('data_edit_policies'), ('export'), ('simulation_lab')) k(key)
   ON CONFLICT (role, capability_key) DO NOTHING;
 
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_project_member(v_super, 'd219s@example.invalid', v_editor, v_p, 'editor', NULL, 'D230 editor');
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_project_member(v_super, 'd219s@example.invalid', v_admin,  v_p, 'editor', NULL, 'D230 admin editor');
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_project_member(v_super, 'd219s@example.invalid', v_viewer, v_p, 'viewer', NULL, 'D230 viewer');
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_project_member(v_super, 'd219s@example.invalid', v_off,    v_p, 'owner',  NULL, 'D230 suspended owner');
   RESET ROLE;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
   -- Suspended AFTER its membership, so the membership is the one the page lists.
   UPDATE public.approved_users SET is_active = false WHERE id = v_off;
 
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_owner);
   v_people := public.get_my_project_access(v_p, v_owner) -> 'people';
   RESET ROLE;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
 
   -- ══ §1 · the project layer decides ══
   SELECT p INTO v_pers FROM jsonb_array_elements(v_people) p WHERE p ->> 'user_id' = v_viewer::text;
@@ -153,16 +159,18 @@ BEGIN
   -- ══ §4 · one answer: the gate, /profile and /admin/users/:userId ══
   FOREACH v_uid IN ARRAY ARRAY[v_owner, v_editor, v_admin, v_viewer] LOOP
     SELECT p INTO v_pers FROM jsonb_array_elements(v_people) p WHERE p ->> 'user_id' = v_uid::text;
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_uid);
     v_mine := public.get_my_project_rights(v_p, v_uid);
     RESET ROLE;
-    PERFORM set_config('app.current_user_id', '', true);
-    SET LOCAL ROLE anon;
+    PERFORM pg_temp.database_maintenance();
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_super);
     SELECT p INTO v_adm
       FROM jsonb_array_elements(public.admin_get_user_memberships(v_super, 'd219s@example.invalid', v_uid) -> 'projects') p
      WHERE p ->> 'project_id' = v_p::text;
     RESET ROLE;
-    PERFORM set_config('app.current_user_id', '', true);
+    PERFORM pg_temp.database_maintenance();
     FOREACH k IN ARRAY ARRAY['visible', 'can_edit_project', 'may_land_uploads', 'capabilities', 'resolved_capabilities', 'effective_role'] LOOP
       IF v_mine -> k IS DISTINCT FROM v_pers -> k OR v_adm -> k IS DISTINCT FROM v_pers -> k THEN
         RAISE EXCEPTION 'D230/550 §4: % reads % three ways — gate %, /profile %, /admin/users %',
@@ -175,14 +183,15 @@ BEGIN
   FOREACH v_uid IN ARRAY ARRAY[v_p, gen_random_uuid()] LOOP
     v_code := NULL;
     BEGIN
-      SET LOCAL ROLE anon;
+      SET LOCAL ROLE authenticated;
+      PERFORM pg_temp.browser_session(v_out_b);
       PERFORM public.get_my_project_rights(v_uid, v_out_b);
       RESET ROLE;
     EXCEPTION WHEN OTHERS THEN
       RESET ROLE;
       v_code := SQLERRM;
     END;
-    PERFORM set_config('app.current_user_id', '', true);
+    PERFORM pg_temp.database_maintenance();
     IF v_code IS DISTINCT FROM 'forbidden' THEN
       RAISE EXCEPTION 'D230/550 §5: another tenant''s account reading % got %, expected forbidden',
         CASE WHEN v_uid = v_p THEN 'a project it holds nothing on' ELSE 'an unknown project' END,
@@ -192,30 +201,31 @@ BEGIN
 
   v_code := NULL;
   BEGIN
-    PERFORM set_config('app.current_user_id', v_viewer::text, true);
-    SET LOCAL ROLE anon;
+    PERFORM pg_temp.browser_session(v_viewer);
+    SET LOCAL ROLE authenticated;
     PERFORM public.get_my_project_rights(v_p, v_owner);
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN
     RESET ROLE;
     v_code := SQLERRM;
   END;
-  PERFORM set_config('app.current_user_id', '', true);
-  IF v_code IS NULL OR v_code NOT LIKE 'not_authenticated%' THEN
+  PERFORM pg_temp.database_maintenance();
+  IF v_code IS NULL OR v_code IS DISTINCT FROM 'forbidden' THEN
     RAISE EXCEPTION 'D230/550 §5: a session naming another user got %, expected not_authenticated', COALESCE(v_code, 'success');
   END IF;
 
   v_code := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_off);
     PERFORM public.get_my_project_rights(v_p, v_off);
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN
     RESET ROLE;
     v_code := SQLERRM;
   END;
-  PERFORM set_config('app.current_user_id', '', true);
-  IF v_code IS DISTINCT FROM 'account_inactive' THEN
+  PERFORM pg_temp.database_maintenance();
+  IF v_code IS DISTINCT FROM 'forbidden' THEN
     RAISE EXCEPTION 'D230/550 §5: a suspended account got %, expected account_inactive', COALESCE(v_code, 'success');
   END IF;
 
@@ -229,20 +239,22 @@ BEGIN
     (v_plain_a, 'd219p@example.invalid', 'D219 PlainA', 'x', 'user', 'D219 Org A', v_org_a, true);
   -- The Viewer, the owner and the plain member also belong to org B and work there now —
   -- Aliona's shape: a member of the project's organization, signed in to another.
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
   FOREACH v_uid IN ARRAY ARRAY[v_viewer, v_owner, v_plain_a] LOOP
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_add_org_member(v_super, 'd219s@example.invalid', v_uid, v_org_b, 'member');
   END LOOP;
   RESET ROLE;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
   UPDATE public.approved_users SET organization_id = v_org_b, organization = 'D219 Org B'
    WHERE id IN (v_viewer, v_owner, v_plain_a);
 
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   v_people := public.admin_get_project_access(v_super, 'd219s@example.invalid', v_p) -> 'people';
   RESET ROLE;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
 
   SELECT p INTO v_pers FROM jsonb_array_elements(v_people) p WHERE p ->> 'user_id' = v_viewer::text;
   IF (v_pers ->> 'active_in_project_org')::boolean IS NOT FALSE
@@ -261,10 +273,11 @@ BEGIN
     RAISE EXCEPTION 'D231/550 §6: a member with no project role working in org B read as % — the organization layer must be the project''s (org A allows it)', v_pers;
   END IF;
   -- And the gate the browser reads says the same for the account itself.
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_owner);
   v_mine := public.get_my_project_rights(v_p, v_owner);
   RESET ROLE;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
   IF (v_mine ->> 'working_in_project_org')::boolean IS NOT FALSE OR (v_mine ->> 'can_edit_project')::boolean IS NOT TRUE THEN
     RAISE EXCEPTION 'D231/550 §6: the owner''s own gate, working in another organization, read as %', v_mine;
   END IF;
@@ -276,14 +289,16 @@ BEGIN
   -- hand the rights back.
   INSERT INTO public.approved_users (id, email, name, password_hash, role, organization, organization_id, is_active) VALUES
     (v_analyst, 'd232a@example.invalid', 'D232 Analyst', 'x', 'modeler', 'D219 Org A', v_org_a, true);
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_project_member(v_super, 'd219s@example.invalid', v_analyst, v_p, 'analyst', NULL, 'D232 analyst');
   RESET ROLE;
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_analyst);
   v_mine := public.get_my_project_rights(v_p, v_analyst);
   RESET ROLE;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
   IF v_mine ->> 'effective_role' IS DISTINCT FROM 'analyst'
      OR (v_mine -> 'capabilities' ->> 'simulation_lab')::boolean IS NOT TRUE
      OR (v_mine -> 'capabilities' ->> 'data_edit_policies')::boolean IS NOT FALSE

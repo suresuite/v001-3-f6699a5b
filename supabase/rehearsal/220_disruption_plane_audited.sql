@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- WP 6.4 · the disruption plane writes audit rows, at statement grain, naming
 -- the actor — and the profile CASCADE writes one per child table.
 --
@@ -63,8 +64,8 @@ BEGIN
   -- The GUC is poisoned with a stranger first: `set_config(..., true)` is
   -- transaction-local and this file is one transaction, so a row naming the
   -- actor could otherwise be a value left lying around by an earlier section.
-  PERFORM set_config('app.current_user_id', v_stranger::text, true);
-  PERFORM set_config('app.current_user_id', v_actor::text, true);
+  PERFORM pg_temp.browser_session(v_stranger);
+  PERFORM pg_temp.browser_session(v_actor);
 
   SELECT count(*) INTO v_before FROM public.audit_logs
    WHERE plane = 'data' AND target_type = 'disruption_scenario_profiles';

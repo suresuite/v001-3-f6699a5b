@@ -1,19 +1,19 @@
 {
   "$generator": "scripts/data-contract/introspect.mjs",
   "$doc": "EFFECTIVE schema replayed from supabase/migrations/*.sql in filename order. Generated — do not edit; `npm run contract:introspect -- --check` fails on drift.",
-  "migrations_found": 414,
-  "migrations_applied": 406,
+  "migrations_found": 419,
+  "migrations_applied": 411,
   "first_migration": "20250815000000_approved_users_base.sql",
-  "last_migration": "20261019000006_storage_and_realtime.sql",
+  "last_migration": "20261019000010_api_scenario_actor.sql",
   "counts": {
-    "tables": 94,
+    "tables": 95,
     "views": 8,
     "enums": 4,
-    "functions": 433,
+    "functions": 436,
     "shadowed_definitions": 4,
     "phantom_tables": 0,
     "unparsed_statements": 0,
-    "dynamic_ddl_statements": 38,
+    "dynamic_ddl_statements": 40,
     "rls_indeterminate_tables": 4,
     "rls_dynamic_unresolved": 0,
     "orphans": 0,
@@ -506,16 +506,6 @@
             ],
             "using": "(user_id = public.get_current_user_id() AND (project_id IS NULL OR public.security_project_allowed(project_id, NULL)))",
             "with_check": "(user_id = public.get_current_user_id() AND (project_id IS NULL OR public.security_project_allowed(project_id, NULL)))",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -1397,16 +1387,6 @@
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
             "name": "security_insert_fence",
             "permissive": false,
             "command": "INSERT",
@@ -1758,16 +1738,6 @@
             ],
             "using": "public.security_project_allowed((SELECT p.project_id FROM public.analysis_runs p WHERE p.id = analysis_results.run_id), NULL)",
             "with_check": "public.security_project_allowed((SELECT p.project_id FROM public.analysis_runs p WHERE p.id = analysis_results.run_id), NULL)",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -2183,16 +2153,6 @@
             ],
             "using": "public.security_project_allowed(project_id, NULL)",
             "with_check": "public.security_project_allowed(project_id, NULL)",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -3129,8 +3089,8 @@
             "roles": [
               "authenticated"
             ],
-            "using": "public.security_project_allowed(project_id, NULL)",
-            "with_check": "public.security_project_allowed(project_id, NULL)",
+            "using": "public.current_is_super_admin()",
+            "with_check": "public.current_is_super_admin()",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -3140,18 +3100,8 @@
             "roles": [
               "PUBLIC"
             ],
-            "using": "public.security_project_allowed(project_id, NULL)",
-            "with_check": "public.security_project_allowed(project_id, NULL)",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
+            "using": "public.current_is_super_admin()",
+            "with_check": "public.current_is_super_admin()",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -4424,6 +4374,87 @@
       ]
     },
     {
+      "name": "browser_session_config",
+      "schema": "public",
+      "created_by": "20261019000000_browser_session_configuration.sql",
+      "columns": [
+        {
+          "name": "singleton",
+          "quoted": false,
+          "type": "boolean",
+          "type_raw": "boolean",
+          "nullable": false,
+          "default": "true",
+          "primary_key": true,
+          "unique": false,
+          "references": null,
+          "added_by": "20261019000000_browser_session_configuration.sql"
+        },
+        {
+          "name": "issuer",
+          "quoted": false,
+          "type": "text",
+          "type_raw": "text",
+          "nullable": false,
+          "default": null,
+          "primary_key": false,
+          "unique": false,
+          "references": null,
+          "added_by": "20261019000000_browser_session_configuration.sql"
+        }
+      ],
+      "constraints": [
+        {
+          "name": "browser_session_config_pkey",
+          "kind": "PRIMARY KEY",
+          "columns": [
+            "singleton"
+          ],
+          "definition": "PRIMARY KEY (singleton)",
+          "implicit": true,
+          "added_by": "20261019000000_browser_session_configuration.sql"
+        },
+        {
+          "name": "browser_session_config_singleton_check",
+          "kind": "CHECK",
+          "columns": [
+            "singleton"
+          ],
+          "definition": "CHECK (singleton)",
+          "implicit": true,
+          "added_by": "20261019000000_browser_session_configuration.sql"
+        },
+        {
+          "name": "browser_session_config_issuer_check",
+          "kind": "CHECK",
+          "columns": [
+            "issuer"
+          ],
+          "definition": "CHECK (issuer ~ '^https://[^/]+/auth/v1$')",
+          "implicit": true,
+          "added_by": "20261019000000_browser_session_configuration.sql"
+        }
+      ],
+      "indexes": [],
+      "rls": {
+        "enabled": true,
+        "forced": false,
+        "policies": [],
+        "determinate": true
+      },
+      "replica_identity": null,
+      "comment": null,
+      "natural_key_unique": [
+        {
+          "source": "column PRIMARY KEY",
+          "columns": [
+            "singleton"
+          ],
+          "name": "browser_session_config_pkey"
+        }
+      ]
+    },
+    {
       "name": "capabilities",
       "schema": "public",
       "created_by": "20260711000002_unified_access_control.sql",
@@ -4938,16 +4969,6 @@
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
             "name": "security_insert_fence",
             "permissive": false,
             "command": "INSERT",
@@ -5242,16 +5263,6 @@
             ],
             "using": "(user_id = public.get_current_user_id() AND (project_id IS NULL OR public.security_project_allowed(project_id, NULL)))",
             "with_check": "(user_id = public.get_current_user_id() AND (project_id IS NULL OR public.security_project_allowed(project_id, NULL)))",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -5556,16 +5567,6 @@
             ],
             "using": "(user_id = public.get_current_user_id() AND (project_id IS NULL OR public.security_project_allowed(project_id, NULL)))",
             "with_check": "(user_id = public.get_current_user_id() AND (project_id IS NULL OR public.security_project_allowed(project_id, NULL)))",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -6183,16 +6184,6 @@
             ],
             "using": "public.security_project_allowed(project_id, NULL)",
             "with_check": "public.security_project_allowed(project_id, NULL)",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -8934,16 +8925,6 @@
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
             "name": "security_insert_fence",
             "permissive": false,
             "command": "INSERT",
@@ -9227,16 +9208,6 @@
             ],
             "using": "public.security_project_allowed(project_id, NULL)",
             "with_check": "public.security_project_allowed(project_id, NULL)",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -9966,8 +9937,8 @@
             "roles": [
               "authenticated"
             ],
-            "using": "public.security_project_allowed((SELECT p.project_id FROM public.ingest_runs p WHERE p.id = ingest_files.ingest_run_id), NULL)",
-            "with_check": "public.security_project_allowed((SELECT p.project_id FROM public.ingest_runs p WHERE p.id = ingest_files.ingest_run_id), NULL)",
+            "using": "public.security_project_allowed((SELECT COALESCE(p.project_id, (SELECT l.project_id FROM public.project_erp_links l WHERE l.id = p.link_id)) FROM public.ingest_runs p WHERE p.id = ingest_files.ingest_run_id), NULL)",
+            "with_check": "public.security_project_allowed((SELECT COALESCE(p.project_id, (SELECT l.project_id FROM public.project_erp_links l WHERE l.id = p.link_id)) FROM public.ingest_runs p WHERE p.id = ingest_files.ingest_run_id), NULL)",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -9977,18 +9948,8 @@
             "roles": [
               "PUBLIC"
             ],
-            "using": "public.security_project_allowed((SELECT p.project_id FROM public.ingest_runs p WHERE p.id = ingest_files.ingest_run_id), NULL)",
-            "with_check": "public.security_project_allowed((SELECT p.project_id FROM public.ingest_runs p WHERE p.id = ingest_files.ingest_run_id), NULL)",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
+            "using": "public.security_project_allowed((SELECT COALESCE(p.project_id, (SELECT l.project_id FROM public.project_erp_links l WHERE l.id = p.link_id)) FROM public.ingest_runs p WHERE p.id = ingest_files.ingest_run_id), NULL)",
+            "with_check": "public.security_project_allowed((SELECT COALESCE(p.project_id, (SELECT l.project_id FROM public.project_erp_links l WHERE l.id = p.link_id)) FROM public.ingest_runs p WHERE p.id = ingest_files.ingest_run_id), NULL)",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -10436,8 +10397,8 @@
             "roles": [
               "authenticated"
             ],
-            "using": "public.security_project_allowed(project_id, NULL)",
-            "with_check": "public.security_project_allowed(project_id, NULL)",
+            "using": "public.security_project_allowed(COALESCE(project_id, (SELECT l.project_id FROM public.project_erp_links l WHERE l.id = ingest_runs.link_id)), NULL)",
+            "with_check": "public.security_project_allowed(COALESCE(project_id, (SELECT l.project_id FROM public.project_erp_links l WHERE l.id = ingest_runs.link_id)), NULL)",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -10447,18 +10408,8 @@
             "roles": [
               "PUBLIC"
             ],
-            "using": "public.security_project_allowed(project_id, NULL)",
-            "with_check": "public.security_project_allowed(project_id, NULL)",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
+            "using": "public.security_project_allowed(COALESCE(project_id, (SELECT l.project_id FROM public.project_erp_links l WHERE l.id = ingest_runs.link_id)), NULL)",
+            "with_check": "public.security_project_allowed(COALESCE(project_id, (SELECT l.project_id FROM public.project_erp_links l WHERE l.id = ingest_runs.link_id)), NULL)",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -10746,8 +10697,8 @@
             "roles": [
               "authenticated"
             ],
-            "using": "public.security_project_allowed((SELECT p.project_id FROM public.ingest_runs p WHERE p.id = ingest_staged_bom_lines.ingest_run_id), NULL)",
-            "with_check": "public.security_project_allowed((SELECT p.project_id FROM public.ingest_runs p WHERE p.id = ingest_staged_bom_lines.ingest_run_id), NULL)",
+            "using": "public.security_project_allowed((SELECT COALESCE(p.project_id, (SELECT l.project_id FROM public.project_erp_links l WHERE l.id = p.link_id)) FROM public.ingest_runs p WHERE p.id = ingest_staged_bom_lines.ingest_run_id), NULL)",
+            "with_check": "public.security_project_allowed((SELECT COALESCE(p.project_id, (SELECT l.project_id FROM public.project_erp_links l WHERE l.id = p.link_id)) FROM public.ingest_runs p WHERE p.id = ingest_staged_bom_lines.ingest_run_id), NULL)",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -10757,18 +10708,8 @@
             "roles": [
               "PUBLIC"
             ],
-            "using": "public.security_project_allowed((SELECT p.project_id FROM public.ingest_runs p WHERE p.id = ingest_staged_bom_lines.ingest_run_id), NULL)",
-            "with_check": "public.security_project_allowed((SELECT p.project_id FROM public.ingest_runs p WHERE p.id = ingest_staged_bom_lines.ingest_run_id), NULL)",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
+            "using": "public.security_project_allowed((SELECT COALESCE(p.project_id, (SELECT l.project_id FROM public.project_erp_links l WHERE l.id = p.link_id)) FROM public.ingest_runs p WHERE p.id = ingest_staged_bom_lines.ingest_run_id), NULL)",
+            "with_check": "public.security_project_allowed((SELECT COALESCE(p.project_id, (SELECT l.project_id FROM public.project_erp_links l WHERE l.id = p.link_id)) FROM public.ingest_runs p WHERE p.id = ingest_staged_bom_lines.ingest_run_id), NULL)",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -11044,8 +10985,8 @@
             "roles": [
               "authenticated"
             ],
-            "using": "public.security_project_allowed((SELECT p.project_id FROM public.ingest_runs p WHERE p.id = ingest_staged_bom_versions.ingest_run_id), NULL)",
-            "with_check": "public.security_project_allowed((SELECT p.project_id FROM public.ingest_runs p WHERE p.id = ingest_staged_bom_versions.ingest_run_id), NULL)",
+            "using": "public.security_project_allowed((SELECT COALESCE(p.project_id, (SELECT l.project_id FROM public.project_erp_links l WHERE l.id = p.link_id)) FROM public.ingest_runs p WHERE p.id = ingest_staged_bom_versions.ingest_run_id), NULL)",
+            "with_check": "public.security_project_allowed((SELECT COALESCE(p.project_id, (SELECT l.project_id FROM public.project_erp_links l WHERE l.id = p.link_id)) FROM public.ingest_runs p WHERE p.id = ingest_staged_bom_versions.ingest_run_id), NULL)",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -11055,18 +10996,8 @@
             "roles": [
               "PUBLIC"
             ],
-            "using": "public.security_project_allowed((SELECT p.project_id FROM public.ingest_runs p WHERE p.id = ingest_staged_bom_versions.ingest_run_id), NULL)",
-            "with_check": "public.security_project_allowed((SELECT p.project_id FROM public.ingest_runs p WHERE p.id = ingest_staged_bom_versions.ingest_run_id), NULL)",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
+            "using": "public.security_project_allowed((SELECT COALESCE(p.project_id, (SELECT l.project_id FROM public.project_erp_links l WHERE l.id = p.link_id)) FROM public.ingest_runs p WHERE p.id = ingest_staged_bom_versions.ingest_run_id), NULL)",
+            "with_check": "public.security_project_allowed((SELECT COALESCE(p.project_id, (SELECT l.project_id FROM public.project_erp_links l WHERE l.id = p.link_id)) FROM public.ingest_runs p WHERE p.id = ingest_staged_bom_versions.ingest_run_id), NULL)",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -11426,8 +11357,8 @@
             "roles": [
               "authenticated"
             ],
-            "using": "public.security_project_allowed((SELECT p.project_id FROM public.ingest_runs p WHERE p.id = ingest_staged_products.ingest_run_id), NULL)",
-            "with_check": "public.security_project_allowed((SELECT p.project_id FROM public.ingest_runs p WHERE p.id = ingest_staged_products.ingest_run_id), NULL)",
+            "using": "public.security_project_allowed((SELECT COALESCE(p.project_id, (SELECT l.project_id FROM public.project_erp_links l WHERE l.id = p.link_id)) FROM public.ingest_runs p WHERE p.id = ingest_staged_products.ingest_run_id), NULL)",
+            "with_check": "public.security_project_allowed((SELECT COALESCE(p.project_id, (SELECT l.project_id FROM public.project_erp_links l WHERE l.id = p.link_id)) FROM public.ingest_runs p WHERE p.id = ingest_staged_products.ingest_run_id), NULL)",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -11437,18 +11368,8 @@
             "roles": [
               "PUBLIC"
             ],
-            "using": "public.security_project_allowed((SELECT p.project_id FROM public.ingest_runs p WHERE p.id = ingest_staged_products.ingest_run_id), NULL)",
-            "with_check": "public.security_project_allowed((SELECT p.project_id FROM public.ingest_runs p WHERE p.id = ingest_staged_products.ingest_run_id), NULL)",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
+            "using": "public.security_project_allowed((SELECT COALESCE(p.project_id, (SELECT l.project_id FROM public.project_erp_links l WHERE l.id = p.link_id)) FROM public.ingest_runs p WHERE p.id = ingest_staged_products.ingest_run_id), NULL)",
+            "with_check": "public.security_project_allowed((SELECT COALESCE(p.project_id, (SELECT l.project_id FROM public.project_erp_links l WHERE l.id = p.link_id)) FROM public.ingest_runs p WHERE p.id = ingest_staged_products.ingest_run_id), NULL)",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -11731,8 +11652,8 @@
             "roles": [
               "authenticated"
             ],
-            "using": "public.security_project_allowed((SELECT p.project_id FROM public.ingest_runs p WHERE p.id = ingest_staged_rows.ingest_run_id), NULL)",
-            "with_check": "public.security_project_allowed((SELECT p.project_id FROM public.ingest_runs p WHERE p.id = ingest_staged_rows.ingest_run_id), NULL)",
+            "using": "public.security_project_allowed((SELECT COALESCE(p.project_id, (SELECT l.project_id FROM public.project_erp_links l WHERE l.id = p.link_id)) FROM public.ingest_runs p WHERE p.id = ingest_staged_rows.ingest_run_id), NULL)",
+            "with_check": "public.security_project_allowed((SELECT COALESCE(p.project_id, (SELECT l.project_id FROM public.project_erp_links l WHERE l.id = p.link_id)) FROM public.ingest_runs p WHERE p.id = ingest_staged_rows.ingest_run_id), NULL)",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -11742,18 +11663,8 @@
             "roles": [
               "PUBLIC"
             ],
-            "using": "public.security_project_allowed((SELECT p.project_id FROM public.ingest_runs p WHERE p.id = ingest_staged_rows.ingest_run_id), NULL)",
-            "with_check": "public.security_project_allowed((SELECT p.project_id FROM public.ingest_runs p WHERE p.id = ingest_staged_rows.ingest_run_id), NULL)",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
+            "using": "public.security_project_allowed((SELECT COALESCE(p.project_id, (SELECT l.project_id FROM public.project_erp_links l WHERE l.id = p.link_id)) FROM public.ingest_runs p WHERE p.id = ingest_staged_rows.ingest_run_id), NULL)",
+            "with_check": "public.security_project_allowed((SELECT COALESCE(p.project_id, (SELECT l.project_id FROM public.project_erp_links l WHERE l.id = p.link_id)) FROM public.ingest_runs p WHERE p.id = ingest_staged_rows.ingest_run_id), NULL)",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -12320,16 +12231,6 @@
             ],
             "using": "public.security_project_allowed(project_id, NULL)",
             "with_check": "public.security_project_allowed(project_id, NULL)",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -13054,16 +12955,6 @@
             ],
             "using": "public.security_project_allowed(project_id, NULL)",
             "with_check": "public.security_project_allowed(project_id, NULL)",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -18274,16 +18165,6 @@
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
             "name": "security_insert_fence",
             "permissive": false,
             "command": "INSERT",
@@ -18548,16 +18429,6 @@
             ],
             "using": "public.security_project_allowed(project_id, NULL)",
             "with_check": "public.security_project_allowed(project_id, NULL)",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -19008,16 +18879,6 @@
             ],
             "using": "public.security_project_allowed(project_id, NULL)",
             "with_check": "public.security_project_allowed(project_id, NULL)",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -20030,16 +19891,6 @@
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
             "name": "security_insert_fence",
             "permissive": false,
             "command": "INSERT",
@@ -20871,16 +20722,6 @@
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
             "name": "security_insert_fence",
             "permissive": false,
             "command": "INSERT",
@@ -21176,16 +21017,6 @@
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
             "name": "security_insert_fence",
             "permissive": false,
             "command": "INSERT",
@@ -21339,16 +21170,6 @@
             ],
             "using": "public.security_project_allowed(project_id, NULL)",
             "with_check": "public.security_project_allowed(project_id, NULL)",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -21602,8 +21423,8 @@
             "roles": [
               "authenticated"
             ],
-            "using": "public.security_project_allowed(project_id, NULL)",
-            "with_check": "public.security_project_allowed(project_id, NULL)",
+            "using": "public.current_is_super_admin()",
+            "with_check": "public.current_is_super_admin()",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -21613,18 +21434,8 @@
             "roles": [
               "PUBLIC"
             ],
-            "using": "public.security_project_allowed(project_id, NULL)",
-            "with_check": "public.security_project_allowed(project_id, NULL)",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
+            "using": "public.current_is_super_admin()",
+            "with_check": "public.current_is_super_admin()",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -23129,16 +22940,6 @@
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
             "name": "security_insert_fence",
             "permissive": false,
             "command": "INSERT",
@@ -23436,16 +23237,6 @@
             ],
             "using": "public.security_project_allowed(project_id, NULL)",
             "with_check": "public.security_project_allowed(project_id, NULL)",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -23954,16 +23745,6 @@
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
             "name": "security_insert_fence",
             "permissive": false,
             "command": "INSERT",
@@ -24245,16 +24026,6 @@
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
             "name": "security_insert_fence",
             "permissive": false,
             "command": "INSERT",
@@ -24512,16 +24283,6 @@
             ],
             "using": "public.security_project_allowed(project_id, NULL)",
             "with_check": "public.security_project_allowed(project_id, NULL)",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -25188,16 +24949,6 @@
             ],
             "using": "public.security_project_allowed(project_id, NULL)",
             "with_check": "public.security_project_allowed(project_id, NULL)",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -25978,16 +25729,6 @@
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
             "name": "security_insert_fence",
             "permissive": false,
             "command": "INSERT",
@@ -26353,16 +26094,6 @@
             ],
             "using": "public.security_project_allowed(project_id, NULL)",
             "with_check": "public.security_project_allowed(project_id, NULL)",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -27644,8 +27375,8 @@
             "roles": [
               "authenticated"
             ],
-            "using": "(user_id = public.get_current_user_id() AND (project_id IS NULL OR public.security_project_allowed(project_id, NULL)))",
-            "with_check": "(user_id = public.get_current_user_id() AND (project_id IS NULL OR public.security_project_allowed(project_id, NULL)))",
+            "using": "public.current_is_super_admin() OR (user_id = public.get_current_user_id() AND (project_id IS NULL OR public.security_project_allowed(project_id, NULL)))",
+            "with_check": "public.current_is_super_admin() OR (user_id = public.get_current_user_id() AND (project_id IS NULL OR public.security_project_allowed(project_id, NULL)))",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -27655,18 +27386,8 @@
             "roles": [
               "PUBLIC"
             ],
-            "using": "(user_id = public.get_current_user_id() AND (project_id IS NULL OR public.security_project_allowed(project_id, NULL)))",
-            "with_check": "(user_id = public.get_current_user_id() AND (project_id IS NULL OR public.security_project_allowed(project_id, NULL)))",
-            "added_by": "20261019000002_project_scoped_rls.sql"
-          },
-          {
-            "name": "security_write",
-            "command": "ALL",
-            "roles": [
-              "authenticated"
-            ],
-            "using": "false",
-            "with_check": "false",
+            "using": "public.current_is_super_admin() OR (user_id = public.get_current_user_id() AND (project_id IS NULL OR public.security_project_allowed(project_id, NULL)))",
+            "with_check": "public.current_is_super_admin() OR (user_id = public.get_current_user_id() AND (project_id IS NULL OR public.security_project_allowed(project_id, NULL)))",
             "added_by": "20261019000002_project_scoped_rls.sql"
           },
           {
@@ -28585,7 +28306,7 @@
       "security_definer": true,
       "volatility": "STABLE",
       "comment": null,
-      "defined_by": "20261001000006_policy_versions_by_content.sql"
+      "defined_by": "20261019000007_remaining_rpc_boundaries.sql"
     },
     {
       "name": "admin_add_org_member",
@@ -29495,11 +29216,11 @@
       "args": [
         "p_run_id uuid"
       ],
-      "returns": "boolean LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path TO",
+      "returns": "boolean LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path TO",
       "security_definer": true,
       "volatility": "VOLATILE",
       "comment": null,
-      "defined_by": "20261001000007_graph_levels_compute_once.sql"
+      "defined_by": "20261019000007_remaining_rpc_boundaries.sql"
     },
     {
       "name": "analysis_runs_actor_is_required",
@@ -29558,6 +29279,20 @@
       "volatility": "STABLE",
       "comment": null,
       "defined_by": "20260711000001_api_access_control.sql"
+    },
+    {
+      "name": "api_create_scenario",
+      "signature": "api_create_scenario(uuid, jsonb, uuid)",
+      "args": [
+        "p_project_id uuid",
+        "p_scenario jsonb",
+        "_actor_user_id uuid DEFAULT NULL"
+      ],
+      "returns": "jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path",
+      "security_definer": true,
+      "volatility": null,
+      "comment": null,
+      "defined_by": "20261019000010_api_scenario_actor.sql"
     },
     {
       "name": "api_key_caller",
@@ -29638,6 +29373,24 @@
       "volatility": null,
       "comment": null,
       "defined_by": "20261019000001_verified_browser_identity.sql"
+    },
+    {
+      "name": "apply_geocode",
+      "signature": "apply_geocode(uuid, uuid, text, numeric, numeric, uuid, boolean)",
+      "args": [
+        "p_project_id uuid",
+        "p_node_id uuid",
+        "p_location_text text",
+        "p_latitude numeric",
+        "p_longitude numeric",
+        "_actor_user_id uuid",
+        "p_plant boolean DEFAULT false"
+      ],
+      "returns": "void LANGUAGE plpgsql SECURITY DEFINER SET search_path",
+      "security_definer": true,
+      "volatility": null,
+      "comment": null,
+      "defined_by": "20261019000008_attributed_geocodes.sql"
     },
     {
       "name": "apply_policy_bundle",
@@ -29866,7 +29619,7 @@
       "security_definer": true,
       "volatility": null,
       "comment": null,
-      "defined_by": "20260930000009_account_default_organization.sql"
+      "defined_by": "20261019000009_login_verification_cost.sql"
     },
     {
       "name": "authenticate_user",
@@ -30176,6 +29929,20 @@
       "volatility": null,
       "comment": null,
       "defined_by": "20261019000001_verified_browser_identity.sql"
+    },
+    {
+      "name": "cancel_authorized_run",
+      "signature": "cancel_authorized_run(uuid, uuid, uuid)",
+      "args": [
+        "p_project_id uuid",
+        "p_run_id uuid",
+        "_actor_user_id uuid DEFAULT NULL"
+      ],
+      "returns": "void LANGUAGE plpgsql SECURITY DEFINER SET search_path",
+      "security_definer": true,
+      "volatility": null,
+      "comment": null,
+      "defined_by": "20261019000010_api_scenario_actor.sql"
     },
     {
       "name": "capabilities_for_user",
@@ -30595,11 +30362,11 @@
       "args": [
         "p_dataset_version_id uuid"
       ],
-      "returns": "jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO",
+      "returns": "jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path TO",
       "security_definer": true,
       "volatility": "STABLE",
       "comment": null,
-      "defined_by": "20261004000002_version_codes.sql"
+      "defined_by": "20261019000007_remaining_rpc_boundaries.sql"
     },
     {
       "name": "dataset_versions_assign_number",
@@ -30919,7 +30686,7 @@
       "security_definer": true,
       "volatility": null,
       "comment": null,
-      "defined_by": "20260726000001_chat_plans.sql"
+      "defined_by": "20261019000007_remaining_rpc_boundaries.sql"
     },
     {
       "name": "find_reusable_runs",
@@ -31018,11 +30785,11 @@
       "args": [
         "_user_id uuid"
       ],
-      "returns": "uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO",
+      "returns": "uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path",
       "security_definer": true,
       "volatility": "STABLE",
       "comment": null,
-      "defined_by": "20260915000004_org_identity_dual_read.sql"
+      "defined_by": "20261019000007_remaining_rpc_boundaries.sql"
     },
     {
       "name": "get_current_user_org",
@@ -31505,11 +31272,11 @@
       "name": "get_self_profile",
       "signature": "get_self_profile()",
       "args": [],
-      "returns": "TABLE( id uuid, email text, name text, role text, organization text, created_at timestamptz, updated_at timestamptz )",
+      "returns": "TABLE(id uuid, email text, name text, role text, organization text, created_at timestamptz, updated_at timestamptz)",
       "security_definer": true,
-      "volatility": null,
+      "volatility": "STABLE",
       "comment": null,
-      "defined_by": "20250826015629_1f7e7b79-174e-45ac-bb52-21cbf97da25f.sql"
+      "defined_by": "20261019000007_remaining_rpc_boundaries.sql"
     },
     {
       "name": "get_simulation_results",
@@ -31619,11 +31386,11 @@
       "args": [
         "p_level_version_id uuid"
       ],
-      "returns": "integer LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO",
+      "returns": "integer LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path TO",
       "security_definer": true,
       "volatility": "STABLE",
       "comment": null,
-      "defined_by": "20261001000022_training_set_by_simulation_version.sql"
+      "defined_by": "20261019000007_remaining_rpc_boundaries.sql"
     },
     {
       "name": "has_project_access",
@@ -31919,11 +31686,11 @@
       "name": "list_approved_users_safe",
       "signature": "list_approved_users_safe()",
       "args": [],
-      "returns": "TABLE( id uuid, email text, name text, role text, organization text, created_at timestamptz, updated_at timestamptz )",
+      "returns": "TABLE(id uuid, email text, name text, role text, organization text, created_at timestamptz, updated_at timestamptz)",
       "security_definer": true,
-      "volatility": null,
+      "volatility": "STABLE",
       "comment": null,
-      "defined_by": "20250826015629_1f7e7b79-174e-45ac-bb52-21cbf97da25f.sql"
+      "defined_by": "20261019000007_remaining_rpc_boundaries.sql"
     },
     {
       "name": "list_chat_folders",
@@ -32263,13 +32030,14 @@
     },
     {
       "name": "persist_browser_result",
-      "signature": "persist_browser_result(uuid, uuid, jsonb, jsonb, jsonb)",
+      "signature": "persist_browser_result(uuid, uuid, jsonb, jsonb, jsonb, uuid)",
       "args": [
         "p_run_id uuid",
         "p_project_id uuid",
         "p_replications jsonb DEFAULT '[]'::jsonb",
         "p_item_series jsonb DEFAULT '[]'::jsonb",
-        "p_run_update jsonb DEFAULT NULL"
+        "p_run_update jsonb DEFAULT NULL",
+        "_actor_user_id uuid DEFAULT NULL"
       ],
       "returns": "void LANGUAGE plpgsql SECURITY DEFINER SET search_path",
       "security_definer": true,
@@ -32422,7 +32190,7 @@
       "security_definer": true,
       "volatility": "STABLE",
       "comment": "D230, D231, D276, D279 — one person's rights on one project, as the app applies them while ",
-      "defined_by": "20261002000007_project_role_decides.sql"
+      "defined_by": "20261019000007_remaining_rpc_boundaries.sql"
     },
     {
       "name": "project_role_holdings",
@@ -32826,11 +32594,11 @@
       "args": [
         "p_scenario_id uuid"
       ],
-      "returns": "text LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO",
+      "returns": "text LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path TO",
       "security_definer": true,
       "volatility": "STABLE",
       "comment": null,
-      "defined_by": "20260710000001_model_validations.sql"
+      "defined_by": "20261019000007_remaining_rpc_boundaries.sql"
     },
     {
       "name": "scenarios_assign_validation_baseline",
@@ -33578,6 +33346,90 @@
       "defined_by": "20260723000001_reports_and_file_workspace.sql"
     }
   ],
+  "platform_relations": [
+    {
+      "schema": "realtime",
+      "name": "messages",
+      "rls": {
+        "enabled": true,
+        "policies": [
+          {
+            "name": "security_project_broadcast_read",
+            "command": "SELECT",
+            "roles": [
+              "authenticated"
+            ],
+            "using": "CASE WHEN realtime.topic() ~ '^sim:[0-9a-fA-F-]{36}$' THEN public.security_project_allowed(split_part(realtime.topic(), ':', 2)::uuid, NULL) ELSE false END",
+            "with_check": "CASE WHEN realtime.topic() ~ '^sim:[0-9a-fA-F-]{36}$' THEN public.security_project_allowed(split_part(realtime.topic(), ':', 2)::uuid, NULL) ELSE false END",
+            "added_by": "20261019000006_storage_and_realtime.sql"
+          },
+          {
+            "name": "security_project_broadcast_fence",
+            "permissive": false,
+            "command": "SELECT",
+            "roles": [
+              "PUBLIC"
+            ],
+            "using": "CASE WHEN realtime.topic() ~ '^sim:[0-9a-fA-F-]{36}$' THEN public.security_project_allowed(split_part(realtime.topic(), ':', 2)::uuid, NULL) ELSE false END",
+            "with_check": "CASE WHEN realtime.topic() ~ '^sim:[0-9a-fA-F-]{36}$' THEN public.security_project_allowed(split_part(realtime.topic(), ':', 2)::uuid, NULL) ELSE false END",
+            "added_by": "20261019000006_storage_and_realtime.sql"
+          }
+        ]
+      }
+    },
+    {
+      "schema": "storage",
+      "name": "objects",
+      "rls": {
+        "enabled": true,
+        "policies": [
+          {
+            "name": "Avatars are publicly readable",
+            "command": "SELECT",
+            "roles": [],
+            "using": "bucket_id = 'avatars'",
+            "with_check": "bucket_id = 'avatars'",
+            "added_by": "20260527011429_f6324329-8a1e-4382-89fe-3bbe364efa92.sql"
+          },
+          {
+            "name": "Users can upload their own avatar",
+            "command": "INSERT",
+            "roles": [],
+            "using": "bucket_id = 'avatars' AND (storage.foldername(name))[1] = COALESCE(public.get_current_user_id()::text, '__none__')",
+            "with_check": "bucket_id = 'avatars' AND (storage.foldername(name))[1] = COALESCE(public.get_current_user_id()::text, '__none__')",
+            "added_by": "20260527011429_f6324329-8a1e-4382-89fe-3bbe364efa92.sql"
+          },
+          {
+            "name": "Users can update their own avatar",
+            "command": "UPDATE",
+            "roles": [],
+            "using": "bucket_id = 'avatars' AND (storage.foldername(name))[1] = COALESCE(public.get_current_user_id()::text, '__none__')",
+            "with_check": "bucket_id = 'avatars' AND (storage.foldername(name))[1] = COALESCE(public.get_current_user_id()::text, '__none__')",
+            "added_by": "20260527011429_f6324329-8a1e-4382-89fe-3bbe364efa92.sql"
+          },
+          {
+            "name": "Users can delete their own avatar",
+            "command": "DELETE",
+            "roles": [],
+            "using": "bucket_id = 'avatars' AND (storage.foldername(name))[1] = COALESCE(public.get_current_user_id()::text, '__none__')",
+            "with_check": "bucket_id = 'avatars' AND (storage.foldername(name))[1] = COALESCE(public.get_current_user_id()::text, '__none__')",
+            "added_by": "20260527011429_f6324329-8a1e-4382-89fe-3bbe364efa92.sql"
+          },
+          {
+            "name": "security_private_bucket_fence",
+            "permissive": false,
+            "command": "ALL",
+            "roles": [
+              "PUBLIC"
+            ],
+            "using": "bucket_id NOT IN ('ingest','workspace','run-results')",
+            "with_check": "bucket_id NOT IN ('ingest','workspace','run-results')",
+            "added_by": "20261019000006_storage_and_realtime.sql"
+          }
+        ]
+      }
+    }
+  ],
   "extensions": [
     "pg_net",
     "pgcrypto",
@@ -34287,6 +34139,24 @@
       "touches_rls": false,
       "has_format_placeholder": false,
       "named_only_via_block": false,
+      "why": "plpgsql EXECUTE — DDL assembled at run time; a static replay cannot evaluate it"
+    },
+    {
+      "migration": "20261019000007_remaining_rpc_boundaries.sql",
+      "statement": "IF target IS NOT NULL THEN EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC, anon, authenticated', target)",
+      "mentions": [],
+      "touches_rls": false,
+      "has_format_placeholder": true,
+      "named_only_via_block": true,
+      "why": "plpgsql EXECUTE — DDL assembled at run time; a static replay cannot evaluate it"
+    },
+    {
+      "migration": "20261019000007_remaining_rpc_boundaries.sql",
+      "statement": "EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO service_role', target)",
+      "mentions": [],
+      "touches_rls": false,
+      "has_format_placeholder": true,
+      "named_only_via_block": true,
       "why": "plpgsql EXECUTE — DDL assembled at run time; a static replay cannot evaluate it"
     }
   ],

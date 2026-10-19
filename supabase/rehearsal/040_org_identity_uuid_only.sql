@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- D29 · two tenants may share a display name, and the predicate must refuse.
 --
 -- `organizations.name` carries no unique constraint (only `slug` does). While
@@ -34,7 +35,7 @@ BEGIN
          -- D27's shape: the text is right, the uuid was never stamped.
          (v_proj_nul, 'Unstamped', v_user, 'P', 'Initech', NULL);
 
-  PERFORM set_config('app.current_user_id', v_user::text, true);
+  PERFORM pg_temp.browser_session(v_user);
 
   -- 1 · the caller's own organization, by uuid
   IF NOT public.org_is_current_user_org(v_org_a, 'Initech') THEN

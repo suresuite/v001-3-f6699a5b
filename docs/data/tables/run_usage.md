@@ -44,17 +44,16 @@ partially or get corrected — the write fails.
 | Minimum project role | `viewer` |
 | Tier transitions audited | **no** — invariant `audit-actor` is not met here yet |
 | Row-level security | enabled |
-| Policies on the table | 6 — all carry a predicate |
+| Policies on the table | 5 — all carry a predicate |
 
-No API role reads or writes it: RLS is on with no policy. Written only by SECURITY DEFINER code — `create_simulation_run` (the reservation, in the same statement as the run row it reserves for), the `simulation_runs_usage_complete` trigger (the actual, once per run) and `simulation_runs_usage_expire` (the release) — and read only through `get_my_capacity` and the super admin's `admin_org_capacity_usage` (the super admin's usage view, `src/pages/admin/AdminUsage.tsx` — an admin page, outside §5.1's lineage). NOT AUDITED: tier 5 is output, append-only by its `(run_id, kind)` key, and each row names the member and the run itself. Compute used is the ledger's, so deleting runs does not hand a month's compute back; storage used is derived from the live runs, so a deleted run frees its bytes whatever deleted it.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; direct browser mutations are closed and authorized RPCs retain their own role gates. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: No API role reads or writes it: RLS is on with no policy. Written only by SECURITY DEFINER code — `create_simulation_run` (the reservation, in the same statement as the run row it reserves for), the `simulation_runs_usage_complete` trigger (the actual, once per run) and `simulation_runs_usage_expire` (the release) — and read only through `get_my_capacity` and the super admin's `admin_org_capacity_usage` (the super admin's usage view, `src/pages/admin/AdminUsage.tsx` — an admin page, outside §5.1's lineage). NOT AUDITED: tier 5 is output, append-only by its `(run_id, kind)` key, and each row names the member and the run itself. Compute used is the ledger's, so deleting runs does not hand a month's compute back; storage used is derived from the live runs, so a deleted run frees its bytes whatever deleted it.
 
-<details><summary>6 RLS policies</summary>
+<details><summary>5 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
 | security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
 | security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
-| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
 | security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 | security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 | security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
@@ -234,6 +233,6 @@ When the event happened; the month a reservation counts in.
 
 ---
 
-*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/run_usage.contract.yaml`, table created by `20261001000012_capacity.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

@@ -58,6 +58,11 @@ governance:
   audited: true
   rls_enabled: true
   note: >-
+    D309/D310 candidate (not deployed): browser reads require a verified active
+    principal and scoped project/owner access. Anonymous tenant grants are revoked;
+    direct browser mutations are closed and authorized RPCs retain their own role gates.
+    The generated schema owns the exact policies; D310 owns live-grant evidence.
+    Historical context before this candidate:
     Written by `rebuild_supply_chain_lanes` — the ONE ETL since WP 8.2 — and
     never by a page. It had TWO writers until then, this and the
     `combine-project` edge function, disagreeing about what `level` meant (§4

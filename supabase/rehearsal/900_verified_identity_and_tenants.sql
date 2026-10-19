@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- D309/D310. Isolated PostgREST-claim simulation: PostgreSQL sees claims only AFTER
 -- the gateway has verified a token. Signature failures are exercised by Vitest.
 -- No production endpoint or row is touched. The rehearsal rolls back this file.
@@ -87,6 +88,16 @@ BEGIN
   IF NOT denied THEN RAISE EXCEPTION 'Cross-organization admin wrote input data'; END IF;
   RESET ROLE;
 
+  PERFORM pg_temp.security_session(owner_id);
+  SET LOCAL ROLE authenticated;
+  denied:=false;
+  BEGIN PERFORM public.bulk_insert_bom_single_level(jsonb_build_array(
+    jsonb_build_object('project_id',project_a,'product_id','P','material_id','M'),
+    jsonb_build_object('project_id',project_b,'product_id','P','material_id','M')),owner_id,'security-owner@example.invalid');
+  EXCEPTION WHEN insufficient_privilege THEN denied:=true; END;
+  IF NOT denied THEN RAISE EXCEPTION 'Mixed-project batch authorized only its first row'; END IF;
+  RESET ROLE;
+
   -- Approved owner and super admin positives are necessary: deny-all would fail them.
   PERFORM pg_temp.security_session(owner_id);
   SET LOCAL ROLE authenticated;
@@ -102,6 +113,15 @@ BEGIN
   SET LOCAL ROLE authenticated;
   IF public.security_is_service() THEN RAISE EXCEPTION 'SQL authenticated role inherited maintenance authority'; END IF;
   RESET ROLE;
+
+  -- Membership in a second tenant does not bypass that tenant's access period.
+  PERFORM set_config('request.jwt.claims','{}',true);
+  INSERT INTO public.organization_members(org_id,user_id,org_role) VALUES(org_b,owner_id,'member') ON CONFLICT DO NOTHING;
+  PERFORM pg_temp.security_session(owner_id);
+  IF NOT public.security_project_allowed(project_b,NULL) THEN RAISE EXCEPTION 'Legitimate second-organization membership lost read'; END IF;
+  UPDATE public.organizations SET access_period='week', access_valid_from=now()-interval '8 days' WHERE id=org_b;
+  IF public.security_project_allowed(project_b,NULL) THEN RAISE EXCEPTION 'Expired target organization remained readable'; END IF;
+  UPDATE public.organizations SET access_period=NULL, access_valid_from=NULL WHERE id=org_b;
 
   -- Anonymous callers cannot use asserted actors, even with a populated GUC.
   PERFORM set_config('request.jwt.claims','{"role":"anon"}',true);
@@ -135,4 +155,18 @@ BEGIN
   IF NOT EXISTS(SELECT 1 FROM public.simulation_runs WHERE id=run_id AND status='done' AND policy_hash='frozen-policy' AND graph_hash='frozen-graph') THEN
     RAISE EXCEPTION 'Authorized result persistence changed bindings or failed';
   END IF;
+  PERFORM pg_temp.security_session(viewer_id);
+  SET LOCAL ROLE authenticated;
+  denied:=false;
+  BEGIN PERFORM public.cancel_authorized_run(project_a,run_id,viewer_id);
+  EXCEPTION WHEN insufficient_privilege THEN denied:=true; END;
+  IF NOT denied THEN RAISE EXCEPTION 'Viewer cancelled a run'; END IF;
+  RESET ROLE;
+  PERFORM pg_temp.security_session(owner_id);
+  SET LOCAL ROLE authenticated;
+  denied:=false;
+  BEGIN PERFORM public.cancel_authorized_run(project_b,run_id,owner_id);
+  EXCEPTION WHEN insufficient_privilege THEN denied:=true; END;
+  IF NOT denied THEN RAISE EXCEPTION 'Cancellation accepted mismatched project/run'; END IF;
+  RESET ROLE;
 END; $test$;

@@ -28,13 +28,13 @@
 | | |
 |---|---|
 | Read capability | any project member |
-| Write capability | **no user-facing write path** |
+| Write capability | `data_edit_inputs` |
 | Minimum project role | `viewer` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
 | Policies on the table | 6 — all carry a predicate |
 
-Read follows project reachability. `bulk_insert_network_summary` exists and HAS NO CALLER AT ALL — §4 D56 records it, and §15 has never counted the table's rows. Described here rather than deferred a fourth time, because a table nothing writes still carries RLS policies that every governance rewrite has had to maintain. `audited: true` as of WP 4.3.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; browser writes require `data_edit_inputs` on the project. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: Read follows project reachability. `bulk_insert_network_summary` exists and HAS NO CALLER AT ALL — §4 D56 records it, and §15 has never counted the table's rows. Described here rather than deferred a fourth time, because a table nothing writes still carries RLS policies that every governance rewrite has had to maintain. `audited: true` as of WP 4.3.
 
 <details><summary>6 RLS policies</summary>
 
@@ -296,6 +296,6 @@ WP 4.3 · when the run that wrote the computed columns finished. It is provenanc
 
 ---
 
-*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/network_summary.contract.yaml`, table created by `20250904105527_e00a21a9-0120-48a7-a62d-e2db83fd4cc6.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

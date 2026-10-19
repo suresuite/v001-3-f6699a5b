@@ -40,17 +40,16 @@ partially or get corrected — the write fails.
 | Minimum project role | `viewer` |
 | Tier transitions audited | **no** — invariant `audit-actor` is not met here yet |
 | Row-level security | enabled |
-| Policies on the table | 6 — all carry a predicate |
+| Policies on the table | 5 — all carry a predicate |
 
-`write: simulation_lab` is the capability behind the one user action that creates a run. The row itself is created by the dispatcher through `create_simulation_run` (service role only — §4 D248 keeps it off the API) and moved on by the worker, or by the browser engine for a browser-computed run. BUT the table carries two predicate-less policies (`sim_runs_auth_all`, `sim_runs_anon_all`), so any holder of the table grant can write a row directly, RunKey and class included — one of the tables §4 D154 measured as writable from the browser's `anon` role, D28's standing decision and WP 7.1's to close. `min_project_role` is `viewer` because nothing here enforces a role, not because a viewer ought to write results. NOT AUDITED: tier 5 is output, and a re-run writes a new row rather than mutating this one.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; direct browser mutations are closed and authorized RPCs retain their own role gates. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: `write: simulation_lab` is the capability behind the one user action that creates a run. The row itself is created by the dispatcher through `create_simulation_run` (service role only — §4 D248 keeps it off the API) and moved on by the worker, or by the browser engine for a browser-computed run. BUT the table carries two predicate-less policies (`sim_runs_auth_all`, `sim_runs_anon_all`), so any holder of the table grant can write a row directly, RunKey and class included — one of the tables §4 D154 measured as writable from the browser's `anon` role, D28's standing decision and WP 7.1's to close. `min_project_role` is `viewer` because nothing here enforces a role, not because a viewer ought to write results. NOT AUDITED: tier 5 is output, and a re-run writes a new row rather than mutating this one.
 
-<details><summary>6 RLS policies</summary>
+<details><summary>5 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
 | security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
 | security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
-| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
 | security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 | security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 | security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
@@ -668,6 +667,6 @@ The simulation scope's level version the run computed over ("simulation inputs v
 
 ---
 
-*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/simulation_runs.contract.yaml`, table created by `20260607121406_fcbd47e9-93de-4b3b-988f-7f4718159c91.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- §4 D245, D248 · ENGINES, RUNKEY, AND THE RESULT BINDING ON THE ROW (WP 10.4).
 --
 -- §1 the registry: scsim active, the legacy engine retired; dispatch defaults to
@@ -121,17 +122,20 @@ BEGIN
               -- for both, so the read tool's door below keys on the same value.
               'policy_hash', k_ph, 'graph_hash', k_gh, 'hash_simulation', k_gh, 'seed', 42,
               'disruption_schedule', '[]'::jsonb);
+  PERFORM pg_temp.browser_session(v_user);
   v_res := public.create_simulation_run(v_base, false, true, v_user);
   v_run1 := (v_res ->> 'run_id')::uuid;
   IF v_run1 IS NULL OR (v_res ->> 'attached')::boolean THEN
     RAISE EXCEPTION 'R590 §4: the first submission did not create a run: %', v_res;
   END IF;
+  PERFORM pg_temp.browser_session(v_user);
   v_res2 := public.create_simulation_run(v_base, false, true, v_user);
   SELECT count(*) INTO v_n FROM public.simulation_runs WHERE scenario_id = v_scen;
   IF (v_res2 ->> 'run_id')::uuid IS DISTINCT FROM v_run1 OR NOT (v_res2 ->> 'attached')::boolean OR v_n <> 1 THEN
     RAISE EXCEPTION 'R590 §4: a second identical submission in flight made % run(s): %', v_n, v_res2;
   END IF;
   -- A browser-computed run is computed by the browser that asked: never attached.
+  PERFORM pg_temp.browser_session(v_user);
   v_res2 := public.create_simulation_run(v_base, false, false, v_user);
   v_run2 := (v_res2 ->> 'run_id')::uuid;
   IF v_run2 IS NULL OR v_run2 = v_run1 THEN
@@ -140,6 +144,7 @@ BEGIN
   DELETE FROM public.simulation_runs WHERE id = v_run2;
   UPDATE public.simulation_runs SET status = 'done', rep_count_done = 10, code_version = 'scsim-0.2.8',
          ended_at = now() WHERE id = v_run1;
+  PERFORM pg_temp.browser_session(v_user);
   v_res2 := public.create_simulation_run(v_base, false, true, v_user);
   SELECT count(*) INTO v_n FROM public.simulation_runs WHERE scenario_id = v_scen;
   IF (v_res2 -> 'reuse' ->> 'run_id')::uuid IS DISTINCT FROM v_run1 OR v_n <> 1 THEN
@@ -153,6 +158,7 @@ BEGIN
   IF v_n <> 0 THEN
     RAISE EXCEPTION 'R590 §4: a 10-replication run was offered for a 20-replication request';
   END IF;
+  PERFORM pg_temp.browser_session(v_user);
   v_res2 := public.create_simulation_run(v_base, true, true, v_user);
   SELECT count(*) INTO v_n FROM public.simulation_runs WHERE scenario_id = v_scen;
   IF v_n <> 2 OR (v_res2 ->> 'run_id')::uuid = v_run1 THEN
@@ -189,8 +195,9 @@ BEGIN
   -- The browser engine persists its results AS ANON, so the derivation must run
   -- with anon's privileges — a helper only the owner could execute would fail
   -- every browser-computed run here.
-  SET LOCAL ROLE anon;
-  UPDATE public.simulation_runs SET code_version = 'worker-legacy' WHERE id = v_run2;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_user);
+  PERFORM public.persist_browser_result(v_run2,v_proj,p_run_update => '{"code_version":"worker-legacy"}'::jsonb, _actor_user_id => v_user);
   RESET ROLE;
   IF (SELECT engine_id FROM public.simulation_runs WHERE id = v_run2) IS DISTINCT FROM v_legacy THEN
     RAISE EXCEPTION 'R590 §6: the engine was not derived from the code version the writer stamped';

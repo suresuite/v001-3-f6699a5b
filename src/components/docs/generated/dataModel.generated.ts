@@ -25,14 +25,14 @@ export type UndescribedGroup = {
 };
 
 /** The contract version these figures came from. §6.4: a version, never a date. */
-export const CONTRACT_VERSION = "1df77a699e5c";
+export const CONTRACT_VERSION = "d11fbbefaac3";
 export const ENGINE_VERSION = "0.8.0";
-export const LAST_MIGRATION = "20261019000006_storage_and_realtime.sql";
+export const LAST_MIGRATION = "20261019000010_api_scenario_actor.sql";
 
 export const COUNTS = {
-  "tablesInSchema": 94,
-  "tablesDescribed": 77,
-  "columnsDescribed": 1026,
+  "tablesInSchema": 95,
+  "tablesDescribed": 78,
+  "columnsDescribed": 1028,
   "tablesUndescribed": 17
 } as const;
 
@@ -527,6 +527,12 @@ export const TIERS: GlanceTier[] = [
         "grain": "One row per analysis kind: which LEVEL of the graph it reads. The one place that is stated — `analysis_get_or_start` reads it to choose the hash a run is keyed on, so a price edit does not invalidate a centrality. What each kind's parameters mean is stated in `analysis_runs.contract.yaml`'s catalog; `analysisKindsParity.test.ts` fails when the two disagree about which kinds exist.",
         "columns": 6,
         "owner": "analysis"
+      },
+      {
+        "table": "browser_session_config",
+        "grain": "One deployment's accepted browser-session issuer; a singleton maintained before user traffic.",
+        "columns": 2,
+        "owner": "platform"
       },
       {
         "table": "risk_data",

@@ -26,17 +26,16 @@
 | Minimum project role | `viewer` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
-| Policies on the table | 6 — all carry a predicate |
+| Policies on the table | 5 — all carry a predicate |
 
-Written by the `_build_dataset_snapshot` database function, never by a page — that is the INTENT, and `write: null` records it. **And since WP 11.1 the database enforces it** (§4 D265): from WP 2.4 to WP 11.1 the live policy `dataset_versions_insert_all` was `FOR INSERT ... WITH CHECK (true)` with an INSERT grant to `anon` and `authenticated`, pinned by `governanceEnforcement.test.ts` rather than changed. No path inserted a row directly, and from WP 11.1 a planted row would also have minted level versions, so the policy is dropped and the grant revoked; `snapshot_dataset` (SECURITY DEFINER) and the service role are the writers. Reads stay open to every API role (`dataset_versions_read_all`, part of D28's pinned list).
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; direct browser mutations are closed and authorized RPCs retain their own role gates. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: Written by the `_build_dataset_snapshot` database function, never by a page — that is the INTENT, and `write: null` records it. **And since WP 11.1 the database enforces it** (§4 D265): from WP 2.4 to WP 11.1 the live policy `dataset_versions_insert_all` was `FOR INSERT ... WITH CHECK (true)` with an INSERT grant to `anon` and `authenticated`, pinned by `governanceEnforcement.test.ts` rather than changed. No path inserted a row directly, and from WP 11.1 a planted row would also have minted level versions, so the policy is dropped and the grant revoked; `snapshot_dataset` (SECURITY DEFINER) and the service role are the writers. Reads stay open to every API role (`dataset_versions_read_all`, part of D28's pinned list).
 
-<details><summary>6 RLS policies</summary>
+<details><summary>5 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
 | security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
 | security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
-| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
 | security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 | security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 | security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
@@ -406,6 +405,6 @@ This snapshot's SIMULATION scope version — the `graph_level_versions` row whos
 
 ---
 
-*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/dataset_versions.contract.yaml`, table created by `20260703000001_dataset_versions.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

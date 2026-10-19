@@ -41,11 +41,16 @@ surfaces:
 
 governance:
   read: null
-  write: null
+  write: data_edit_inputs
   min_project_role: viewer
   audited: true
   rls_enabled: true
   note: >-
+    D309/D310 candidate (not deployed): browser reads require a verified active
+    principal and scoped project/owner access. Anonymous tenant grants are revoked;
+    browser writes require `data_edit_inputs` on the project.
+    The generated schema owns the exact policies; D310 owns live-grant evidence.
+    Historical context before this candidate:
     Read follows project reachability. `bulk_insert_network_summary` exists and HAS NO
     CALLER AT ALL — §4 D56 records it, and §15 has never counted the table's rows.
     Described here rather than deferred a fourth time, because a table nothing writes

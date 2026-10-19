@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- §4 D258 · A VERSION PER LEVEL (WP 11.1).
 --
 -- §1  a snapshot registers its level rows (three, and since WP 11.2 the simulation
@@ -49,7 +50,7 @@ BEGIN
     VALUES (v_user, 'r650@example.invalid', 'R660', 'x');
   INSERT INTO public.projects (id, name, modeler_id, plant_name)
     VALUES (v_proj, 'R660', v_user, 'P'), (v_proj3, 'R660 history', v_user, 'P');
-  PERFORM set_config('app.current_user_id', v_user::text, true);
+  PERFORM pg_temp.browser_session(v_user);
 
   INSERT INTO public.suppliers (project_id, supplier_id) VALUES (v_proj, 'S1');
   INSERT INTO public.materials (project_id, material_id, cost) VALUES (v_proj, 'M1', 10);
@@ -60,6 +61,7 @@ BEGIN
     VALUES (v_proj, 'P', 'P1', 'M1', 2);
 
   -- ══ §1 · one snapshot, three level rows numbered 1 ══
+  PERFORM pg_temp.browser_session(v_user);
   v_d1 := public.snapshot_dataset(v_proj, 'first', v_user);
   SELECT * INTO v_dv FROM public.dataset_versions WHERE id = v_d1;
   -- Four since WP 11.2: the simulation scope is the fourth level (`rehearsal/670`).
@@ -85,6 +87,7 @@ BEGIN
 
   -- ══ §2 · a price edit moves product only ══
   UPDATE public.materials SET cost = 11 WHERE project_id = v_proj;
+  PERFORM pg_temp.browser_session(v_user);
   v_d2 := public.snapshot_dataset(v_proj, 'price', v_user);
   SELECT * INTO v_dv FROM public.dataset_versions WHERE id = v_d2;
   IF v_d2 = v_d1 THEN RAISE EXCEPTION 'R660 §2: a price edit did not make a new snapshot'; END IF;
@@ -98,6 +101,7 @@ BEGIN
 
   -- ══ §3 · a BOM quantity moves product AND process ══
   UPDATE public.bom_single_level SET consumption_rate = 3 WHERE project_id = v_proj;
+  PERFORM pg_temp.browser_session(v_user);
   v_d3 := public.snapshot_dataset(v_proj, 'bom', v_user);
   SELECT * INTO v_dv FROM public.dataset_versions WHERE id = v_d3;
   SELECT version_no INTO v_no FROM public.graph_level_versions WHERE id = v_dv.product_version_id;
@@ -133,6 +137,7 @@ BEGIN
   IF (v_st -> 'current_version') <> 'null'::jsonb THEN
     RAISE EXCEPTION 'R660 §4: the composite reads a saved version for an unsaved world';
   END IF;
+  PERFORM pg_temp.browser_session(v_user);
   v_cap := public.capture_graph_version(v_proj, v_user, 'deep tier');
   v_d4 := (v_cap ->> 'dataset_version_id')::uuid;
   SELECT * INTO v_dv FROM public.dataset_versions WHERE id = v_d4;
@@ -155,6 +160,7 @@ BEGIN
   DELETE FROM public.network_edges WHERE project_id = v_proj;
   DELETE FROM public.network_nodes WHERE project_id = v_proj;
   SELECT count(*) INTO v_n FROM public.graph_level_versions WHERE project_id = v_proj AND level = 'firm';
+  PERFORM pg_temp.browser_session(v_user);
   v_d5 := public.snapshot_dataset(v_proj, 'revert', v_user);
   SELECT * INTO v_dv FROM public.dataset_versions WHERE id = v_d5;
   IF v_d5 IN (v_d1, v_d2, v_d3, v_d4) THEN
@@ -290,7 +296,8 @@ BEGIN
   DELETE FROM public.audit_logs WHERE plane = 'data' AND target_type = 'graph_level_versions';
   ALTER TABLE public.audit_logs ENABLE TRIGGER audit_logs_guard_change;
   UPDATE public.materials SET cost = 13 WHERE project_id = v_proj;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
+  PERFORM pg_temp.browser_session(v_user);
   PERFORM public.snapshot_dataset(v_proj, 'attributed', v_user);
   SELECT * INTO v_row FROM public.audit_logs
    WHERE plane = 'data' AND target_type = 'graph_level_versions' AND action = 'insert'

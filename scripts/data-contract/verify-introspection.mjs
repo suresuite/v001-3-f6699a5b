@@ -161,8 +161,9 @@ check(
 // louder wrong answer than the one it replaced.
 check(
   "multi-tier access retains scoped reads and restrictive write fences",
-  ['security_read', 'security_write', 'security_read_fence', 'security_insert_fence', 'security_update_fence', 'security_delete_fence']
-    .every(name => T.get("supply_chain_data_multi_tier")?.rls.policies.some(p => p.name === name && (!name.endsWith('_fence') || p.permissive === false))),
+  ['security_read', 'security_read_fence', 'security_insert_fence', 'security_update_fence', 'security_delete_fence']
+    .every(name => T.get("supply_chain_data_multi_tier")?.rls.policies.some(p => p.name === name && (!name.endsWith('_fence') || p.permissive === false)))
+    && T.get("supply_chain_data_multi_tier")?.rls.policies.length === 5,
   `${T.get("supply_chain_data_multi_tier")?.rls.policies.length ?? 0} policies`,
 );
 check(

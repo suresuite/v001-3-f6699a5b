@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- §4 D304 · AN ORGANIZATION ADMIN OR OWNER MAY DELETE A PROJECT OF THAT ORGANIZATION AND THE
 -- DATA INSIDE ONE, WHATEVER THE ACCOUNT ROLE.
 --
@@ -46,14 +47,17 @@ BEGIN
     (v_owner,  'd304o@example.invalid', 'D304 Owner',  'x', 'user',        'D304 Org A', v_org_a, true),
     (v_member, 'd304m@example.invalid', 'D304 Member', 'x', 'user',        'D304 Org A', v_org_a, true),
     (v_maker,  'd304k@example.invalid', 'D304 Maker',  'x', 'modeler',     'D304 Org A', v_org_a, true);
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_user_org_role(v_super, 'd304s@example.invalid', v_admin, v_org_a, 'admin');
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_user_org_role(v_super, 'd304s@example.invalid', v_owner, v_org_a, 'owner');
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_add_org_member(v_super, 'd304s@example.invalid', v_admin, v_org_b, 'member');
   INSERT INTO public.projects (id, name, modeler_id, plant_name, organization, organization_id, bom_level) VALUES
     (v_p1, 'D304 p1', v_maker, 'D304P', 'D304 Org A', v_org_a, 'single'),
     (v_p2, 'D304 p2', v_maker, 'D304P', 'D304 Org A', v_org_a, 'single'),
     (v_q,  'D304 q',  v_super, 'D304Q', 'D304 Org B', v_org_b, 'single');
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
 
   IF (SELECT organization_id FROM public.approved_users WHERE id = v_admin) IS DISTINCT FROM v_org_a
      OR (SELECT org_role FROM public.organization_members WHERE user_id = v_admin AND org_id = v_org_a) IS DISTINCT FROM 'admin'
@@ -74,26 +78,31 @@ BEGIN
   IF public.project_org_admin(v_member, v_p1) THEN
     RAISE EXCEPTION 'D304/870 §1: a member of A is an organization admin of A''s project';
   END IF;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_admin);
   PERFORM public.switch_my_organization(v_org_b, v_admin);
   RESET ROLE;
   IF public.project_org_admin(v_admin, v_p1) THEN
     RAISE EXCEPTION 'D304/870 §1: an admin of A working in B still counts as an admin of A''s project';
   END IF;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_admin);
   PERFORM public.switch_my_organization(v_org_a, v_admin);
   RESET ROLE;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
 
   -- ── §2 the data ──────────────────────────────────────────────────────────
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_admin);
   v_n := public.delete_project_dataset(v_p1, 'network_nodes', v_admin, 'd304a@example.invalid');
+  PERFORM pg_temp.browser_session(v_admin);
   v_n := public.delete_project_dataset(v_p1, 'all', v_admin, 'd304a@example.invalid');
   RESET ROLE;
 
   v_msg := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_member);
     PERFORM public.delete_project_dataset(v_p1, 'all', v_member, 'd304m@example.invalid');
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN RESET ROLE; v_msg := SQLERRM; END;
@@ -103,17 +112,19 @@ BEGIN
 
   v_msg := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_admin);
     PERFORM public.delete_project_dataset(v_q, 'all', v_admin, 'd304a@example.invalid');
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN RESET ROLE; v_msg := SQLERRM; END;
   IF v_msg IS DISTINCT FROM 'forbidden' THEN
     RAISE EXCEPTION 'D304/870 §2: an admin of A deleting B''s project''s data got %', COALESCE(v_msg, '(no error)');
   END IF;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
 
   -- ── §3 the project ───────────────────────────────────────────────────────
   v_code := NULL;
+  PERFORM pg_temp.browser_session(v_member);
   BEGIN PERFORM public.delete_project(v_p2, v_member, 'd304m@example.invalid');
   EXCEPTION WHEN OTHERS THEN v_code := SQLSTATE; END;
   IF v_code IS DISTINCT FROM '42501' OR NOT EXISTS (SELECT 1 FROM public.projects WHERE id = v_p2) THEN
@@ -122,6 +133,7 @@ BEGIN
   END IF;
 
   v_code := NULL;
+  PERFORM pg_temp.browser_session(v_admin);
   BEGIN PERFORM public.delete_project(v_q, v_admin, 'd304a@example.invalid');
   EXCEPTION WHEN OTHERS THEN v_code := SQLSTATE; END;
   IF v_code IS DISTINCT FROM '42501' OR NOT EXISTS (SELECT 1 FROM public.projects WHERE id = v_q) THEN
@@ -129,16 +141,20 @@ BEGIN
       COALESCE(v_code, '(no error)'), EXISTS (SELECT 1 FROM public.projects WHERE id = v_q);
   END IF;
 
+  PERFORM pg_temp.browser_session(v_owner);
+
   PERFORM public.delete_project(v_p2, v_owner, 'd304o@example.invalid');
   IF EXISTS (SELECT 1 FROM public.projects WHERE id = v_p2) THEN
     RAISE EXCEPTION 'D304/870 §3: the organization owner''s delete left the project in place';
   END IF;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
 
   -- ── §4 nothing narrowed ──────────────────────────────────────────────────
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_maker);
   v_n := public.delete_project_dataset(v_p1, 'all', v_maker, 'd304k@example.invalid');
   RESET ROLE;
+  PERFORM pg_temp.browser_session(v_maker);
   PERFORM public.delete_project(v_p1, v_maker, 'd304k@example.invalid');
   IF EXISTS (SELECT 1 FROM public.projects WHERE id = v_p1) THEN
     RAISE EXCEPTION 'D304/870 §4: the creator could no longer delete its own project';

@@ -22,6 +22,11 @@ governance:
   audited: false
   rls_enabled: true
   note: >-
+    D309/D310 candidate (not deployed): browser reads require a verified active
+    principal and scoped project/owner access. Anonymous tenant grants are revoked;
+    direct browser mutations are closed and authorized RPCs retain their own role gates.
+    The generated schema owns the exact policies; D310 owns live-grant evidence.
+    Historical context before this candidate:
     RLS reaches the project through the RUN — `EXISTS (SELECT 1 FROM
     ingest_runs r WHERE r.id = ingest_run_id AND
     has_project_access(r.project_id))`. WP 3.1 rewrote it: the original went

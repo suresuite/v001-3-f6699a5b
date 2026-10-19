@@ -1,0 +1,43 @@
+table: browser_session_config
+tier: reference
+schema_name: public
+grain: One deployment's accepted browser-session issuer; a singleton maintained before user traffic.
+owner: platform
+natural_key_unique:
+  - source: column PRIMARY KEY
+    columns: [singleton]
+    name: browser_session_config_pkey
+natural_key_intended: [singleton]
+surfaces: []
+governance:
+  read: null
+  write: null
+  min_project_role: viewer
+  audited: false
+  rls_enabled: true
+  note: >-
+    Deployment metadata, not a public catalog. Browser roles have no table grants
+    or policies. Only database maintenance configures the issuer; the service
+    role may read it. The verified SQL resolver reads it as its owner. A missing
+    or mismatched issuer fails closed. D309 tracks deployment acceptance.
+fields:
+  singleton:
+    type: boolean
+    unit: null
+    unit_source: none
+    meaning: The sole row is true; the primary key and CHECK prevent multiple configurations.
+    grain: identifier
+    engine: {consumed_by: null, transform: null, missing_default: null}
+    substitutions: []
+    ingest: {csv_header: null, required: false, validate: null}
+    surfaces: []
+  issuer:
+    type: text
+    unit: null
+    unit_source: none
+    meaning: HTTPS authentication issuer accepted for approved-user browser credentials in this deployment.
+    grain: metadata
+    engine: {consumed_by: null, transform: null, missing_default: null}
+    substitutions: []
+    ingest: {csv_header: null, required: false, validate: null}
+    surfaces: []

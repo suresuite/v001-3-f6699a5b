@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- D38 · the six views now run as their CALLER, and one of them had to be
 -- proved rather than argued.
 --
@@ -73,7 +74,7 @@ BEGIN
   -- The pages run as `authenticated`, not as the owner. SET ROLE is the only
   -- way to ask the question the page asks; querying as superuser answers a
   -- different one and answers it wrongly (RLS does not apply to a superuser).
-  PERFORM set_config('app.current_user_id', v_super::text, true);
+  PERFORM pg_temp.browser_session(v_super);
   SET LOCAL ROLE authenticated;
   SELECT coalesce(sum(mtd_cost_usd), 0), count(*) INTO v_seen, v_rows
     FROM public.v_admin_user_usage WHERE user_id IN (v_super, v_plain);
@@ -86,7 +87,7 @@ BEGIN
     RAISE EXCEPTION 'D38: a super admin sees $% of the $3.00 seeded spend — `usage: super read` is not carrying the view', v_seen;
   END IF;
 
-  PERFORM set_config('app.current_user_id', v_plain::text, true);
+  PERFORM pg_temp.browser_session(v_plain);
   SET LOCAL ROLE authenticated;
   SELECT coalesce(sum(mtd_cost_usd), 0), count(*) INTO v_seen, v_rows
     FROM public.v_admin_user_usage;
@@ -136,7 +137,7 @@ BEGIN
   VALUES (v_other, v_org, 'report_xlsx', 'a.xlsx', 'org/a/a.xlsx', 1000, true),
          (v_other, v_org, 'report_xlsx', 'b.xlsx', 'org/a/b.xlsx', 2000, false);
 
-  PERFORM set_config('app.current_user_id', v_super::text, true);
+  PERFORM pg_temp.browser_session(v_super);
   SET LOCAL ROLE authenticated;
   SELECT file_count INTO v_files
     FROM public.admin_org_file_usage WHERE org_id = v_org;
@@ -150,7 +151,7 @@ BEGIN
 
   -- And the reader who is not a super admin gets their own files, which is
   -- zero here, rather than the organization's.
-  PERFORM set_config('app.current_user_id', v_other::text, true);
+  PERFORM pg_temp.browser_session(v_other);
   SET LOCAL ROLE authenticated;
   SELECT file_count INTO v_files
     FROM public.admin_org_file_usage WHERE org_id = v_org;

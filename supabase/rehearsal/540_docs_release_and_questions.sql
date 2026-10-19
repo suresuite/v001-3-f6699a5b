@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- THE MANUAL, RELEASED SECTION BY SECTION — and the Q&A's answers filtered in the database.
 --
 -- `20261001000002` replaces the compile-time `DOCS_SUPER_ADMIN_ONLY` with a per-section
@@ -70,7 +71,7 @@ BEGIN
   INSERT INTO public.user_capabilities (user_id, capability_key, allowed)
   VALUES (v_cleared, 'docs_confidential', true);
 
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
 
   -- ══ §1 · nothing changes on deploy ══
   SELECT count(*) INTO v_n FROM public.docs_section_releases WHERE audience <> 'confidential';
@@ -81,31 +82,39 @@ BEGIN
   IF v_n = 0 THEN
     RAISE EXCEPTION 'DOCS/540 §1: no prepared answers were seeded';
   END IF;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
   SELECT count(*) INTO v_n FROM public.docs_list_faq(NULL);
   IF v_n <> 0 THEN RAISE EXCEPTION 'DOCS/540 §1: anonymous reader saw % answers on deploy', v_n; END IF;
+  PERFORM pg_temp.browser_session(v_user);
   SELECT count(*) INTO v_n FROM public.docs_list_faq(v_user);
   IF v_n <> 0 THEN RAISE EXCEPTION 'DOCS/540 §1: a signed-in user saw % answers on deploy', v_n; END IF;
+  PERFORM pg_temp.browser_session(v_admin);
   SELECT count(*) INTO v_n FROM public.docs_list_faq(v_admin);
   IF v_n <> 0 THEN RAISE EXCEPTION 'DOCS/540 §1: an admin saw % answers on deploy', v_n; END IF;
+  PERFORM pg_temp.browser_session(v_super);
   SELECT count(*) INTO v_n FROM public.docs_list_faq(v_super);
   IF v_n = 0 THEN RAISE EXCEPTION 'DOCS/540 §1: the super admin saw no answers'; END IF;
   RESET ROLE;
 
   -- ══ §2 · who is reading ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
   v_level := public.docs_reader_level(NULL);
   IF v_level <> 'public' THEN RAISE EXCEPTION 'DOCS/540 §2: nobody read as %', v_level; END IF;
   v_level := public.docs_reader_level(gen_random_uuid());
   IF v_level <> 'public' THEN RAISE EXCEPTION 'DOCS/540 §2: an unknown id read as %', v_level; END IF;
+  PERFORM pg_temp.browser_session(v_gone);
   v_level := public.docs_reader_level(v_gone);
   IF v_level <> 'public' THEN RAISE EXCEPTION 'DOCS/540 §2: a suspended account read as %', v_level; END IF;
+  PERFORM pg_temp.browser_session(v_user);
   v_level := public.docs_reader_level(v_user);
   IF v_level <> 'internal' THEN RAISE EXCEPTION 'DOCS/540 §2: a user read as %', v_level; END IF;
+  PERFORM pg_temp.browser_session(v_admin);
   v_level := public.docs_reader_level(v_admin);
   IF v_level <> 'internal' THEN RAISE EXCEPTION 'DOCS/540 §2: an ungranted admin read as %', v_level; END IF;
+  PERFORM pg_temp.browser_session(v_cleared);
   v_level := public.docs_reader_level(v_cleared);
   IF v_level <> 'confidential' THEN RAISE EXCEPTION 'DOCS/540 §2: a granted user read as %', v_level; END IF;
+  PERFORM pg_temp.browser_session(v_super);
   v_level := public.docs_reader_level(v_super);
   IF v_level <> 'confidential' THEN RAISE EXCEPTION 'DOCS/540 §2: the super admin read as %', v_level; END IF;
   RESET ROLE;
@@ -113,7 +122,8 @@ BEGIN
   -- ══ §3 · refusal ══
   v_code := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_admin);
     PERFORM public.admin_set_docs_section_audience(v_admin, 'docs-a@example.invalid', 'questions', 'public');
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN RESET ROLE; v_code := SQLERRM;
@@ -123,7 +133,8 @@ BEGIN
   END IF;
   v_code := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_admin);
     PERFORM public.admin_save_docs_faq(v_admin, 'docs-a@example.invalid', NULL, 'Q?', 'A.', NULL, '{}', 0, true);
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN RESET ROLE; v_code := SQLERRM;
@@ -133,7 +144,8 @@ BEGIN
   END IF;
   v_code := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_set_docs_section_audience(v_super, 'docs-s@example.invalid', 'questions', 'everyone');
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN RESET ROLE; v_code := SQLERRM;
@@ -143,15 +155,19 @@ BEGIN
   END IF;
 
   -- ══ §4 · the filter ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_docs_section_audience(v_super, 'docs-s@example.invalid', 'questions', 'public');
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_docs_section_audience(v_super, 'docs-s@example.invalid', 'overview', 'public');
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_docs_section_audience(v_super, 'docs-s@example.invalid', 'getting-started', 'internal');
+  PERFORM pg_temp.browser_session(v_super);
   v_draft := public.admin_save_docs_faq(v_super, 'docs-s@example.invalid', NULL,
     'DOCS/540 draft question', 'Not yet.', NULL, '{}', 0, false);
   RESET ROLE;
 
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
   -- anonymous: general answers and overview answers only
   SELECT count(*) INTO v_n FROM public.docs_list_faq(NULL)
    WHERE section_key IS NOT NULL AND section_key <> 'overview';
@@ -161,18 +177,23 @@ BEGIN
   SELECT count(*) INTO v_n FROM public.docs_list_faq(NULL) WHERE section_key IS NULL;
   IF v_n = 0 THEN RAISE EXCEPTION 'DOCS/540 §4: anonymous reader saw no general answers'; END IF;
   -- signed in: internal sections too, confidential ones still not
+  PERFORM pg_temp.browser_session(v_user);
   SELECT count(*) INTO v_n FROM public.docs_list_faq(v_user) WHERE section_key = 'getting-started';
   IF v_n = 0 THEN RAISE EXCEPTION 'DOCS/540 §4: a user saw no getting-started answers'; END IF;
+  PERFORM pg_temp.browser_session(v_user);
   SELECT count(*) INTO v_n FROM public.docs_list_faq(v_user)
    WHERE section_key IS NOT NULL AND section_key NOT IN ('overview', 'getting-started');
   IF v_n <> 0 THEN RAISE EXCEPTION 'DOCS/540 §4: a user saw % confidential answers', v_n; END IF;
   -- granted: everything published
+  PERFORM pg_temp.browser_session(v_cleared);
   SELECT count(*) INTO v_n FROM public.docs_list_faq(v_cleared) WHERE section_key = 'access';
   IF v_n = 0 THEN RAISE EXCEPTION 'DOCS/540 §4: a granted user saw no confidential answers'; END IF;
   -- nobody sees a draft
+  PERFORM pg_temp.browser_session(v_super);
   SELECT count(*) INTO v_n FROM public.docs_list_faq(v_super) WHERE id = v_draft;
   IF v_n <> 0 THEN RAISE EXCEPTION 'DOCS/540 §4: an unpublished answer was listed to a reader'; END IF;
   -- and the admin list does
+  PERFORM pg_temp.browser_session(v_super);
   SELECT count(*) INTO v_n FROM public.admin_list_docs_faq(v_super, 'docs-s@example.invalid') WHERE id = v_draft;
   IF v_n <> 1 THEN RAISE EXCEPTION 'DOCS/540 §4: the admin list did not include the draft'; END IF;
   RESET ROLE;
@@ -185,13 +206,15 @@ BEGIN
    WHERE action = 'docs.faq_create' AND target_id = v_draft::text AND actor_user_id = v_super;
   IF v_n <> 1 THEN RAISE EXCEPTION 'DOCS/540 §5: % audit rows for the draft, expected 1', v_n; END IF;
   -- a no-op change writes nothing
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_docs_section_audience(v_super, 'docs-s@example.invalid', 'questions', 'public');
   RESET ROLE;
   SELECT count(*) INTO v_n FROM public.admin_audit_logs
    WHERE action = 'docs.section_audience' AND target_id = 'questions';
   IF v_n <> 1 THEN RAISE EXCEPTION 'DOCS/540 §5: a no-op change wrote an audit row'; END IF;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_delete_docs_faq(v_super, 'docs-s@example.invalid', v_draft);
   RESET ROLE;
   SELECT count(*) INTO v_n FROM public.docs_faq WHERE id = v_draft;

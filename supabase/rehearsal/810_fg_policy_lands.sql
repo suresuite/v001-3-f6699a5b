@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- Phase 14 / WP 14.4 · THE FG POLICY PER PRODUCT LANDS AND REACHES THE SNAPSHOT.
 --
 -- `20261003000002` gives the finished-goods policy (base-stock S · min-max s, S ·
@@ -44,10 +45,12 @@ BEGIN
     jsonb_build_object('source_row_number', 4, 'raw', '{}'::jsonb,
       'parsed', jsonb_build_object('product_id', 'P3', 'fulfillment_mode', 'mto'),
       'findings', '[]'::jsonb));
+  PERFORM pg_temp.browser_session(v_user);
   v_res := public.ingest_land_file(
     v_project, v_user, 'csv', 'master', 'products',
     'products.csv', 'ingest', 'p/wp144/p.csv', 'text/csv', 128, repeat('f', 64), v_rows);
   v_run := (v_res ->> 'run_id')::uuid;
+  PERFORM pg_temp.browser_session(v_user);
   v_res := public.ingest_apply_run(v_run, v_user);
   IF (v_res ->> 'rows_promoted')::int <> 3 THEN
     RAISE EXCEPTION 'WP 14.4: the products promotion moved % row(s), expected 3 — %',

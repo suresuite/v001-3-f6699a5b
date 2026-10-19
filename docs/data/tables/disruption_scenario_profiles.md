@@ -30,13 +30,13 @@ CREATED BY `20250827171106`, NOT BY `20250827170942`. The earlier file appears t
 | | |
 |---|---|
 | Read capability | `project_member` |
-| Write capability | `project_member` |
+| Write capability | `simulation_lab` |
 | Minimum project role | `editor` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
 | Policies on the table | 6 — all carry a predicate |
 
-Tier 4 — the DECISION plane. Audited from WP 6.4. The three child tables cascade from this row's id, so a DELETE here is four tables' worth of decision disappearing on one statement — which is exactly why the audit row naming the actor matters more here than on a table that loses one row.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; browser writes require `simulation_lab` on the project. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: Tier 4 — the DECISION plane. Audited from WP 6.4. The three child tables cascade from this row's id, so a DELETE here is four tables' worth of decision disappearing on one statement — which is exactly why the audit row naming the actor matters more here than on a table that loses one row.
 
 <details><summary>6 RLS policies</summary>
 
@@ -269,6 +269,6 @@ Last day the disruption applies, inclusive. See `disruption_start` — the pair 
 
 ---
 
-*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/disruption_scenario_profiles.contract.yaml`, table created by `20250827171106_00d577a4-5496-4e8d-8775-bbe357746c20.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

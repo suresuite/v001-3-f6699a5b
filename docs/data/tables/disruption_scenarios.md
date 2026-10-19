@@ -24,13 +24,13 @@ TWO DISRUPTION MODELS ARE LIVE AT ONCE AND NEITHER READS THE OTHER. This table i
 | | |
 |---|---|
 | Read capability | `project_member` |
-| Write capability | `project_member` |
+| Write capability | `simulation_lab` |
 | Minimum project role | `editor` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
 | Policies on the table | 6 — all carry a predicate |
 
-Tier 4 — the DECISION plane. These rows are what a person chose, as against the dataset they chose it over and the result it produced, which is why `result-binding` (I8) needs all three. Audited from WP 6.4: the three statement-grain triggers land with this sidecar, because `dataPlaneAudit.test.ts` scopes its rule to tables IN the contract and a deferred table's writes are unaudited with nothing to notice (D54).
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; browser writes require `simulation_lab` on the project. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: Tier 4 — the DECISION plane. These rows are what a person chose, as against the dataset they chose it over and the result it produced, which is why `result-binding` (I8) needs all three. Audited from WP 6.4: the three statement-grain triggers land with this sidecar, because `dataPlaneAudit.test.ts` scopes its rule to tables IN the contract and a deferred table's writes are unaudited with nothing to notice (D54).
 
 <details><summary>6 RLS policies</summary>
 
@@ -271,6 +271,6 @@ Whether the scenario was created by clicking a node on a network page (true) or 
 
 ---
 
-*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/disruption_scenarios.contract.yaml`, table created by `20250826180749_e9181074-55e6-4724-98c3-3c4b648aa891.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

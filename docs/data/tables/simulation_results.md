@@ -28,17 +28,16 @@ A RETIRED PIPELINE'S RESULT TABLE, LEFT IN PLACE ON PURPOSE. The commit that rem
 | Minimum project role | `viewer` |
 | Tier transitions audited | **no** — invariant `audit-actor` is not met here yet |
 | Row-level security | enabled |
-| Policies on the table | 6 — all carry a predicate |
+| Policies on the table | 5 — all carry a predicate |
 
-Two policies, both routed through the project's organization (`org_is_current_user_org(p.organization_id, p.organization)`, the WP 2.1 dual-read shape): SELECT for any member of the project's organization, and ALL for the project's modeler or an organization admin. Neither is predicate-less, so `write: null` is consistent with `governanceEnforcement.test.ts` — and it is also the plain truth: no user-facing write path exists in the repository. THE ONLY STATEMENTS THAT STILL TOUCH IT ARE DELETES. `_delete_project_rows` (reached from `delete_project` and the organization and user deletions) sweeps it BY NAME, because it has no foreign key to `projects` and the cascade (§4 D117) cannot reach it. `admin_delete_project` does NOT go through that sweep — it deletes the project row alone — so a project a super admin deletes from /admin/projects leaves its rows here behind, unreachable: D117's class, on a table no screen reads. The SECURITY DEFINER readers and writers the legacy path used (`create_simulation_result`, `get_simulation_results`, `get_baseline_simulation_results`, `get_scenario_simulation_results`, `delete_simulation_result`, `delete_simulation_results_batch`, `seed_synthetic_simulation_data`) still exist in the database and have no caller in the repository; the two views over it (`simulation_results_with_settings`, `simulation_result_scenarios`, `security_invoker` since D38) have none either. NOT IN PRODUCTION'S CASE: §4 D168 read production's function list and found the legacy functions that wrote this table — `simulation-runner`, `external-simulation-processor`, `simulation-availability-checker`, `delete-simulation-job` — still LIVE there with no source in this repository. So "dormant" is a statement about the repository; whether anything still calls those endpoints is a production question (D168, WP 7.1). NOT AUDITED, and that is the tier rather than an omission: `audit-actor` covers tiers 2–4, and a result row is an input to nothing.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; direct browser mutations are closed and authorized RPCs retain their own role gates. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: Two policies, both routed through the project's organization (`org_is_current_user_org(p.organization_id, p.organization)`, the WP 2.1 dual-read shape): SELECT for any member of the project's organization, and ALL for the project's modeler or an organization admin. Neither is predicate-less, so `write: null` is consistent with `governanceEnforcement.test.ts` — and it is also the plain truth: no user-facing write path exists in the repository. THE ONLY STATEMENTS THAT STILL TOUCH IT ARE DELETES. `_delete_project_rows` (reached from `delete_project` and the organization and user deletions) sweeps it BY NAME, because it has no foreign key to `projects` and the cascade (§4 D117) cannot reach it. `admin_delete_project` does NOT go through that sweep — it deletes the project row alone — so a project a super admin deletes from /admin/projects leaves its rows here behind, unreachable: D117's class, on a table no screen reads. The SECURITY DEFINER readers and writers the legacy path used (`create_simulation_result`, `get_simulation_results`, `get_baseline_simulation_results`, `get_scenario_simulation_results`, `delete_simulation_result`, `delete_simulation_results_batch`, `seed_synthetic_simulation_data`) still exist in the database and have no caller in the repository; the two views over it (`simulation_results_with_settings`, `simulation_result_scenarios`, `security_invoker` since D38) have none either. NOT IN PRODUCTION'S CASE: §4 D168 read production's function list and found the legacy functions that wrote this table — `simulation-runner`, `external-simulation-processor`, `simulation-availability-checker`, `delete-simulation-job` — still LIVE there with no source in this repository. So "dormant" is a statement about the repository; whether anything still calls those endpoints is a production question (D168, WP 7.1). NOT AUDITED, and that is the tier rather than an omission: `audit-actor` covers tiers 2–4, and a result row is an input to nothing.
 
-<details><summary>6 RLS policies</summary>
+<details><summary>5 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
 | security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
 | security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
-| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
 | security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 | security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 | security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
@@ -264,6 +263,6 @@ When the row was last changed.
 
 ---
 
-*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/simulation_results.contract.yaml`, table created by `20250826180749_e9181074-55e6-4724-98c3-3c4b648aa891.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

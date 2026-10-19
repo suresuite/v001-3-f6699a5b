@@ -92,7 +92,7 @@ export type RefTable = {
   columns: RefColumn[];
 };
 
-export const REFERENCE_COLUMN_COUNT = 1026;
+export const REFERENCE_COLUMN_COUNT = 1028;
 
 export const REFERENCE_TABLES: RefTable[] = [
   {
@@ -324,7 +324,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "rls": {
       "enabled": true,
       "determinate": true,
-      "policies": 6,
+      "policies": 5,
       "unrestricted": 0
     },
     "columns": [
@@ -539,7 +539,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "rls": {
       "enabled": true,
       "determinate": true,
-      "policies": 6,
+      "policies": 5,
       "unrestricted": 0
     },
     "columns": [
@@ -2010,7 +2010,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     ],
     "governance": {
       "read": null,
-      "write": "data_editing",
+      "write": "data_edit_inputs",
       "minProjectRole": "editor",
       "audited": true,
       "rlsEnabled": true
@@ -2363,7 +2363,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     ],
     "governance": {
       "read": null,
-      "write": "data_editing",
+      "write": "data_edit_inputs",
       "minProjectRole": "editor",
       "audited": true,
       "rlsEnabled": true
@@ -2646,6 +2646,94 @@ export const REFERENCE_TABLES: RefTable[] = [
     ]
   },
   {
+    "table": "browser_session_config",
+    "tier": "reference",
+    "tierName": "project-independent, versioned by vintage rather than by project",
+    "owner": "platform",
+    "grain": "One deployment's accepted browser-session issuer; a singleton maintained before user traffic.",
+    "naturalKey": [
+      "singleton"
+    ],
+    "naturalKeyIntended": [
+      "singleton"
+    ],
+    "checks": [
+      {
+        "name": "browser_session_config_singleton_check",
+        "definition": "CHECK (singleton)"
+      },
+      {
+        "name": "browser_session_config_issuer_check",
+        "definition": "CHECK (issuer ~ '^https://[^/]+/auth/v1$')"
+      }
+    ],
+    "ingestDataset": null,
+    "surfaces": [],
+    "governance": {
+      "read": null,
+      "write": null,
+      "minProjectRole": "viewer",
+      "audited": false,
+      "rlsEnabled": true
+    },
+    "rls": {
+      "enabled": true,
+      "determinate": true,
+      "policies": 0,
+      "unrestricted": 0
+    },
+    "columns": [
+      {
+        "name": "singleton",
+        "type": "boolean",
+        "nullable": false,
+        "unit": null,
+        "csvHeader": null,
+        "required": false,
+        "validate": null,
+        "meaning": "The sole row is true; the primary key and CHECK prevent multiple configurations.",
+        "primaryKey": true,
+        "unique": false,
+        "references": null,
+        "substitutions": [],
+        "engineChain": null,
+        "engineLevel": null,
+        "blank": null,
+        "engineField": null,
+        "engineMissingDefault": null,
+        "engineTransform": null,
+        "unitColumn": null,
+        "normalizeAtPromotion": null,
+        "quantityGrain": "identifier",
+        "computedBy": null
+      },
+      {
+        "name": "issuer",
+        "type": "text",
+        "nullable": false,
+        "unit": null,
+        "csvHeader": null,
+        "required": false,
+        "validate": null,
+        "meaning": "HTTPS authentication issuer accepted for approved-user browser credentials in this deployment.",
+        "primaryKey": false,
+        "unique": false,
+        "references": null,
+        "substitutions": [],
+        "engineChain": null,
+        "engineLevel": null,
+        "blank": null,
+        "engineField": null,
+        "engineMissingDefault": null,
+        "engineTransform": null,
+        "unitColumn": null,
+        "normalizeAtPromotion": null,
+        "quantityGrain": "metadata",
+        "computedBy": null
+      }
+    ]
+  },
+  {
     "table": "capabilities",
     "tier": "G",
     "tierName": "governance — identity, capability, delegation, audit",
@@ -2872,7 +2960,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "surfaces": [],
     "governance": {
       "read": "project_member",
-      "write": "project_modeler_or_admin",
+      "write": "data_edit_inputs",
       "minProjectRole": "editor",
       "audited": true,
       "rlsEnabled": true
@@ -3182,7 +3270,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "rls": {
       "enabled": true,
       "determinate": true,
-      "policies": 6,
+      "policies": 5,
       "unrestricted": 0
     },
     "columns": [
@@ -3971,7 +4059,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "surfaces": [],
     "governance": {
       "read": "project_member",
-      "write": "project_modeler_or_admin",
+      "write": "data_edit_inputs",
       "minProjectRole": "editor",
       "audited": true,
       "rlsEnabled": true
@@ -4333,7 +4421,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "surfaces": [],
     "governance": {
       "read": "project_member",
-      "write": "project_member",
+      "write": "simulation_lab",
       "minProjectRole": "editor",
       "audited": true,
       "rlsEnabled": true
@@ -4585,7 +4673,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "surfaces": [],
     "governance": {
       "read": "project_member",
-      "write": "project_member",
+      "write": "simulation_lab",
       "minProjectRole": "editor",
       "audited": true,
       "rlsEnabled": true
@@ -4928,7 +5016,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "surfaces": [],
     "governance": {
       "read": "project_member",
-      "write": "project_member",
+      "write": "simulation_lab",
       "minProjectRole": "editor",
       "audited": true,
       "rlsEnabled": true
@@ -5156,7 +5244,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "surfaces": [],
     "governance": {
       "read": "project_member",
-      "write": "project_member",
+      "write": "simulation_lab",
       "minProjectRole": "editor",
       "audited": true,
       "rlsEnabled": true
@@ -5432,7 +5520,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "surfaces": [],
     "governance": {
       "read": "project_member",
-      "write": "project_member",
+      "write": "simulation_lab",
       "minProjectRole": "editor",
       "audited": true,
       "rlsEnabled": true
@@ -6454,7 +6542,7 @@ export const REFERENCE_TABLES: RefTable[] = [
         "csvHeader": null,
         "required": false,
         "validate": null,
-        "meaning": "Meant to name the author. `REFERENCES auth.users ON DELETE SET NULL`, and the hook fills it from `supabase.auth.getUser()` — but this application authenticates against `approved_users`, not Supabase Auth, so for a real user the value can only be NULL.",
+        "meaning": "Historical GoTrue author reference (`REFERENCES auth.users ON DELETE SET NULL`). Existing provenance is retained. Browser creates leave this NULL and store the verified approved-user principal in `author_user_id` (D309 candidate).",
         "primaryKey": false,
         "unique": false,
         "references": {
@@ -6602,7 +6690,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "rls": {
       "enabled": true,
       "determinate": true,
-      "policies": 6,
+      "policies": 5,
       "unrestricted": 0
     },
     "columns": [
@@ -6876,7 +6964,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "rls": {
       "enabled": true,
       "determinate": true,
-      "policies": 6,
+      "policies": 5,
       "unrestricted": 0
     },
     "columns": [
@@ -7192,7 +7280,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     ],
     "governance": {
       "read": null,
-      "write": "data_editing",
+      "write": "data_edit_inputs",
       "minProjectRole": "editor",
       "audited": true,
       "rlsEnabled": true
@@ -7796,7 +7884,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "rls": {
       "enabled": true,
       "determinate": true,
-      "policies": 6,
+      "policies": 5,
       "unrestricted": 0
     },
     "columns": [
@@ -8132,7 +8220,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "rls": {
       "enabled": true,
       "determinate": true,
-      "policies": 6,
+      "policies": 5,
       "unrestricted": 0
     },
     "columns": [
@@ -8740,7 +8828,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "rls": {
       "enabled": true,
       "determinate": true,
-      "policies": 6,
+      "policies": 5,
       "unrestricted": 0
     },
     "columns": [
@@ -9108,7 +9196,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "rls": {
       "enabled": true,
       "determinate": true,
-      "policies": 6,
+      "policies": 5,
       "unrestricted": 0
     },
     "columns": [
@@ -9452,7 +9540,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "rls": {
       "enabled": true,
       "determinate": true,
-      "policies": 6,
+      "policies": 5,
       "unrestricted": 0
     },
     "columns": [
@@ -9977,7 +10065,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "rls": {
       "enabled": true,
       "determinate": true,
-      "policies": 6,
+      "policies": 5,
       "unrestricted": 0
     },
     "columns": [
@@ -10276,7 +10364,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "surfaces": [],
     "governance": {
       "read": null,
-      "write": "data_editing",
+      "write": "data_edit_inputs",
       "minProjectRole": "editor",
       "audited": true,
       "rlsEnabled": false
@@ -10766,7 +10854,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "rls": {
       "enabled": true,
       "determinate": true,
-      "policies": 6,
+      "policies": 5,
       "unrestricted": 0
     },
     "columns": [
@@ -11103,7 +11191,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "rls": {
       "enabled": true,
       "determinate": true,
-      "policies": 6,
+      "policies": 5,
       "unrestricted": 0
     },
     "columns": [
@@ -12103,7 +12191,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     ],
     "governance": {
       "read": null,
-      "write": null,
+      "write": "data_edit_inputs",
       "minProjectRole": "editor",
       "audited": true,
       "rlsEnabled": true
@@ -12366,7 +12454,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     ],
     "governance": {
       "read": null,
-      "write": null,
+      "write": "data_edit_inputs",
       "minProjectRole": "viewer",
       "audited": true,
       "rlsEnabled": true
@@ -12776,7 +12864,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     ],
     "governance": {
       "read": null,
-      "write": null,
+      "write": "data_edit_inputs",
       "minProjectRole": "viewer",
       "audited": true,
       "rlsEnabled": true
@@ -13541,7 +13629,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     ],
     "governance": {
       "read": null,
-      "write": null,
+      "write": "data_edit_inputs",
       "minProjectRole": "viewer",
       "audited": true,
       "rlsEnabled": true
@@ -13932,7 +14020,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     ],
     "governance": {
       "read": null,
-      "write": null,
+      "write": "data_edit_inputs",
       "minProjectRole": "viewer",
       "audited": true,
       "rlsEnabled": true
@@ -14158,7 +14246,7 @@ export const REFERENCE_TABLES: RefTable[] = [
         "unitColumn": null,
         "normalizeAtPromotion": null,
         "quantityGrain": "level",
-        "computedBy": "geocode-locations"
+        "computedBy": "apply_geocode (called by geocode-locations)"
       },
       {
         "name": "latitude",
@@ -14182,7 +14270,7 @@ export const REFERENCE_TABLES: RefTable[] = [
         "unitColumn": null,
         "normalizeAtPromotion": null,
         "quantityGrain": "level",
-        "computedBy": "geocode-locations"
+        "computedBy": "apply_geocode (called by geocode-locations)"
       },
       {
         "name": "is_critical_node",
@@ -15406,7 +15494,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     ],
     "governance": {
       "read": null,
-      "write": "data_editing",
+      "write": "data_edit_inputs",
       "minProjectRole": "editor",
       "audited": true,
       "rlsEnabled": true
@@ -16395,7 +16483,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     ],
     "governance": {
       "read": null,
-      "write": "data_editing",
+      "write": "data_edit_policies",
       "minProjectRole": "editor",
       "audited": true,
       "rlsEnabled": true
@@ -16818,7 +16906,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     ],
     "governance": {
       "read": null,
-      "write": "data_editing",
+      "write": "data_edit_policies",
       "minProjectRole": "editor",
       "audited": true,
       "rlsEnabled": true
@@ -17775,7 +17863,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "surfaces": [],
     "governance": {
       "read": null,
-      "write": "data_editing",
+      "write": "data_edit_inputs",
       "minProjectRole": "editor",
       "audited": true,
       "rlsEnabled": false
@@ -18692,7 +18780,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "rls": {
       "enabled": true,
       "determinate": false,
-      "policies": 6,
+      "policies": 5,
       "unrestricted": 0
     },
     "columns": [
@@ -19095,7 +19183,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "rls": {
       "enabled": true,
       "determinate": true,
-      "policies": 6,
+      "policies": 5,
       "unrestricted": 0
     },
     "columns": [
@@ -21219,7 +21307,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "rls": {
       "enabled": true,
       "determinate": true,
-      "policies": 6,
+      "policies": 5,
       "unrestricted": 0
     },
     "columns": [
@@ -21453,7 +21541,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "rls": {
       "enabled": true,
       "determinate": true,
-      "policies": 6,
+      "policies": 5,
       "unrestricted": 0
     },
     "columns": [
@@ -21786,7 +21874,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "rls": {
       "enabled": true,
       "determinate": true,
-      "policies": 6,
+      "policies": 5,
       "unrestricted": 0
     },
     "columns": [
@@ -21927,7 +22015,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "rls": {
       "enabled": true,
       "determinate": true,
-      "policies": 6,
+      "policies": 5,
       "unrestricted": 0
     },
     "columns": [
@@ -22602,7 +22690,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     ],
     "governance": {
       "read": null,
-      "write": "data_edit_policies",
+      "write": "simulation_lab",
       "minProjectRole": "editor",
       "audited": true,
       "rlsEnabled": true
@@ -23874,7 +23962,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "rls": {
       "enabled": true,
       "determinate": true,
-      "policies": 6,
+      "policies": 5,
       "unrestricted": 0
     },
     "columns": [
@@ -24222,7 +24310,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "rls": {
       "enabled": true,
       "determinate": true,
-      "policies": 6,
+      "policies": 5,
       "unrestricted": 0
     },
     "columns": [
@@ -24573,7 +24661,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "rls": {
       "enabled": true,
       "determinate": true,
-      "policies": 6,
+      "policies": 5,
       "unrestricted": 0
     },
     "columns": [
@@ -25216,7 +25304,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "rls": {
       "enabled": true,
       "determinate": true,
-      "policies": 6,
+      "policies": 5,
       "unrestricted": 0
     },
     "columns": [
@@ -25595,7 +25683,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "rls": {
       "enabled": true,
       "determinate": true,
-      "policies": 6,
+      "policies": 5,
       "unrestricted": 0
     },
     "columns": [
@@ -25956,7 +26044,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "rls": {
       "enabled": true,
       "determinate": true,
-      "policies": 6,
+      "policies": 5,
       "unrestricted": 0
     },
     "columns": [
@@ -26945,7 +27033,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "surfaces": [],
     "governance": {
       "read": null,
-      "write": "data_editing",
+      "write": "data_edit_inputs",
       "minProjectRole": "editor",
       "audited": true,
       "rlsEnabled": false
@@ -27326,7 +27414,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "rls": {
       "enabled": true,
       "determinate": true,
-      "policies": 6,
+      "policies": 5,
       "unrestricted": 0
     },
     "columns": [
@@ -27880,7 +27968,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "rls": {
       "enabled": true,
       "determinate": true,
-      "policies": 6,
+      "policies": 5,
       "unrestricted": 0
     },
     "columns": [
@@ -28303,7 +28391,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "surfaces": [],
     "governance": {
       "read": null,
-      "write": null,
+      "write": "data_edit_inputs",
       "minProjectRole": "editor",
       "audited": true,
       "rlsEnabled": true
@@ -28720,7 +28808,7 @@ export const REFERENCE_TABLES: RefTable[] = [
     "surfaces": [],
     "governance": {
       "read": null,
-      "write": null,
+      "write": "data_edit_inputs",
       "minProjectRole": "editor",
       "audited": true,
       "rlsEnabled": true

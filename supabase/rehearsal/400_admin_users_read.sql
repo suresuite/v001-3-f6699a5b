@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- Admin users · D205 — /admin/users LISTS the accounts, suspension is ENFORCED, and an
 -- account's organization is authored ONCE.
 --
@@ -50,7 +51,7 @@ BEGIN
     (v_user,   'A400 user',   'a400u@example.invalid',  extensions.crypt('right-pw-2', extensions.gen_salt('bf')), 'user',        'A400 Org A', v_org_a);
 
   -- The browser's shape: no GUC, no session.
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
 
   -- ══ §1 · the defect: anon reads the view and gets NOTHING ══
   BEGIN
@@ -66,7 +67,8 @@ BEGIN
   END IF;
 
   -- ══ §2 · the list, AS anon ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   SELECT count(*) INTO v_rows FROM public.admin_list_users(v_super, 'a400s@example.invalid');
   RESET ROLE;
   SELECT count(*) INTO v_n FROM public.approved_users;
@@ -76,6 +78,7 @@ BEGIN
 
   -- A rename shows through the uuid; the text copy stays stale and is NOT what is shown.
   UPDATE public.organizations SET name = 'A400 Org A renamed' WHERE id = v_org_a;
+  PERFORM pg_temp.browser_session(v_super);
   SELECT * INTO r FROM public.admin_list_users(v_super, 'a400s@example.invalid') WHERE user_id = v_user;
   IF r.organization IS DISTINCT FROM 'A400 Org A renamed' OR r.organization_id IS DISTINCT FROM v_org_a THEN
     RAISE EXCEPTION 'A400 §2: organization shown as % (%), expected the renamed name through the uuid', r.organization, r.organization_id;
@@ -87,7 +90,8 @@ BEGIN
   -- A plain user is refused, not emptied.
   v_code := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_user);
     PERFORM public.admin_list_users(v_user, 'a400u@example.invalid');
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN
@@ -102,6 +106,7 @@ BEGIN
   UPDATE public.approved_users SET is_active = false WHERE id = v_super2;
   v_code := NULL;
   BEGIN
+    PERFORM pg_temp.browser_session(v_super2);
     PERFORM public.admin_list_users(v_super2, 'a400s2@example.invalid');
   EXCEPTION WHEN OTHERS THEN
     v_code := SQLERRM;
@@ -112,8 +117,10 @@ BEGIN
   UPDATE public.approved_users SET is_active = true WHERE id = v_super2;
 
   -- ══ §3 · sign-in refuses a suspended account ══
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_user_active(v_super, 'a400s@example.invalid', v_user, false);
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE service_role;
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   SELECT count(*) INTO v_rows FROM public.authenticate_approved_user('a400u@example.invalid', 'right-pw-2');
   RESET ROLE;
   IF v_rows <> 0 THEN
@@ -129,7 +136,9 @@ BEGIN
               WHERE action = 'auth.sign_in' AND actor_user_id = v_user) THEN
     RAISE EXCEPTION 'A400 §3: a suspended account was recorded as signed in';
   END IF;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_user_active(v_super, 'a400s@example.invalid', v_user, true);
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   SELECT count(*) INTO v_rows FROM public.authenticate_approved_user('a400u@example.invalid', 'right-pw-2');
   IF v_rows <> 1 THEN
     RAISE EXCEPTION 'A400 §3: a reactivated account could not sign in (% rows)', v_rows;
@@ -138,6 +147,7 @@ BEGIN
   -- ══ §4 · the verbs cannot lock the platform out ══
   v_code := NULL;
   BEGIN
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_set_user_active(v_super, 'a400s@example.invalid', v_super, false);
   EXCEPTION WHEN OTHERS THEN v_code := SQLERRM; END;
   IF v_code IS NULL OR v_code NOT LIKE '%your own account%' THEN
@@ -146,6 +156,7 @@ BEGIN
 
   v_code := NULL;
   BEGIN
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_set_user_role(v_super, 'a400s@example.invalid', v_super, 'user');
   EXCEPTION WHEN OTHERS THEN v_code := SQLERRM; END;
   IF v_code IS NULL OR v_code NOT LIKE '%your own super_admin role%' THEN
@@ -154,14 +165,19 @@ BEGIN
 
   -- With a second active super admin, one may suspend and restore the other — the
   -- guard is not a blanket refusal.
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_user_active(v_super, 'a400s@example.invalid', v_super2, false);
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_user_active(v_super, 'a400s@example.invalid', v_super2, true);
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_user_role(v_super, 'a400s@example.invalid', v_super2, 'admin');
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_user_role(v_super, 'a400s@example.invalid', v_super2, 'super_admin');
 
   -- Leave exactly two active super admins, and have one retire the other.
   UPDATE public.approved_users SET is_active = false
    WHERE role = 'super_admin' AND id NOT IN (v_super, v_super2);
+  PERFORM pg_temp.browser_session(v_super2);
   PERFORM public.admin_set_user_active(v_super2, 'a400s2@example.invalid', v_super, false);
   IF public._active_super_admin_count() <> 1 THEN
     RAISE EXCEPTION 'A400 §4: expected one active super admin, have %', public._active_super_admin_count();
@@ -170,6 +186,7 @@ BEGIN
   -- The last one cannot leave: the only actor who passes the gate IS the last one.
   v_code := NULL;
   BEGIN
+    PERFORM pg_temp.browser_session(v_super2);
     PERFORM public.admin_set_user_active(v_super2, 'a400s2@example.invalid', v_super2, false);
   EXCEPTION WHEN OTHERS THEN v_code := SQLERRM; END;
   IF v_code IS NULL THEN
@@ -177,6 +194,7 @@ BEGIN
   END IF;
   v_code := NULL;
   BEGIN
+    PERFORM pg_temp.browser_session(v_super2);
     PERFORM public.admin_set_user_role(v_super2, 'a400s2@example.invalid', v_super2, 'admin');
   EXCEPTION WHEN OTHERS THEN v_code := SQLERRM; END;
   IF v_code IS NULL THEN
@@ -186,6 +204,7 @@ BEGIN
   -- …and the suspended one cannot act at all, not even to remove the last.
   v_code := NULL;
   BEGIN
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_set_user_active(v_super, 'a400s@example.invalid', v_super2, false);
   EXCEPTION WHEN OTHERS THEN v_code := SQLERRM; END;
   IF v_code IS DISTINCT FROM 'forbidden' THEN
@@ -194,6 +213,7 @@ BEGIN
   IF public._active_super_admin_count() <> 1 THEN
     RAISE EXCEPTION 'A400 §4: the platform lost its last active super admin';
   END IF;
+  PERFORM pg_temp.browser_session(v_super2);
   PERFORM public.admin_set_user_active(v_super2, 'a400s2@example.invalid', v_super, true);
 
   -- ══ §5 · membership follows organization_id ══
@@ -219,6 +239,7 @@ BEGIN
   UPDATE public.approved_users SET role = 'user' WHERE id = v_user;
 
   -- The admin RPCs still work through the rule (they insert the row that already exists).
+  PERFORM pg_temp.browser_session(v_super2);
   PERFORM public.admin_update_user(v_super2, 'a400s2@example.invalid', v_user, 'A400 user', v_org_b);
   SELECT count(*) INTO v_n FROM public.organization_members WHERE user_id = v_user;
   IF v_n <> 2 THEN
@@ -226,7 +247,9 @@ BEGIN
   END IF;
 
   -- Members are the membership rows, and equal the accounts the list shows in that org.
+  PERFORM pg_temp.browser_session(v_super2);
   SELECT members INTO v_n FROM public.admin_list_organizations(v_super2, 'a400s2@example.invalid') WHERE id = v_org_b;
+  PERFORM pg_temp.browser_session(v_super2);
   SELECT count(*) INTO v_rows FROM public.admin_list_users(v_super2, 'a400s2@example.invalid')
    WHERE memberships @> jsonb_build_array(jsonb_build_object('org_id', v_org_b));
   IF v_n <> v_rows OR v_n <> 1 THEN
@@ -244,7 +267,8 @@ BEGIN
   VALUES (v_user, v_org_b, 'a400-model', 10, 1.25, 'success'),
          (v_user, v_org_b, 'a400-model', 20, 0.75, 'success');
 
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super2);
   v_out := public.admin_platform_overview(v_super2, 'a400s2@example.invalid');
   RESET ROLE;
   IF (v_out ->> 'users')::int <> (SELECT count(*) FROM public.approved_users)
@@ -263,11 +287,15 @@ BEGIN
     RAISE EXCEPTION 'A400 §6: top_orgs does not name the org: %', v_out -> 'top_orgs';
   END IF;
 
+  PERFORM pg_temp.browser_session(v_super2);
+
   SELECT count(*) INTO v_n FROM public.admin_usage_log_read(v_super2, 'a400s2@example.invalid', 500)
    WHERE user_id = v_user AND user_name = 'A400 user';
   IF v_n <> 2 THEN
     RAISE EXCEPTION 'A400 §6: the usage log named % of 2 rows', v_n;
   END IF;
+
+  PERFORM pg_temp.browser_session(v_super2);
 
   SELECT mtd_requests INTO v_n FROM public.admin_list_users(v_super2, 'a400s2@example.invalid') WHERE user_id = v_user;
   IF v_n <> 2 THEN

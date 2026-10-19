@@ -14,7 +14,8 @@ RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
   IF NOT public.security_is_service() THEN
     IF TG_OP='INSERT' THEN NEW.author_user_id := public.security_actor(NEW.author_user_id);
-    ELSIF NEW.author_user_id IS DISTINCT FROM OLD.author_user_id THEN
+    ELSIF NEW.author_user_id IS DISTINCT FROM OLD.author_user_id
+      AND NOT (NEW.author_user_id IS NULL AND NOT EXISTS (SELECT 1 FROM public.approved_users WHERE id=OLD.author_user_id)) THEN
       RAISE EXCEPTION 'immutable author' USING ERRCODE='42501';
     END IF;
   END IF;

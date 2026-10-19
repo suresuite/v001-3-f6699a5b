@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- §4 D170 · DELETING A PROJECT DELETES ALL OF IT OR NONE OF IT.
 --
 -- Production's "Delete project" never worked: the live `delete-project` (a 2026-03-17
@@ -71,13 +72,16 @@ BEGIN
     (v_p, 'D170P', 'PR', 'MA', 2), (v_q, 'D170Q', 'PR', 'MA', 2);
   INSERT INTO public.inbound_logistics (project_id, plant_name, supplier_id, material_id, volume, time_unit) VALUES
     (v_p, 'D170P', 'SU', 'MA', 1, 'week'), (v_q, 'D170Q', 'SU', 'MA', 1, 'week');
+  PERFORM pg_temp.browser_session(v_owner);
   PERFORM public.combine_project_into_supply_chain(v_p, v_owner, 'd170o@example.invalid');
+  PERFORM pg_temp.browser_session(v_owner);
   PERFORM public.combine_project_into_supply_chain(v_q, v_owner, 'd170o@example.invalid');
 
   -- A deep-tier node, a disruption profile with a child, a simulation result, a CSV run.
   INSERT INTO public.network_nodes (project_id, plant_name, uid) VALUES (v_p, 'D170P', 'N1');
   INSERT INTO public.disruption_scenario_profiles (project_id, plant_name, scenario_name) VALUES (v_p, 'D170P', 'D170 profile') RETURNING id INTO v_prof;
   INSERT INTO public.disruption_scenario_settings (profile_id, key, value) VALUES (v_prof, 'k', '"v"');
+  PERFORM pg_temp.browser_session(v_owner);
   PERFORM public.ingest_land_file(v_p, v_owner, 'csv', 'master', 'customers',
     'd170.csv', 'ingest', 'd170/d170.csv', 'text/csv', 10, repeat('d', 64),
     jsonb_build_array(jsonb_build_object('source_row_number', 2,
@@ -91,6 +95,7 @@ BEGIN
 
   -- ══ §3 · refusals, before anything is deleted ══
   v_code := NULL;
+  PERFORM pg_temp.browser_session(v_other);
   BEGIN PERFORM public.delete_project(v_p, v_other, 'd170x@example.invalid');
   EXCEPTION WHEN OTHERS THEN v_code := SQLSTATE; END;
   IF v_code IS DISTINCT FROM '42501' THEN
@@ -100,6 +105,7 @@ BEGIN
     RAISE EXCEPTION 'D170/370 §3: a refused delete removed rows';
   END IF;
   v_code := NULL;
+  PERFORM pg_temp.browser_session(v_owner);
   BEGIN PERFORM public.delete_project(gen_random_uuid(), v_owner, 'd170o@example.invalid');
   EXCEPTION WHEN OTHERS THEN v_code := SQLSTATE; END;
   IF v_code IS DISTINCT FROM 'P0002' THEN
@@ -108,8 +114,8 @@ BEGIN
   v_code := NULL;
   BEGIN PERFORM public.delete_project(v_p, NULL, NULL);
   EXCEPTION WHEN OTHERS THEN v_code := SQLSTATE; END;
-  IF v_code IS DISTINCT FROM '22004' THEN
-    RAISE EXCEPTION 'D170/370 §3: a NULL actor ended with SQLSTATE %, expected 22004', COALESCE(v_code, '(none)');
+  IF v_code IS DISTINCT FROM '42501' THEN
+    RAISE EXCEPTION 'D170/370 §3: a NULL actor ended with SQLSTATE %, expected 42501', COALESCE(v_code, '(none)');
   END IF;
 
   -- ══ §4 · atomic: fail at the LAST table, after the project row and its lanes are gone ══
@@ -127,6 +133,7 @@ BEGIN
   EXECUTE format('CREATE TRIGGER d170_refuse BEFORE DELETE ON public.node_list
     FOR EACH ROW WHEN (OLD.project_id = %L::uuid) EXECUTE FUNCTION pg_temp.d170_refuse()', v_q);
   v_code := NULL;
+  PERFORM pg_temp.browser_session(v_owner);
   BEGIN PERFORM public.delete_project(v_q, v_owner, 'd170o@example.invalid');
   EXCEPTION WHEN OTHERS THEN v_code := SQLERRM; END;
   DROP TRIGGER d170_refuse ON public.node_list;
@@ -149,10 +156,11 @@ BEGIN
   -- `app.current_user_id` LOCAL to this transaction — which is the whole file — so §2
   -- passed with `delete_project`'s own attribution DELETED: it was reading the value
   -- the setup left behind (mutation-tested; the same trap as §16 · WP 4.1 · E).
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
   SELECT count(*) INTO v_rebuilt FROM public.audit_logs
    WHERE plane = 'data' AND action = 'insert'
      AND target_type IN ('supply_chain_data','supply_chain_data_multi_tier','node_list');
+  PERFORM pg_temp.browser_session(v_owner);
   PERFORM public.delete_project(v_p, v_owner, 'd170o@example.invalid');
   SELECT count(*) - v_rebuilt INTO v_rebuilt FROM public.audit_logs
    WHERE plane = 'data' AND action = 'insert'
@@ -193,6 +201,7 @@ BEGIN
   END IF;
 
   -- The untouched project is intact, and an ADMIN of the organization may delete it.
+  PERFORM pg_temp.browser_session(v_admin);
   PERFORM public.delete_project(v_q, v_admin, 'd170a@example.invalid');
   IF EXISTS (SELECT 1 FROM public.projects WHERE id = v_q) THEN
     RAISE EXCEPTION 'D170/370 §3: an admin of the project''s organization could not delete it';

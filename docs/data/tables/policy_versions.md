@@ -37,7 +37,7 @@ partially or get corrected — the write fails.
 | Row-level security | enabled |
 | Policies on the table | 6 — all carry a predicate |
 
-Tier 4 — the DECISION plane: what a person or an agent CHOSE, as against the dataset they chose it over and the result it produced. `result-binding` (I8) needs all three, which is why WP 6.3 keeps the results and this package takes the decisions. Audited from WP 6.4: the three statement-grain triggers land beside this sidecar, because `dataPlaneAudit.test.ts` scopes its rule to tables IN the contract and a deferred table's writes are unaudited with nothing to notice (D54). **This is the one decision table `result-binding` (I8) already reaches**: a run stores `policy_version_id` and the verifiable export reads the row back, so the policy half of a reproducibility record is bound where the dataset half has to be reconstructed. The row carries THREE author columns beside `created_by`, which is a denormalised copy of a person rather than a second identity (G1) — kept because a version outlives an account and a deleted user should not erase who made a decision.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; browser writes require `data_edit_policies` on the project. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: Tier 4 — the DECISION plane: what a person or an agent CHOSE, as against the dataset they chose it over and the result it produced. `result-binding` (I8) needs all three, which is why WP 6.3 keeps the results and this package takes the decisions. Audited from WP 6.4: the three statement-grain triggers land beside this sidecar, because `dataPlaneAudit.test.ts` scopes its rule to tables IN the contract and a deferred table's writes are unaudited with nothing to notice (D54). **This is the one decision table `result-binding` (I8) already reaches**: a run stores `policy_version_id` and the verifiable export reads the row back, so the policy half of a reproducibility record is bound where the dataset half has to be reconstructed. The row carries THREE author columns beside `created_by`, which is a denormalised copy of a person rather than a second identity (G1) — kept because a version outlives an account and a deleted user should not erase who made a decision.
 
 <details><summary>6 RLS policies</summary>
 
@@ -311,6 +311,6 @@ Free text a person wrote about why. The only column here that carries a REASON r
 
 ---
 
-*Generated from data contract `1df77a699e5c`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/policy_versions.contract.yaml`, table created by `20260609000002_policy_versions.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- WP 6.3 · §5.4 A2 — THE VALUE CHAIN ANSWERS, AND ANSWERS ONCE.
 --
 -- `20260919000003` adds `ingest_value_chain`. What only a running database can
@@ -74,11 +75,14 @@ BEGIN
       'findings', jsonb_build_array(jsonb_build_object(
         'level','info','field','segment','code','blank','message','left empty'))));
 
+  PERFORM pg_temp.browser_session(v_user);
+
   v_res := public.ingest_land_file(
     v_project, v_user, 'csv', 'master', 'customers',
     'customers-may.csv', 'ingest', 'p/wp63/1.csv', 'text/csv', 411,
     repeat('a', 64), v_rows);
   v_run1 := (v_res ->> 'run_id')::uuid;
+  PERFORM pg_temp.browser_session(v_user);
   PERFORM public.ingest_apply_run(v_run1, v_user);
 
   SELECT source_row_id INTO v_srow
@@ -88,10 +92,13 @@ BEGIN
   END IF;
 
   -- ── 1 · THE CHAIN REACHES THE FILE, AND IT IS ONE ROW ─────────────────────
+  PERFORM pg_temp.browser_session(v_user);
   SELECT count(*) INTO v_n FROM public.ingest_value_chain(v_user, v_srow);
   IF v_n <> 1 THEN
     RAISE EXCEPTION 'WP 6.3 §1: the chain returned % row(s) for a provenanced row, expected exactly 1', v_n;
   END IF;
+
+  PERFORM pg_temp.browser_session(v_user);
 
   SELECT * INTO v_chain FROM public.ingest_value_chain(v_user, v_srow);
   IF NOT v_chain.has_provenance THEN
@@ -160,6 +167,7 @@ BEGIN
   END IF;
 
   -- A second upload of the SAME dataset, applied after the first.
+  PERFORM pg_temp.browser_session(v_user);
   v_res := public.ingest_land_file(
     v_project, v_user, 'csv', 'master', 'customers',
     'customers-june.csv', 'ingest', 'p/wp63/2.csv', 'text/csv', 500,
@@ -169,7 +177,10 @@ BEGIN
       'parsed',   jsonb_build_object('customer_id','C-9','name','New Buyer'),
       'findings', '[]'::jsonb)));
   v_run2 := (v_res ->> 'run_id')::uuid;
+  PERFORM pg_temp.browser_session(v_user);
   PERFORM public.ingest_apply_run(v_run2, v_user);
+
+  PERFORM pg_temp.browser_session(v_user);
 
   SELECT * INTO v_chain FROM public.ingest_value_chain(v_user, v_srow);
   IF v_chain.later_uploads IS DISTINCT FROM 1 THEN
@@ -182,6 +193,7 @@ BEGIN
 
   -- A run for a DIFFERENT target must not count. `suppliers` is landable and is
   -- not this row's dataset.
+  PERFORM pg_temp.browser_session(v_user);
   v_res := public.ingest_land_file(
     v_project, v_user, 'csv', 'master', 'suppliers',
     'suppliers.csv', 'ingest', 'p/wp63/3.csv', 'text/csv', 120,
@@ -190,7 +202,10 @@ BEGIN
       'raw',      jsonb_build_object('supplier_id','S-1','name','Acme'),
       'parsed',   jsonb_build_object('supplier_id','S-1','name','Acme'),
       'findings', '[]'::jsonb)));
+  PERFORM pg_temp.browser_session(v_user);
   PERFORM public.ingest_apply_run((v_res ->> 'run_id')::uuid, v_user);
+
+  PERFORM pg_temp.browser_session(v_user);
 
   SELECT * INTO v_chain FROM public.ingest_value_chain(v_user, v_srow);
   IF v_chain.later_uploads IS DISTINCT FROM 1 THEN
@@ -203,11 +218,14 @@ BEGIN
   -- 8 577 rows in production predate the landing path. Their provenance is
   -- UNKNOWN, and the difference between "unknown" and a blank popover is the
   -- whole of T2 at this point of display.
+  PERFORM pg_temp.browser_session(v_user);
   SELECT count(*) INTO v_n
     FROM public.ingest_value_chain(v_user, NULL, v_project, 'customers');
   IF v_n <> 1 THEN
     RAISE EXCEPTION 'WP 6.3 §5: the no-provenance mode returned % row(s); zero renders as "failed to load"', v_n;
   END IF;
+
+  PERFORM pg_temp.browser_session(v_user);
 
   SELECT * INTO v_chain
     FROM public.ingest_value_chain(v_user, NULL, v_project, 'customers');
@@ -232,8 +250,9 @@ BEGIN
   -- `v_other` is a real approved user with no claim on this project. The GUC is
   -- deliberately poisoned with the OWNER first, so a function that read the
   -- session instead of its parameter would pass this and be wrong.
-  PERFORM set_config('app.current_user_id', v_user::text, true);
+  PERFORM pg_temp.browser_session(v_user);
   BEGIN
+    PERFORM pg_temp.browser_session(v_other);
     PERFORM * FROM public.ingest_value_chain(v_other, v_srow);
     RAISE EXCEPTION 'WP 6.3 §6: a user with no access to the project read its value chain';
   EXCEPTION WHEN insufficient_privilege THEN
@@ -242,14 +261,16 @@ BEGIN
 
   -- And a NULL reader is refused rather than defaulted.
   BEGIN
+    PERFORM pg_temp.browser_session(NULL);
     PERFORM * FROM public.ingest_value_chain(NULL, v_srow);
     RAISE EXCEPTION 'WP 6.3 §6: the chain answered a read that named no reader';
-  EXCEPTION WHEN null_value_not_allowed THEN
+  EXCEPTION WHEN insufficient_privilege THEN
     NULL;
   END;
 
   -- ── 7 · THE TABLE NAME IS NOT A GENERIC READER ───────────────────────────
   BEGIN
+    PERFORM pg_temp.browser_session(v_user);
     PERFORM * FROM public.ingest_value_chain(v_user, NULL, v_project, 'approved_users');
     RAISE EXCEPTION 'WP 6.3 §7: the chain accepted a target table outside the landing path';
   EXCEPTION WHEN invalid_parameter_value THEN
@@ -259,6 +280,7 @@ BEGIN
   -- And a staged row that does not exist is an error, not an empty answer: the
   -- caller passed an id it got from a row, so a miss means the chain is broken.
   BEGIN
+    PERFORM pg_temp.browser_session(v_user);
     PERFORM * FROM public.ingest_value_chain(v_user, '00000000-0000-4000-8000-0000000630ff');
     RAISE EXCEPTION 'WP 6.3 §7: the chain answered for a staged row that does not exist';
   EXCEPTION WHEN no_data_found THEN

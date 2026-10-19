@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- §4 D275 · A POLICY WRITE THAT NAMES ITS ACTOR NEEDS EDIT POLICIES — ON THE SERVER.
 --
 -- `20261002000003` makes the eight policy writers call `assert_may_edit_policies`, which reads
@@ -29,6 +30,7 @@ DECLARE
   v_refused text[];
   v_val     jsonb;
   v_n       bigint;
+  v_code    text;
 BEGIN
   INSERT INTO public.organizations (id, name, slug) VALUES
     (v_org, 'D275 Org', 'd273-' || substr(v_org::text, 1, 8));
@@ -70,20 +72,24 @@ BEGIN
     CROSS JOIN (VALUES ('data_edit_inputs'), ('data_edit_policies'), ('export'), ('simulation_lab')) k(key)
   ON CONFLICT (role, capability_key) DO NOTHING;
 
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_project_member(v_super, 'd273s@example.invalid', v_editor,  v_p, 'editor',  NULL, 'D275 editor');
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_project_member(v_super, 'd273s@example.invalid', v_analyst, v_p, 'analyst', NULL, 'D275 analyst');
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_project_member(v_super, 'd273s@example.invalid', v_viewer,  v_p, 'viewer',  NULL, 'D275 viewer');
   RESET ROLE;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
 
   -- A known starting value, and a version to restore / annotate / delete. Written with no
   -- actor (§5's path), as the owner would have left it.
   PERFORM public.save_policy_defaults(v_p, 'inventory', '{"d273": "start"}'::jsonb);
   PERFORM public.bulk_upsert_policy_overrides(v_p, jsonb_build_array(jsonb_build_object(
     'scope', 'node', 'target_key', 'N1', 'family', 'sourcing', 'patch', '{"d273": "start"}'::jsonb)));
+  PERFORM pg_temp.browser_session(v_owner);
   v_version := public.snapshot_policy(v_p, 'D275 base', v_owner);
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
 
   -- ══ §1–§2 · every writer refuses the analyst, the viewer and an unknown actor ══
   FOREACH v_who IN ARRAY ARRAY[v_analyst, v_viewer, v_ghost] LOOP
@@ -93,24 +99,32 @@ BEGIN
       'clear_policy_preset', 'restore_policy_version', 'update_policy_version_notes',
       'delete_policy_version', 'apply_policy_bundle'] LOOP
       BEGIN
-        SET LOCAL ROLE anon;
+        SET LOCAL ROLE authenticated;
         CASE v_call
           WHEN 'save_policy_defaults' THEN
+            PERFORM pg_temp.browser_session(v_who);
             PERFORM public.save_policy_defaults(v_p, 'inventory', '{"d273": "changed"}'::jsonb, _actor_user_id => v_who);
           WHEN 'bulk_upsert_policy_overrides' THEN
+            PERFORM pg_temp.browser_session(v_who);
             PERFORM public.bulk_upsert_policy_overrides(v_p, jsonb_build_array(jsonb_build_object(
               'scope', 'node', 'target_key', 'N1', 'family', 'sourcing', 'patch', '{"d273": "changed"}'::jsonb)), v_who);
           WHEN 'delete_policy_override' THEN
+            PERFORM pg_temp.browser_session(v_who);
             PERFORM public.delete_policy_override(v_p, 'node', 'N1', 'sourcing', v_who);
           WHEN 'clear_policy_preset' THEN
+            PERFORM pg_temp.browser_session(v_who);
             PERFORM public.clear_policy_preset(v_p, v_who);
           WHEN 'restore_policy_version' THEN
+            PERFORM pg_temp.browser_session(v_who);
             PERFORM public.restore_policy_version(v_version, v_who);
           WHEN 'update_policy_version_notes' THEN
+            PERFORM pg_temp.browser_session(v_who);
             PERFORM public.update_policy_version_notes(v_version, 'changed', v_who);
           WHEN 'delete_policy_version' THEN
+            PERFORM pg_temp.browser_session(v_who);
             PERFORM public.delete_policy_version(v_version, v_who);
           WHEN 'apply_policy_bundle' THEN
+            PERFORM pg_temp.browser_session(v_who);
             PERFORM public.apply_policy_bundle(v_p, '{"inventory": {"d273": "changed"}}'::jsonb,
               p_user_id => v_who);
         END CASE;
@@ -120,7 +134,7 @@ BEGIN
         v_refused := v_refused || v_call;
       END;
     END LOOP;
-    PERFORM set_config('app.current_user_id', '', true);
+    PERFORM pg_temp.database_maintenance();
     IF cardinality(v_refused) <> 8 THEN
       RAISE EXCEPTION 'D275/710 §1–§2: actor % (analyst %, viewer %, ghost %) was refused only by % — every policy writer must refuse it',
         v_who, v_analyst, v_viewer, v_ghost, v_refused;
@@ -142,21 +156,25 @@ BEGIN
   END IF;
 
   -- ══ §3 · the editor and the owner still write ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_editor);
   PERFORM public.save_policy_defaults(v_p, 'inventory', '{"d273": "editor"}'::jsonb, _actor_user_id => v_editor);
   RESET ROLE;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
   SELECT inventory INTO v_val FROM public.policy_defaults WHERE project_id = v_p;
   IF v_val ->> 'd273' IS DISTINCT FROM 'editor' THEN
     RAISE EXCEPTION 'D275/710 §3: the editor''s write did not land (defaults %)', v_val;
   END IF;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_owner);
   PERFORM public.bulk_upsert_policy_overrides(v_p, jsonb_build_array(jsonb_build_object(
     'scope', 'node', 'target_key', 'N1', 'family', 'sourcing', 'patch', '{"d273": "owner"}'::jsonb)), v_owner);
+  PERFORM pg_temp.browser_session(v_owner);
   PERFORM public.update_policy_version_notes(v_version, 'owner note', v_owner);
+  PERFORM pg_temp.browser_session(v_editor);
   PERFORM public.restore_policy_version(v_version, v_editor);
   RESET ROLE;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
   SELECT inventory INTO v_val FROM public.policy_defaults WHERE project_id = v_p;
   IF v_val ->> 'd273' IS DISTINCT FROM 'start' THEN
     RAISE EXCEPTION 'D275/710 §3: the editor''s restore did not land (defaults %)', v_val;
@@ -167,22 +185,26 @@ BEGIN
   END IF;
 
   -- ══ §4 · the analyst may still save a version on the way to a run ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_analyst);
   v_v2 := public.snapshot_policy(v_p, 'D275 analyst run', v_analyst);
   RESET ROLE;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
   IF v_v2 IS NULL THEN
     RAISE EXCEPTION 'D275/710 §4: the analyst could not save a policy version for a run';
   END IF;
 
-  -- ══ §5 · no actor, no change ══
-  SET LOCAL ROLE anon;
-  PERFORM public.save_policy_defaults(v_p, 'inventory', '{"d273": "unnamed"}'::jsonb);
-  RESET ROLE;
+  -- ══ §5 · an anonymous caller cannot use the formerly unnamed write ══
+  v_code := NULL;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(NULL);
+    PERFORM public.save_policy_defaults(v_p, 'inventory', '{"d273": "unnamed"}'::jsonb);
+    RESET ROLE;
+  EXCEPTION WHEN insufficient_privilege THEN RESET ROLE; v_code := 'refused'; END;
+  IF v_code IS NULL THEN RAISE EXCEPTION 'Anonymous policy write succeeded'; END IF;
   SELECT inventory INTO v_val FROM public.policy_defaults WHERE project_id = v_p;
-  IF v_val ->> 'd273' IS DISTINCT FROM 'unnamed' THEN
-    RAISE EXCEPTION 'D275/710 §5: a write naming no actor was refused or lost (defaults %)', v_val;
-  END IF;
+  IF v_val ->> 'd273' = 'unnamed' THEN RAISE EXCEPTION 'Refused policy write changed data'; END IF;
 
   RAISE NOTICE 'D275/710: every policy writer refuses an actor without Edit Policies; editors, owners, runs and the API path are unchanged';
 END $d273$;
