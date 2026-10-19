@@ -34,11 +34,16 @@ natural_key_intended: [project_id, customer_id, product_id, period_start]
 
 governance:
   read: project_member
-  write: project_modeler_or_admin
+  write: data_edit_inputs
   min_project_role: editor
   audited: true
   rls_enabled: true
   note: >-
+    D309/D310 candidate (not deployed): browser reads require a verified active
+    principal and scoped project/owner access. Anonymous tenant grants are revoked;
+    browser writes require `data_edit_inputs` on the project.
+    The generated schema owns the exact policies; D310 owns live-grant evidence.
+    Historical context before this candidate:
     RLS with NO `anon` policy: §4 D28's list of unconditional policies is meant to
     shrink, and nothing needs one. The run reads through the snapshot (SECURITY
     DEFINER), the worker as service role, and /policies and the Data map through

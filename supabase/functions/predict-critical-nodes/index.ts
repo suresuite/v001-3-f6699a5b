@@ -1,3 +1,4 @@
+import { browserIdentity } from "../_shared/requestIdentity.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.55.0';
@@ -39,6 +40,9 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const project_id: string | undefined = body.project_id;
     const uploaded_by = body.uploaded_by;
+    const who = await browserIdentity(req, supabase, { id: uploaded_by }, project_id, "data_edit_inputs");
+    if (who instanceof Response) return who;
+
     // §4 D307 — the threshold is part of the request AND of the cache key: two
     // thresholds are two answers. Out of (0, 1] falls back to the default.
     const threshold = resolveThreshold(body.threshold);

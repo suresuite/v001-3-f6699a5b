@@ -44,7 +44,7 @@ export default function Guide() { return <>
     ]}
   />
   <Details title="What a key can and can't do">
-    <p>Keys carry an organization and optional project restrictions. What a key can reach also depends on its owner's current eligibility — a stored scope list isn't a permanent entitlement. <Term>GET /key</Term> returns the scopes the key may use now; the notebooks check it before they start.</p>
+    <p>Keys carry an organization and optional project restrictions. What a key can reach also depends on its owner's current eligibility — a stored scope list isn't a permanent entitlement. Personal keys also respect the owner's project rights: a Viewer cannot use a key to edit that project's policies. <Term>GET /key</Term> returns the scopes the key may use now; the notebooks check it before they start.</p>
     <p>The test/live label controls limits. It isn't proof that the key points at a separate database.</p>
   </Details>
 </Section>

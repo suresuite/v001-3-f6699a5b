@@ -27,15 +27,19 @@
 | Minimum project role | `analyst` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
-| Policies on the table | 1 — all carry a predicate |
+| Policies on the table | 5 — all carry a predicate |
 
-Written only by `_insert_validated_model`, inside the same transaction as its model; a BEFORE UPDATE trigger refuses every edit. Read through `has_project_access`, and by the browser through `get_validated_model_evidence`, which is no wider than the model row it belongs to (readable by every API role). Audited at statement grain.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; direct browser mutations are closed and authorized RPCs retain their own role gates. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: Written only by `_insert_validated_model`, inside the same transaction as its model; a BEFORE UPDATE trigger refuses every edit. Read through `has_project_access`, and by the browser through `get_validated_model_evidence`, which is no wider than the model row it belongs to (readable by every API role). Audited at statement grain.
 
-<details><summary>1 RLS policy</summary>
+<details><summary>5 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| model_validation_evidence_select | SELECT | all | `20261001000008_validated_model.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -203,6 +207,6 @@ When it was written.
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/model_validation_evidence.contract.yaml`, table created by `20261001000008_validated_model.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

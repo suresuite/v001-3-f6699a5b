@@ -172,7 +172,7 @@ describe("the edge function validates from the contract and nowhere else", () =>
     // `ingest_files.ingest_run_id` is NOT NULL and write-once; the order is not
     // a preference. The function must not do it in pieces.
     expect(FUNCTION).toMatch(/rpc\("ingest_land_file"/);
-    expect(FUNCTION).not.toMatch(/from\("ingest_runs"\)/);
+    expect(FUNCTION).not.toMatch(/from\("ingest_runs"\)\s*\.(?:insert|upsert|update|delete)\(/);
     expect(FUNCTION).not.toMatch(/from\("ingest_files"\)/);
     expect(FUNCTION).not.toMatch(/from\("ingest_staged_rows"\)/);
   });

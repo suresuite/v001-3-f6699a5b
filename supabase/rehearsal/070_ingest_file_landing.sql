@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- WP 3.2 · THE LANDING, AND THE AUDIT ROW IT OWES.
 --
 -- `050` proves the connector path survives a rename and `060` proves a link-less
@@ -94,6 +95,7 @@ BEGIN
   -- thing the database can still refuse is a landing into a project that user
   -- cannot reach. If this stops holding, a caller can write into any project.
   BEGIN
+    PERFORM pg_temp.browser_session(v_user);
     PERFORM public.ingest_land_file(
       v_foreign, v_user, 'csv', 'transactional', 'inbound_logistics',
       'x.csv', 'ingest', 'p/2', 'text/csv', 10,
@@ -105,6 +107,7 @@ BEGIN
   -- The promotion builds dynamic SQL, so the target is a closed set and the
   -- landing is where it closes — before a row exists, not at apply time.
   BEGIN
+    PERFORM pg_temp.browser_session(v_user);
     PERFORM public.ingest_land_file(
       v_project, v_user, 'csv', 'transactional', 'audit_logs',
       'x.csv', 'ingest', 'p/3', 'text/csv', 10,
@@ -119,6 +122,8 @@ BEGIN
   ALTER TABLE public.audit_logs DISABLE TRIGGER audit_logs_guard_change;
   DELETE FROM public.audit_logs WHERE plane = 'data';
   ALTER TABLE public.audit_logs ENABLE TRIGGER audit_logs_guard_change;
+
+  PERFORM pg_temp.browser_session(v_user);
 
   v_landed := public.ingest_land_file(
     v_project, v_user, 'csv', 'transactional', 'inbound_logistics',
@@ -202,7 +207,7 @@ BEGIN
   END IF;
 
   -- ── 4 · tier 1 is governed by the RUN's project ───────────────────────────
-  PERFORM set_config('app.current_user_id', v_user::text, true);
+  PERFORM pg_temp.browser_session(v_user);
   SET LOCAL ROLE authenticated;
   SELECT count(*) INTO v_n FROM public.ingest_staged_rows WHERE ingest_run_id = v_run;
   RESET ROLE;
@@ -210,7 +215,7 @@ BEGIN
     RAISE EXCEPTION 'WP 3.2: the uploader reads % of their own 3 staged rows', v_n;
   END IF;
 
-  PERFORM set_config('app.current_user_id', v_other::text, true);
+  PERFORM pg_temp.browser_session(v_other);
   SET LOCAL ROLE authenticated;
   SELECT count(*) INTO v_n FROM public.ingest_staged_rows WHERE ingest_run_id = v_run;
   RESET ROLE;
@@ -225,6 +230,8 @@ BEGIN
   DELETE FROM public.audit_logs WHERE plane = 'data';
   ALTER TABLE public.audit_logs ENABLE TRIGGER audit_logs_guard_change;
   DELETE FROM public.inbound_logistics WHERE project_id = v_project;
+
+  PERFORM pg_temp.browser_session(v_user);
 
   v_applied := public.ingest_apply_run(v_run, v_user);
 
@@ -292,6 +299,7 @@ BEGIN
 
   -- ── 6 · a run is promoted once ────────────────────────────────────────────
   BEGIN
+    PERFORM pg_temp.browser_session(v_user);
     PERFORM public.ingest_apply_run(v_run, v_user);
     RAISE EXCEPTION 'WP 3.2: a run was promoted twice — the same rows are now in tier 2 twice';
   EXCEPTION WHEN invalid_parameter_value THEN NULL;

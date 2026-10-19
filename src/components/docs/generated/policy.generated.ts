@@ -4385,7 +4385,7 @@ export type ReadExposure = {
 };
 
 export const READ_EXPOSURE: ReadExposure = {
-  "described": 77,
+  "described": 78,
   "open": [
     {
       "table": "analysis_kinds",
@@ -4400,82 +4400,13 @@ export const READ_EXPOSURE: ReadExposure = {
       ]
     },
     {
-      "table": "bom_multi_level",
-      "roles": [
-        "anon",
-        "authenticated"
-      ]
-    },
-    {
-      "table": "bom_single_level",
-      "roles": [
-        "anon",
-        "authenticated"
-      ]
-    },
-    {
       "table": "capabilities",
       "roles": [
         "public"
       ]
     },
     {
-      "table": "customers",
-      "roles": [
-        "anon",
-        "authenticated"
-      ]
-    },
-    {
-      "table": "dataset_versions",
-      "roles": [
-        "anon",
-        "authenticated"
-      ]
-    },
-    {
       "table": "docs_section_releases",
-      "roles": [
-        "anon",
-        "authenticated"
-      ]
-    },
-    {
-      "table": "experiments",
-      "roles": [
-        "authenticated"
-      ]
-    },
-    {
-      "table": "external_evidence",
-      "roles": [
-        "anon",
-        "authenticated"
-      ]
-    },
-    {
-      "table": "inbound_logistics",
-      "roles": [
-        "anon",
-        "authenticated"
-      ]
-    },
-    {
-      "table": "materials",
-      "roles": [
-        "anon",
-        "authenticated"
-      ]
-    },
-    {
-      "table": "model_validations",
-      "roles": [
-        "anon",
-        "authenticated"
-      ]
-    },
-    {
-      "table": "outbound_logistics",
       "roles": [
         "anon",
         "authenticated"
@@ -4489,35 +4420,7 @@ export const READ_EXPOSURE: ReadExposure = {
       ]
     },
     {
-      "table": "policy_defaults",
-      "roles": [
-        "anon",
-        "authenticated"
-      ]
-    },
-    {
-      "table": "policy_overrides",
-      "roles": [
-        "anon",
-        "authenticated"
-      ]
-    },
-    {
       "table": "policy_presets",
-      "roles": [
-        "anon",
-        "authenticated"
-      ]
-    },
-    {
-      "table": "policy_versions",
-      "roles": [
-        "anon",
-        "authenticated"
-      ]
-    },
-    {
-      "table": "products",
       "roles": [
         "anon",
         "authenticated"
@@ -4527,12 +4430,6 @@ export const READ_EXPOSURE: ReadExposure = {
       "table": "project_role_capabilities",
       "roles": [
         "public"
-      ]
-    },
-    {
-      "table": "recovery_playbooks",
-      "roles": [
-        "authenticated"
       ]
     },
     {
@@ -4549,27 +4446,6 @@ export const READ_EXPOSURE: ReadExposure = {
       ]
     },
     {
-      "table": "run_item_series",
-      "roles": [
-        "anon",
-        "authenticated"
-      ]
-    },
-    {
-      "table": "run_replications",
-      "roles": [
-        "anon",
-        "authenticated"
-      ]
-    },
-    {
-      "table": "scenarios",
-      "roles": [
-        "anon",
-        "authenticated"
-      ]
-    },
-    {
       "table": "sim_engine_builds",
       "roles": [
         "anon",
@@ -4582,52 +4458,20 @@ export const READ_EXPOSURE: ReadExposure = {
         "anon",
         "authenticated"
       ]
-    },
-    {
-      "table": "simulation_runs",
-      "roles": [
-        "anon",
-        "authenticated"
-      ]
-    },
-    {
-      "table": "suppliers",
-      "roles": [
-        "anon",
-        "authenticated"
-      ]
     }
   ],
   "signedOut": [
     "analysis_kinds",
     "approved_users",
-    "bom_multi_level",
-    "bom_single_level",
     "capabilities",
-    "customers",
-    "dataset_versions",
     "docs_section_releases",
-    "external_evidence",
-    "inbound_logistics",
-    "materials",
-    "model_validations",
-    "outbound_logistics",
     "plan_role_allowances",
-    "policy_defaults",
-    "policy_overrides",
     "policy_presets",
-    "policy_versions",
-    "products",
     "project_role_capabilities",
     "risk_data",
     "role_capabilities",
-    "run_item_series",
-    "run_replications",
-    "scenarios",
     "sim_engine_builds",
-    "sim_engines",
-    "simulation_runs",
-    "suppliers"
+    "sim_engines"
   ]
 };
 

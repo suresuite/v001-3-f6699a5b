@@ -115,6 +115,7 @@ describe('D278 · the hooks use them', () => {
     expect(src).toMatch(/watchProfileFreshness\(/);
     expect(src).toMatch(/roleChangeNotice\(user\.role, updated\.role\)/);
     // Installed per signed-in user, and cleaned up: the effect returns the watcher's cleanup.
-    expect(src).toMatch(/if \(!user\?\.id\) return;\s*\n\s*return watchProfileFreshness\(/);
+    expect(src).toMatch(/const stop = watchProfileFreshness\(/);
+    expect(src).toMatch(/return \(\) => \{ stop\(\); clearInterval\(timer\); \}/);
   });
 });

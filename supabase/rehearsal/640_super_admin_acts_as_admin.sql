@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- A `super_admin` HOLDS EVERY RIGHT AN `admin` HOLDS — `20261001000017`.
 --
 -- A super admin could not upload a data file: `ingest_land_file` applies
@@ -47,7 +48,7 @@ BEGIN
     SELECT * FROM (VALUES (v_owner, 'owner', true), (v_admin, 'admin', true),
                           (v_super, 'super_admin', true), (v_other, 'modeler', false)) t(u, l, want)
   LOOP
-    PERFORM set_config('app.current_user_id', v_who::text, true);
+    PERFORM pg_temp.browser_session(v_who);
     IF public.has_project_access(v_proj) IS DISTINCT FROM v_got THEN
       RAISE EXCEPTION 'D640/640 §1: has_project_access for a % is %, want %',
         v_label, NOT v_got, v_got;
@@ -66,9 +67,11 @@ BEGIN
   END LOOP;
 
   -- ══ §3 · a writer, as the browser calls it ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM * FROM public.get_simulation_results(v_proj, v_super, 'd640s@example.invalid');
   BEGIN
+    PERFORM pg_temp.browser_session(v_other);
     PERFORM * FROM public.get_simulation_results(v_proj, v_other, 'd640x@example.invalid');
     RAISE EXCEPTION 'D640/640 §3: a modeler who is not the owner read the results';
   EXCEPTION WHEN raise_exception THEN
@@ -77,6 +80,7 @@ BEGIN
 
   -- ══ §4 · the organization test stays ══
   BEGIN
+    PERFORM pg_temp.browser_session(v_super_b);
     PERFORM * FROM public.get_simulation_results(v_proj, v_super_b, 'd640sb@example.invalid');
     RAISE EXCEPTION 'D640/640 §4: a super admin active in ANOTHER organization read this project''s results';
   EXCEPTION WHEN raise_exception THEN

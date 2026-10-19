@@ -65,6 +65,19 @@ CREATE SCHEMA IF NOT EXISTS auth;
 CREATE SCHEMA IF NOT EXISTS extensions;
 CREATE SCHEMA IF NOT EXISTS storage;
 CREATE SCHEMA IF NOT EXISTS graphql_public;
+CREATE SCHEMA IF NOT EXISTS realtime;
+-- Platform policy fixture surfaces. These model policy evaluation only, not the
+-- Storage signing service or the Realtime broker; staging verifies those services.
+CREATE TABLE IF NOT EXISTS storage.objects(id uuid DEFAULT gen_random_uuid(), bucket_id text, name text);
+ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+CREATE OR REPLACE FUNCTION storage.foldername(object_name text) RETURNS text[] LANGUAGE sql IMMUTABLE AS $prelude$
+  SELECT parts[1:cardinality(parts)-1] FROM (SELECT string_to_array(object_name, '/') AS parts) p
+$prelude$;
+CREATE TABLE IF NOT EXISTS realtime.messages(id uuid DEFAULT gen_random_uuid(), topic text, extension text);
+ALTER TABLE realtime.messages ENABLE ROW LEVEL SECURITY;
+CREATE OR REPLACE FUNCTION realtime.topic() RETURNS text LANGUAGE sql STABLE AS $prelude$
+  SELECT current_setting('realtime.topic', true)
+$prelude$;
 
 -- GoTrue's claim readers. The rehearsal runs as one superuser with no JWT, so
 -- these read a settable GUC: a test can impersonate by setting request.jwt.claims
@@ -274,7 +287,7 @@ function emitIndexes(artifact, warn) {
 
 function emitRls(artifact) {
   const out = [];
-  for (const t of artifact.tables) {
+  for (const t of [...artifact.tables, ...(artifact.platform_relations || [])]) {
     const rls = t.rls || {};
 
     // ENABLING RLS AND CREATING POLICIES ARE TWO DECISIONS, AND THIS USED TO MAKE THEM
@@ -295,9 +308,9 @@ function emitRls(artifact) {
     }
 
     for (const p of rls.policies || []) {
-      const to = p.roles && p.roles.length ? ` TO ${p.roles.map(q).join(", ")}` : "";
+      const to = p.roles && p.roles.length ? ` TO ${p.roles.map(r => r.toLowerCase() === "public" ? "PUBLIC" : q(r)).join(", ")}` : "";
       const bits = [
-        `CREATE POLICY ${q(p.name)} ON ${q(t.schema)}.${q(t.name)}`,
+        `CREATE POLICY ${q(p.name)} ON ${q(t.schema)}.${q(t.name)}${p.permissive === false ? " AS RESTRICTIVE" : ""}`,
         `  FOR ${p.command || "ALL"}${to}`,
       ];
       // The introspector stores `true` for an absent clause. USING on INSERT and

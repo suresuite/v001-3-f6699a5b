@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- WP 4.4 · A HASH CHANGE IS A REVERSIBLE DISPLAY STATE, AND THERE IS ONE RULE.
 --
 -- §11's WP 4.4 has one sentence and one clause, and the clause is D70:
@@ -67,7 +68,7 @@ BEGIN
   -- `project_freshness` refuses a project the caller cannot reach, so the
   -- fixture has to BE somebody. The owner, and the refusal itself is asserted in
   -- §8 rather than taken on trust.
-  PERFORM set_config('app.current_user_id', v_owner::text, true);
+  PERFORM pg_temp.browser_session(v_owner);
 
   v_h0 := public.current_graph_hash(v_project);
   IF v_h0 IS NULL THEN
@@ -365,7 +366,7 @@ BEGIN
   -- for one project, which is exactly the shape that leaks a competitor's
   -- dataset size if it forgets to ask. Asserted rather than assumed.
 
-  PERFORM set_config('app.current_user_id', v_editor::text, true);
+  PERFORM pg_temp.browser_session(NULL);
   BEGIN
     PERFORM public.project_freshness(v_project);
     RAISE EXCEPTION
@@ -375,7 +376,7 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN
     NULL;  -- refused, which is the assertion
   END;
-  PERFORM set_config('app.current_user_id', v_owner::text, true);
+  PERFORM pg_temp.browser_session(v_owner);
 
   RAISE NOTICE 'WP 4.4 · 140_one_staleness_rule · all sections passed';
 END $wp44$;

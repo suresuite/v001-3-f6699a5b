@@ -28,11 +28,16 @@ natural_key_unique:
 
 governance:
   read: null
-  write: "simulation_lab"
+  write: simulation_lab
   min_project_role: viewer
   audited: false
   rls_enabled: true
   note: >-
+    D309/D310 candidate (not deployed): browser reads require a verified active
+    principal and scoped project/owner access. Anonymous tenant grants are revoked;
+    browser writes require `simulation_lab` on the project.
+    The generated schema owns the exact policies; D310 owns live-grant evidence.
+    Historical context before this candidate:
     `write: simulation_lab`, not `null`, because the table's one policy,
     `experiments_auth_all` (`FOR ALL TO authenticated USING (true) WITH CHECK
     (true)`), has no predicate, and `governanceEnforcement.test.ts` refuses a
@@ -179,10 +184,9 @@ fields:
     unit: null
     unit_source: none
     meaning: >-
-      Meant to name the author. `REFERENCES auth.users ON DELETE SET NULL`, and
-      the hook fills it from `supabase.auth.getUser()` — but this application
-      authenticates against `approved_users`, not Supabase Auth, so for a real
-      user the value can only be NULL.
+      Historical GoTrue author reference (`REFERENCES auth.users ON DELETE SET NULL`).
+      Existing provenance is retained. Browser creates leave this NULL and store the
+      verified approved-user principal in `author_user_id` (D309 candidate).
     grain: identifier
     engine: {consumed_by: null, transform: null, missing_default: null}
     substitutions: []
@@ -211,3 +215,22 @@ fields:
     ingest: {csv_header: null, required: false, validate: null}
     surfaces: []
     resolution: null
+
+  author_user_id:
+    type: uuid
+    unit: null
+    unit_source: none
+    meaning: Verified approved-user author for browser sessions. The legacy auth.users created_by is preserved separately (PLAN.md §4 D309).
+    grain: identifier
+    engine:
+      consumed_by: null
+      transform: null
+      missing_default: null
+    substitutions: []
+    ingest:
+      csv_header: null
+      required: false
+      validate: null
+    surfaces: []
+    resolution: null
+

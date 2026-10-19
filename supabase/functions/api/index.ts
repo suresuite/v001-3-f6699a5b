@@ -23,6 +23,7 @@
 //   (no timing oracle); `Authorization` never logged; 401 storms are
 //   throttled by IP.
 
+import { authorizeApiProject, ApiScopeFailure } from "../_shared/apiProjectScope.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@3";
 import { cleanEnv } from "../_shared/env.ts";
@@ -258,14 +259,12 @@ function requireScope(p: Principal, scope: string): void {
 }
 
 /** Edge tenancy check + DB re-check (§6.2-6.3). Cross-org ⇒ 404, no oracle. */
-async function authorizeProject(p: Principal, projectId: string): Promise<void> {
-  if (p.projectIds && !p.projectIds.includes(projectId)) throw notFoundProject();
-  const { data, error } = await svc.rpc("api_can_access_project", {
-    p_org_id: p.orgId,
-    p_project_id: projectId,
-  });
-  if (error) throw new ApiError(503, "authz_unavailable", "authorization backend unavailable"); // fail closed
-  if (data !== true) throw notFoundProject();
+async function authorizeProject(p: Principal, projectId: string, capability?: string): Promise<void> {
+  try { await authorizeApiProject(svc, p, projectId, capability); }
+  catch (e) {
+    if (e instanceof ApiScopeFailure && e.status === 404) throw notFoundProject();
+    throw new ApiError(503, "authz_unavailable", "authorization backend unavailable");
+  }
 }
 
 // ── Step 5: rate limits + quotas (§7) ────────────────────────────────────────
@@ -395,7 +394,7 @@ function parseBody<T>(schema: z.ZodType<T>, body: unknown): T {
 }
 
 /** Load a run row and tenancy-check its project. 404 on any miss (no oracle). */
-async function loadAuthorizedRun(ctx: Ctx, runId: string): Promise<Record<string, unknown>> {
+async function loadAuthorizedRun(ctx: Ctx, runId: string, capability?: string): Promise<Record<string, unknown>> {
   const { data, error } = await svc
     .from("simulation_runs")
     .select(
@@ -410,7 +409,7 @@ async function loadAuthorizedRun(ctx: Ctx, runId: string): Promise<Record<string
   const run = data as unknown as Record<string, unknown> | null;
   if (!run) throw new ApiError(404, "run_not_found", "run not found");
   try {
-    await authorizeProject(ctx.principal, String(run.project_id));
+    await authorizeProject(ctx.principal, String(run.project_id), capability);
   } catch (e) {
     // Cross-tenant run ids read as nonexistent (no oracle); backend
     // unavailability keeps its fail-closed 503.
@@ -538,7 +537,7 @@ const freezeDataset: Handler = async (ctx) => {
   const { data: dsId, error } = await svc.rpc("snapshot_dataset", {
     p_project_id: projectId,
     p_label: body.label ?? null,
-    p_user_id: null,
+    p_user_id: ctx.principal.actorUserId,
     p_user_email: `api-key:${ctx.principal.keyPrefix}`,
   });
   if (error || !dsId) throw new ApiError(500, "snapshot_failed", "dataset snapshot failed");
@@ -590,30 +589,19 @@ const getPolicies: Handler = async (ctx) => {
 
 const putPolicies: Handler = async (ctx) => {
   const projectId = ctx.params[0];
-  await authorizeProject(ctx.principal, projectId);
+  await authorizeProject(ctx.principal, projectId, "data_edit_policies");
   ctx.auditProjectId = projectId;
   const body = parseBody(PoliciesPutSchema, ctx.body);
   // Same write RPCs the /policies page uses (20260609000025) — no forked path.
   //
-  // D71 · THESE THREE CALLS PASS NO `_actor_user_id`, AND THAT IS THE HONEST
-  // ANSWER RATHER THAN AN OMISSION. `ctx.principal` is an API KEY — keyId,
-  // orgId, scopes — and carries no user uuid, because a key is issued to an
-  // organization and not to a person. `snapshot_dataset` above already faces
-  // this and does the same thing: `p_user_id: null` with the key named in
-  // `p_user_email`. Passing a fabricated uuid would make `actor_known` true
-  // about somebody who did not act, which is worse than recording that the
-  // actor is unknown. Making an API key nameable in the audit plane is D28's
-  // question and WP 7.1's to answer.
-  //
-  // WP 12.3 made a PERSONAL key nameable (`ctx.principal.actorUserId`), and the
-  // request log names its owner. It is deliberately NOT passed here yet: a user
-  // id switches these RPCs onto their per-user checks, which the API path has
-  // never gone through, so naming the person in a write is the push-back
-  // package's change, made together with the project-role gate it needs.
+  // D309: personal-key actors come from the verified grant, never the body.
+  // Organization keys remain explicit scoped service principals, with no invented
+  // human UUID; their key identity is recorded in the API request log.
   let strategySent = false;
   for (const [family, value] of Object.entries(body.defaults ?? {})) {
     const { error } = await svc.rpc("save_policy_defaults", {
       p_project_id: projectId,
+      _actor_user_id: ctx.principal.actorUserId,
       p_family: family,
       p_value: value,
       p_strategy: !strategySent ? body.fulfillment_strategy ?? null : null,
@@ -627,6 +615,7 @@ const putPolicies: Handler = async (ctx) => {
       .from("policy_defaults").select("fulfillment").eq("project_id", projectId).maybeSingle();
     const { error } = await svc.rpc("save_policy_defaults", {
       p_project_id: projectId,
+      _actor_user_id: ctx.principal.actorUserId,
       p_family: "fulfillment",
       p_value: existing?.fulfillment ?? {},
       p_strategy: body.fulfillment_strategy,
@@ -636,6 +625,7 @@ const putPolicies: Handler = async (ctx) => {
   if (body.overrides?.length) {
     const { error } = await svc.rpc("bulk_upsert_policy_overrides", {
       p_project_id: projectId,
+      _actor_user_id: ctx.principal.actorUserId,
       p_rows: body.overrides,
     });
     if (error) throw new ApiError(500, "write_failed", "saving policy overrides failed");
@@ -651,7 +641,7 @@ const snapshotPolicyVersion: Handler = async (ctx) => {
   const { data: versionId, error } = await svc.rpc("snapshot_policy", {
     p_project_id: projectId,
     p_label: body.label ?? null,
-    p_user_id: null,
+    p_user_id: ctx.principal.actorUserId,
     p_user_email: `api-key:${ctx.principal.keyPrefix}`,
     p_user_name: null,
     p_parent_version_id: null,
@@ -701,21 +691,19 @@ const listScenarios: Handler = async (ctx) => {
 
 const createScenario: Handler = async (ctx) => {
   const projectId = ctx.params[0];
-  await authorizeProject(ctx.principal, projectId);
+  await authorizeProject(ctx.principal, projectId, "simulation_lab");
   ctx.auditProjectId = projectId;
   const body = parseBody(ScenarioCreateSchema, ctx.body);
-  const { data, error } = await svc
-    .from("scenarios")
-    .insert({ project_id: projectId, ...body })
-    .select("id,name,horizon_days,replications,seed,created_at")
-    .single();
+  const { data, error } = await svc.rpc("api_create_scenario", {
+    p_project_id: projectId, p_scenario: body, _actor_user_id: ctx.principal.actorUserId,
+  });
   if (error || !data) throw new ApiError(500, "write_failed", "scenario create failed");
   return { status: 201, body: data };
 };
 
 const createRun: Handler = async (ctx) => {
   const projectId = ctx.params[0];
-  await authorizeProject(ctx.principal, projectId);
+  await authorizeProject(ctx.principal, projectId, "simulation_lab");
   ctx.auditProjectId = projectId;
   const body = parseBody(RunCreateSchema, ctx.body);
   const p = ctx.principal;
@@ -771,7 +759,7 @@ const createRun: Handler = async (ctx) => {
         acknowledge_warnings: body.acknowledge_warnings,
         force_rerun: body.force_rerun,
       },
-    }, null, {
+    }, ctx.principal.actorUserId, {
       limits: {
         max_concurrent_runs: ctx.limits.max_concurrent_runs,
         max_replications: ctx.limits.max_replications,
@@ -891,23 +879,23 @@ const getRunReplications: Handler = async (ctx) => {
 };
 
 const cancelRun: Handler = async (ctx) => {
-  const run = await loadAuthorizedRun(ctx, ctx.params[0]);
+  const run = await loadAuthorizedRun(ctx, ctx.params[0], "simulation_lab");
   await dispatchExperimentCancel({ reader: svc, svc, upstash }, {
     project_id: String(run.project_id),
     kind: "experiment.cancel",
-    payload: { run_id: String(run.id) },
+    payload: { run_id: String(run.id), actor_user_id: ctx.principal.actorUserId },
   });
   return { status: 202, body: { run_id: run.id, status: "cancelled" } };
 };
 
 const addRunReps: Handler = async (ctx) => {
-  const run = await loadAuthorizedRun(ctx, ctx.params[0]);
+  const run = await loadAuthorizedRun(ctx, ctx.params[0], "simulation_lab");
   const body = parseBody(AddRepsSchema, ctx.body);
   await enqueueEnvelope({ upstash }, String(run.project_id), {
     project_id: run.project_id,
     kind: "experiment.add_reps",
     payload: { run_id: run.id, n: body.n },
-    user_id: null,
+    user_id: ctx.principal.actorUserId,
     server_ts: Date.now(),
   });
   return { status: 202, body: { run_id: run.id, added: body.n } };

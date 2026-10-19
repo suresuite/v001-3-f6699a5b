@@ -42,6 +42,11 @@ governance:
   audited: true
   rls_enabled: true
   note: >-
+    D309/D310 candidate (not deployed): browser reads require a verified active
+    principal and scoped project/owner access. Anonymous tenant grants are revoked;
+    direct browser mutations are closed and authorized RPCs retain their own role gates.
+    The generated schema owns the exact policies; D310 owns live-grant evidence.
+    Historical context before this candidate:
     Tier 4 — a DECISION. Readable by every API role (`model_validations_read_all`, D28's
     pinned list); written only through SECURITY DEFINER functions: `record_validated_model`
     (Save Validated Model — authenticates the actor through the shared preamble and

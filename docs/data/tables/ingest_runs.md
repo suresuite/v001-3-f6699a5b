@@ -44,15 +44,19 @@ partially or get corrected — the write fails.
 | Minimum project role | `editor` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
-| Policies on the table | 1 — all carry a predicate |
+| Policies on the table | 5 — all carry a predicate |
 
-RLS keys on the run's own `project_id` — `has_project_access(project_id)` — which is WP 3.1's change. The original policy reached the project through `project_erp_links`, and a run with no link (`source_kind` csv or api) could not be reached that way at all: it would have been ungoverned rather than merely unsupported. `audited: true` SINCE WP 3.2, by the RPC route: `ingest_land_file` writes one `plane='data'` row naming the uploader and carrying this run's id when the run is OPENED, and `ingest_apply_run` sets `app.current_user_id` LOCAL to its own transaction before the tier-2 INSERT, so the statement-level `audit_tier_write` trigger names the promoter too. That is the half D36 said was expensive: it is cheap here because both functions take their actor as a parameter and neither depends on a GUC surviving PostgREST pooling. WHAT IS STILL NOT AUDITED: the CONNECTOR's runs. `erp-sync-orbit-mrp` writes this table as the service role with no actor to name, which is D36 proper and is WP 3.3's, unchanged by this package. `min_project_role: editor` states the intent — a viewer has no business opening an ingestion run — and nothing enforces the role yet; the policy is the modeler-or-admin predicate the connector shipped with.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; direct browser mutations are closed and authorized RPCs retain their own role gates. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: RLS keys on the run's own `project_id` — `has_project_access(project_id)` — which is WP 3.1's change. The original policy reached the project through `project_erp_links`, and a run with no link (`source_kind` csv or api) could not be reached that way at all: it would have been ungoverned rather than merely unsupported. `audited: true` SINCE WP 3.2, by the RPC route: `ingest_land_file` writes one `plane='data'` row naming the uploader and carrying this run's id when the run is OPENED, and `ingest_apply_run` sets `app.current_user_id` LOCAL to its own transaction before the tier-2 INSERT, so the statement-level `audit_tier_write` trigger names the promoter too. That is the half D36 said was expensive: it is cheap here because both functions take their actor as a parameter and neither depends on a GUC surviving PostgREST pooling. WHAT IS STILL NOT AUDITED: the CONNECTOR's runs. `erp-sync-orbit-mrp` writes this table as the service role with no actor to name, which is D36 proper and is WP 3.3's, unchanged by this package. `min_project_role: editor` states the intent — a viewer has no business opening an ingestion run — and nothing enforces the role yet; the policy is the modeler-or-admin predicate the connector shipped with.
 
-<details><summary>1 RLS policy</summary>
+<details><summary>5 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| ingest_runs: project access | ALL | authenticated | `20260916000012_ingest_rename_and_widen.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -472,6 +476,6 @@ Staged rows that a LATER line of the same file repeats on the natural key. The p
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/ingest_runs.contract.yaml`, table created by `20260829120000_erp_connector_phase1_2.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

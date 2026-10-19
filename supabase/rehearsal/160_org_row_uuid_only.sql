@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- D47 · the ORGANIZATION ROW itself, not just the projects under it.
 --
 -- `supabase/rehearsal/040` proves `org_is_current_user_org` is uuid-only, and
@@ -35,7 +36,7 @@ BEGIN
   INSERT INTO public.approved_users (id, email, name, password_hash, organization, organization_id)
   VALUES (v_user, 'd47@example.invalid', 'D47', 'x', 'Initech', v_org_a);
 
-  PERFORM set_config('app.current_user_id', v_user::text, true);
+  PERFORM pg_temp.browser_session(v_user);
 
   -- ── 1 · the caller reads their OWN organization row ──────────────────────
   --

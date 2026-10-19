@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- §4 D210 · ONE ACCOUNT, SEVERAL ORGANIZATIONS — AND ONE ACTIVE AT A TIME.
 --
 -- Every claim below is about what the database DOES when the browser calls as `anon`
@@ -65,10 +66,11 @@ BEGIN
     (v_u3,    'M450 three', 'm450u3@example.invalid', extensions.crypt('pw-u3-1',    extensions.gen_salt('bf')), 'user',        'M450 Org D', v_org_d);
 
   -- The browser's shape: no GUC, no session.
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
 
   -- ══ §1 · a second membership ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_add_org_member(v_super, 'm450s@example.invalid', v_u1, v_org_b, NULL);
   RESET ROLE;
   SELECT count(*) INTO v_n FROM public.organization_members WHERE user_id = v_u1;
@@ -85,7 +87,8 @@ BEGIN
 
   v_msg := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_add_org_member(v_super, 'm450s@example.invalid', v_u1, v_org_b, NULL);
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN RESET ROLE; v_msg := SQLERRM; END;
@@ -94,10 +97,12 @@ BEGIN
   END IF;
 
   -- Each request is its own transaction in production: the admin verb's GUC is gone.
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_u1);
   SELECT count(*), count(*) FILTER (WHERE is_current) INTO v_n, v_cur
     FROM public.list_my_organizations(v_u1);
+  PERFORM pg_temp.browser_session(v_u1);
   SELECT org_id INTO v_org FROM public.list_my_organizations(v_u1) WHERE is_current;
   RESET ROLE;
   IF v_n <> 2 OR v_cur <> 1 OR v_org IS DISTINCT FROM v_org_a THEN
@@ -105,7 +110,8 @@ BEGIN
   END IF;
 
   -- ══ §2 · the switch ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_u1);
   v_name := public.switch_my_organization(v_org_b, v_u1);
   RESET ROLE;
   IF v_name IS DISTINCT FROM 'M450 Org B'
@@ -126,10 +132,11 @@ BEGIN
   END IF;
 
   -- Not a member: refused.
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
   v_msg := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_u1);
     PERFORM public.switch_my_organization(v_org_c, v_u1);
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN RESET ROLE; v_msg := SQLERRM; END;
@@ -144,17 +151,19 @@ BEGIN
   UPDATE public.organizations
      SET access_period = 'week', access_valid_from = now() - interval '7 days' - interval '1 second'
    WHERE id = v_org_a;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
   v_msg := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_u1);
     PERFORM public.switch_my_organization(v_org_a, v_u1);
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN RESET ROLE; v_msg := SQLERRM; END;
   IF v_msg IS NULL OR v_msg NOT LIKE 'org_access_ended%' THEN
     RAISE EXCEPTION 'M450 §2: a switch into an ended organization got %', COALESCE(v_msg, '(no error — it switched)');
   END IF;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_u1);
   SELECT access_expired INTO v_ended FROM public.list_my_organizations(v_u1) WHERE org_id = v_org_a;
   RESET ROLE;
   IF v_ended IS DISTINCT FROM true THEN
@@ -164,9 +173,11 @@ BEGIN
 
   -- ══ §3 · the user limit counts memberships ══
   -- Org C holds one account (u2, added); its limit is 1: u1 cannot be added.
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_add_org_member(v_super, 'm450s@example.invalid', v_u2, v_org_c, 'owner');
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_org_limits(v_super, 'm450s@example.invalid', v_org_c, NULL, 1);
   RESET ROLE;
   IF NOT EXISTS (SELECT 1 FROM public.organization_members
@@ -175,7 +186,8 @@ BEGIN
   END IF;
   v_msg := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_add_org_member(v_super, 'm450s@example.invalid', v_u1, v_org_c, NULL);
     RESET ROLE;
   EXCEPTION WHEN check_violation THEN RESET ROLE; GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT; END;
@@ -193,15 +205,20 @@ BEGIN
 
   -- Org B holds u1 alone; at a limit of 1 u1 still switches INTO it: no new seat.
   -- Org A holds u1 and u2; lowered to 1 it is OVER its limit, and u1 still switches back.
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_org_limits(v_super, 'm450s@example.invalid', v_org_a, NULL, 1);
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_org_limits(v_super, 'm450s@example.invalid', v_org_b, NULL, 1);
   RESET ROLE;
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_u1);
   PERFORM public.switch_my_organization(v_org_a, v_u1);
+  PERFORM pg_temp.browser_session(v_u1);
   PERFORM public.switch_my_organization(v_org_b, v_u1);
+  PERFORM pg_temp.browser_session(v_u1);
   PERFORM public.switch_my_organization(v_org_a, v_u1);
   RESET ROLE;
   IF public.get_current_user_org_id(v_u1) IS DISTINCT FROM v_org_a THEN
@@ -210,12 +227,14 @@ BEGIN
   UPDATE public.organizations SET user_limit = NULL WHERE id IN (v_org_a, v_org_b, v_org_c);
 
   -- The figures a limit is measured by are the membership rows, on both reads.
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
+  PERFORM pg_temp.browser_session(v_super);
   SELECT members INTO v_n FROM public.admin_list_organizations(v_super, 'm450s@example.invalid') WHERE id = v_org_b;
   IF v_n <> 1 THEN
     RAISE EXCEPTION 'M450 §3: Org B lists % member(s), expected 1 (u1, whose active organization is A)', v_n;
   END IF;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
+  PERFORM pg_temp.browser_session(v_u2);
   SELECT users_used INTO v_n FROM public.get_my_profile(v_u2);
   IF v_n <> 2 THEN
     RAISE EXCEPTION 'M450 §3: get_my_profile counts % user(s) in Org A, expected its 2 memberships', v_n;
@@ -225,7 +244,8 @@ BEGIN
   UPDATE public.organizations
      SET access_period = 'week', access_valid_from = now() - interval '7 days' - interval '1 second'
    WHERE id = v_org_a;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE service_role;
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   SELECT count(*) INTO v_n FROM public.authenticate_approved_user('m450u1@example.invalid', 'pw-u1-1');
   RESET ROLE;
   IF v_n <> 1 THEN
@@ -240,7 +260,8 @@ BEGIN
     RAISE EXCEPTION 'M450 §4: the sign-in row does not record the switch';
   END IF;
   -- u2 belongs to A (ended) and C (current), and is active in A: switched to C.
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE service_role;
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   SELECT count(*) INTO v_n FROM public.authenticate_approved_user('m450u2@example.invalid', 'pw-u2-1');
   RESET ROLE;
   IF v_n <> 1 OR (SELECT organization_id FROM public.approved_users WHERE id = v_u2) IS DISTINCT FROM v_org_c THEN
@@ -250,7 +271,8 @@ BEGIN
   UPDATE public.organizations
      SET access_period = 'week', access_valid_from = now() - interval '7 days' - interval '1 second'
    WHERE id = v_org_b;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE service_role;
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   SELECT count(*) INTO v_n FROM public.authenticate_approved_user('m450u1@example.invalid', 'pw-u1-1');
   RESET ROLE;
   IF v_n <> 0 THEN
@@ -264,16 +286,19 @@ BEGIN
   UPDATE public.organizations SET access_period = NULL, access_valid_from = NULL WHERE id IN (v_org_a, v_org_b);
 
   -- ══ §5 · removal ══  (u1: A and B, active B.)
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_remove_org_member(v_super, 'm450s@example.invalid', v_u1, v_org_a);
   RESET ROLE;
   IF (SELECT organization_id FROM public.approved_users WHERE id = v_u1) IS DISTINCT FROM v_org_b THEN
     RAISE EXCEPTION 'M450 §5: removing a membership that is not active moved the account';
   END IF;
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_add_org_member(v_super, 'm450s@example.invalid', v_u1, v_org_a, NULL);
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_remove_org_member(v_super, 'm450s@example.invalid', v_u1, v_org_b);
   RESET ROLE;
   IF (SELECT organization_id FROM public.approved_users WHERE id = v_u1) IS DISTINCT FROM v_org_a
@@ -288,8 +313,9 @@ BEGIN
   END IF;
   v_msg := NULL;
   BEGIN
-    PERFORM set_config('app.current_user_id', '', true);
-    SET LOCAL ROLE anon;
+    PERFORM pg_temp.database_maintenance();
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_remove_org_member(v_super, 'm450s@example.invalid', v_u1, v_org_b);
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN RESET ROLE; v_msg := SQLERRM; END;
@@ -299,22 +325,26 @@ BEGIN
 
   -- ══ §6 · deleting an organization: delete the only-here accounts, detach the rest ══
   -- Org D: u3 (only there) and u1 (also in A), with u1 active in D.
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_add_org_member(v_super, 'm450s@example.invalid', v_u1, v_org_d, NULL);
   RESET ROLE;
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_u1);
   PERFORM public.switch_my_organization(v_org_d, v_u1);
   RESET ROLE;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
+  PERFORM pg_temp.browser_session(v_super);
   SELECT jsonb_build_object('members', members, 'only_here', members_only_here) INTO v_out
     FROM public.admin_list_organizations(v_super, 'm450s@example.invalid') WHERE id = v_org_d;
   IF v_out IS DISTINCT FROM '{"members": 2, "only_here": 1}'::jsonb THEN
     RAISE EXCEPTION 'M450 §6: before the delete Org D reads %, expected 2 members, 1 only here', v_out;
   END IF;
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   v_out := public.admin_delete_organization(v_super, 'm450s@example.invalid', v_org_d, 'm450-org-d');
   RESET ROLE;
   IF (v_out ->> 'users')::int <> 1 OR (v_out ->> 'detached')::int <> 1 THEN
@@ -330,8 +360,9 @@ BEGIN
   END IF;
 
   -- ══ §7 · a bare organization delete re-points through ON DELETE SET NULL ══
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_add_org_member(v_super, 'm450s@example.invalid', v_u1, v_org_e, NULL);
   RESET ROLE;
   UPDATE public.approved_users SET organization_id = v_org_e WHERE id = v_u1;
@@ -342,16 +373,18 @@ BEGIN
   END IF;
 
   -- The last membership removed: no organization at all.
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_remove_org_member(v_super, 'm450s@example.invalid', v_u1, v_org_a);
   RESET ROLE;
   IF (SELECT organization_id FROM public.approved_users WHERE id = v_u1) IS NOT NULL THEN
     RAISE EXCEPTION 'M450 §7: an account with no membership left still has an active organization';
   END IF;
   -- …and a first membership is its active organization again.
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_add_org_member(v_super, 'm450s@example.invalid', v_u1, v_org_b, NULL);
   RESET ROLE;
   IF (SELECT organization_id FROM public.approved_users WHERE id = v_u1) IS DISTINCT FROM v_org_b THEN

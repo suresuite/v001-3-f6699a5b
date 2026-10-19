@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- WP 6.3 · §5.4's ACCEPTANCE TEST, EXPORT SIDE.
 --
 -- `20260919000004` adds `ingest_row_provenance`, which is what lets the dataset
@@ -41,6 +42,7 @@ BEGIN
     VALUES (v_project, 'WP63 provenance', v_user, 'WP63P');
 
   -- One customer through the landing path…
+  PERFORM pg_temp.browser_session(v_user);
   v_res := public.ingest_land_file(
     v_project, v_user, 'csv', 'master', 'customers',
     'customers-q3.csv', 'ingest', 'p/wp63p/1.csv', 'text/csv', 320,
@@ -51,6 +53,7 @@ BEGIN
       'parsed',   jsonb_build_object('customer_id','C-TRACED','name','Traced Co'),
       'findings', '[]'::jsonb)));
   v_run := (v_res ->> 'run_id')::uuid;
+  PERFORM pg_temp.browser_session(v_user);
   PERFORM public.ingest_apply_run(v_run, v_user);
 
   -- …and one written straight into tier 2, which is what every row in production
@@ -59,11 +62,14 @@ BEGIN
     VALUES (v_project, 'C-LEGACY', 'Legacy Co');
 
   -- ── 1 · THE NATURAL KEY IS THE INDEX'S, AND BOTH ROWS APPEAR ─────────────
+  PERFORM pg_temp.browser_session(v_user);
   SELECT count(*) INTO v_n
     FROM public.ingest_row_provenance(v_project, v_user, 'customers');
   IF v_n IS DISTINCT FROM 2 THEN
     RAISE EXCEPTION 'WP 6.3 §1: the export lists % row(s), expected 2 — a row with no provenance was dropped', v_n;
   END IF;
+
+  PERFORM pg_temp.browser_session(v_user);
 
   SELECT * INTO v_rec
     FROM public.ingest_row_provenance(v_project, v_user, 'customers')
@@ -98,6 +104,7 @@ BEGIN
   END IF;
 
   -- ── 3 · THE UNTRACED ROW IS LISTED AND SAYS SO ──────────────────────────
+  PERFORM pg_temp.browser_session(v_user);
   SELECT * INTO v_rec
     FROM public.ingest_row_provenance(v_project, v_user, 'customers')
    WHERE natural_key ->> 'customer_id' = 'C-LEGACY';
@@ -113,6 +120,7 @@ BEGIN
   END IF;
 
   -- ── 4 · ANOTHER TABLE, ANOTHER KEY, READ FROM THE INDEX ─────────────────
+  PERFORM pg_temp.browser_session(v_user);
   v_res := public.ingest_land_file(
     v_project, v_user, 'csv', 'master', 'suppliers',
     'suppliers-q3.csv', 'ingest', 'p/wp63p/2.csv', 'text/csv', 90,
@@ -122,7 +130,10 @@ BEGIN
       'raw',      jsonb_build_object('supplier_id','S-1','name','Acme'),
       'parsed',   jsonb_build_object('supplier_id','S-1','name','Acme'),
       'findings', '[]'::jsonb)));
+  PERFORM pg_temp.browser_session(v_user);
   PERFORM public.ingest_apply_run((v_res ->> 'run_id')::uuid, v_user);
+
+  PERFORM pg_temp.browser_session(v_user);
 
   SELECT * INTO v_rec
     FROM public.ingest_row_provenance(v_project, v_user, 'suppliers')
@@ -138,22 +149,25 @@ BEGIN
   --
   -- The GUC is poisoned with the OWNER first, so a function that read the session
   -- instead of its parameter would pass this and be wrong.
-  PERFORM set_config('app.current_user_id', v_user::text, true);
+  PERFORM pg_temp.browser_session(v_user);
   BEGIN
+    PERFORM pg_temp.browser_session(v_other);
     PERFORM * FROM public.ingest_row_provenance(v_project, v_other, 'customers');
     RAISE EXCEPTION 'WP 6.3 §5: a user with no access to the project read its row provenance';
   EXCEPTION WHEN insufficient_privilege THEN
     NULL;
   END;
   BEGIN
+    PERFORM pg_temp.browser_session(NULL);
     PERFORM * FROM public.ingest_row_provenance(v_project, NULL, 'customers');
     RAISE EXCEPTION 'WP 6.3 §5: the export answered a read that named no reader';
-  EXCEPTION WHEN null_value_not_allowed THEN
+  EXCEPTION WHEN insufficient_privilege THEN
     NULL;
   END;
 
   -- ── 6 · THE TABLE NAME IS NOT A GENERIC READER ──────────────────────────
   BEGIN
+    PERFORM pg_temp.browser_session(v_user);
     PERFORM * FROM public.ingest_row_provenance(v_project, v_user, 'approved_users');
     RAISE EXCEPTION 'WP 6.3 §6: the export accepted a table outside the landing path';
   EXCEPTION WHEN invalid_parameter_value THEN

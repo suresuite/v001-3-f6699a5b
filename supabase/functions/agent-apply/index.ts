@@ -1,3 +1,5 @@
+import { validAiResolution } from "../_shared/capabilityResolution.ts";
+import { browserIdentity, requireProject } from "../_shared/requestIdentity.ts";
 // agent-apply — the ONLY writer of proposal apply outcomes (Stage 1;
 // ai-agents.md §4.4, §13.2 checkpoint 5, §8 T9).
 //
@@ -215,6 +217,8 @@ serve(async (req) => {
   );
 
   try {
+    const who = await browserIdentity(req, svc, { id: userId, email: userEmail });
+    if (who instanceof Response) return who;
     const { data: proposal, error: loadErr } = await svc
       .from("proposals")
       .select("*")
@@ -223,6 +227,8 @@ serve(async (req) => {
     if (loadErr) return jsonResponse({ error: `Proposal load failed: ${loadErr.message}`, type: "APPLY_ERROR" });
     if (!proposal) return jsonResponse({ error: "Proposal not found.", type: "NOT_FOUND" });
 
+    // Authorize before even the terminal-status path can disclose results or refresh them.
+    await requireProject(svc, who, String(proposal.project_id));
     // Idempotent re-POST (§4.4): applied is terminal — return the stored result.
     if (proposal.status === "applied") {
       // §18.3 hard gate 8: an applied risk_alert whose linked run has since
@@ -275,7 +281,7 @@ serve(async (req) => {
     }
 
     const { data: caps, error: capsErr } = await svc.rpc("get_my_capabilities", { _user_id: userId });
-    if (capsErr || !caps || typeof caps !== "object") {
+    if (capsErr || !validAiResolution(caps)) {
       return jsonResponse({
         error: "Could not verify your permissions — try again.",
         type: "FORBIDDEN",
@@ -284,7 +290,7 @@ serve(async (req) => {
     const c = caps as Record<string, unknown>;
     const features = (c.features as Record<string, boolean>) ?? {};
     const pages = (c.pages as Record<string, boolean>) ?? {};
-    const isSuper = Boolean(c.is_super_admin);
+    const isSuper = c.is_super_admin === true;
     if (!isSuper) {
       // §13.3: decision_report rides agent_proposals (rendering mutates no
       // project state); every other artifact demands agent_apply.

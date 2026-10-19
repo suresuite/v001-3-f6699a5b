@@ -298,6 +298,6 @@ When the row was created. Server-stamped.
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/scenario_templates.contract.yaml`, table created by `20260609000022_scenario_templates.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

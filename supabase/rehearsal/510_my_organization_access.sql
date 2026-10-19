@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- §4 D217 · /profile SHOWS AN ACCOUNT WHO ELSE IS IN ITS ORGANIZATION AND ON ITS PROJECTS.
 --
 -- `20260930000011` lifts D215's read into `project_access_read` and adds two self-service
@@ -60,18 +61,20 @@ BEGIN
     ('viewer', 'data_edit_inputs', false),  ('viewer', 'data_edit_policies', false)
   ON CONFLICT (project_role, capability_key) DO NOTHING;
 
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_project_member(v_super, 'd217s@example.invalid', v_view_b, v_p, 'viewer', NULL, 'D217 viewer');
   RESET ROLE;
   UPDATE public.organization_members SET is_default = false WHERE user_id = v_view_b;
   UPDATE public.organization_members SET is_default = true WHERE user_id = v_view_b AND org_id = v_org_b;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
 
   -- ══ §1 · refusal ══
   FOREACH v_pers IN ARRAY ARRAY[to_jsonb(v_p), to_jsonb(gen_random_uuid())] LOOP
     v_code := NULL;
     BEGIN
-      SET LOCAL ROLE anon;
+      SET LOCAL ROLE authenticated;
+      PERFORM pg_temp.browser_session(v_out_b);
       PERFORM public.get_my_project_access((v_pers #>> '{}')::uuid, v_out_b);
       RESET ROLE;
     EXCEPTION WHEN OTHERS THEN
@@ -87,38 +90,40 @@ BEGIN
 
   v_code := NULL;
   BEGIN
-    PERFORM set_config('app.current_user_id', v_out_b::text, true);
-    SET LOCAL ROLE anon;
+    PERFORM pg_temp.browser_session(v_out_b);
+    SET LOCAL ROLE authenticated;
     PERFORM public.get_my_organization_access(v_owner);
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN
     RESET ROLE;
     v_code := SQLERRM;
   END;
-  PERFORM set_config('app.current_user_id', '', true);
-  IF v_code IS NULL OR v_code NOT LIKE 'not_authenticated%' THEN
+  PERFORM pg_temp.database_maintenance();
+  IF v_code IS NULL OR v_code IS DISTINCT FROM 'forbidden' THEN
     RAISE EXCEPTION 'D217/510 §1: a session naming another user got %, expected not_authenticated', COALESCE(v_code, 'success');
   END IF;
 
   v_code := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_off);
     PERFORM public.get_my_organization_access(v_off);
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN
     RESET ROLE;
     v_code := SQLERRM;
   END;
-  PERFORM set_config('app.current_user_id', '', true);
-  IF v_code IS DISTINCT FROM 'account_inactive' THEN
+  PERFORM pg_temp.database_maintenance();
+  IF v_code IS DISTINCT FROM 'forbidden' THEN
     RAISE EXCEPTION 'D217/510 §1: a suspended account got %, expected account_inactive', COALESCE(v_code, 'success');
   END IF;
 
   -- ══ §2 · organization ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_plain);
   v_out := public.get_my_organization_access(v_plain);
   RESET ROLE;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
 
   IF v_out -> 'organization' ->> 'id' IS DISTINCT FROM v_org_a::text
      OR v_out -> 'organization' ->> 'name' IS DISTINCT FROM 'D217 Org A' THEN
@@ -146,23 +151,26 @@ BEGIN
   END IF;
 
   -- ══ §3 · one answer ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_plain);
   v_out := public.get_my_project_access(v_p, v_plain);
   RESET ROLE;
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   v_adm := public.admin_get_project_access(v_super, 'd217s@example.invalid', v_p);
   RESET ROLE;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
   IF v_out IS DISTINCT FROM v_adm THEN
     RAISE EXCEPTION 'D217/510 §3: /profile and /admin/projects read the project differently: % / %', v_out, v_adm;
   END IF;
 
   -- ══ §4 · role without organization; the default organization is named ══
-  SET LOCAL ROLE anon;
-  v_out := public.get_my_project_access(v_p, v_view_b);
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_owner);
+  v_out := public.get_my_project_access(v_p, v_owner);
   RESET ROLE;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
   SELECT p INTO v_pers FROM jsonb_array_elements(v_out -> 'people') p WHERE p ->> 'user_id' = v_view_b::text;
   IF v_pers ->> 'effective_role' IS DISTINCT FROM 'viewer'
      OR v_pers ->> 'default_org_name' IS DISTINCT FROM 'D217 Org B'

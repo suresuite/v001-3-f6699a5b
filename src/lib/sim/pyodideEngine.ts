@@ -13,6 +13,7 @@
 // its messages into callbacks, and keeps the Supabase persistence helpers
 // (which must run on the main thread). The heavy lifting lives in the worker.
 
+import { currentSessionSubject } from "@/lib/auth/sessionState";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface EngineResult {
@@ -338,9 +339,9 @@ export async function persistEngineResult(
   try {
     if (result.replications.length > 0) {
       const rows = result.replications.map((r) => ({ ...r, run_id: runId, project_id: projectId }));
-      const { error: repErr } = await sb
-        .from("run_replications")
-        .upsert(rows, { onConflict: "run_id,rep_index" });
+      const { error: repErr } = await sb.rpc("persist_browser_result", {
+        p_run_id: runId, p_project_id: projectId, _actor_user_id: currentSessionSubject(), p_replications: rows,
+      });
       if (repErr) throw repErr;
     }
     // Inspection runs (G17): the per-item weekly series rows, chunked — the
@@ -348,16 +349,16 @@ export async function persistEngineResult(
     if (result.itemSeries && result.itemSeries.length > 0) {
       const rows = result.itemSeries.map((r) => ({ ...r, run_id: runId, project_id: projectId }));
       for (let i = 0; i < rows.length; i += 100) {
-        const { error: itemErr } = await sb
-          .from("run_item_series")
-          .upsert(rows.slice(i, i + 100), { onConflict: "run_id,kind,item_id" });
+        const { error: itemErr } = await sb.rpc("persist_browser_result", {
+          p_run_id: runId, p_project_id: projectId, _actor_user_id: currentSessionSubject(), p_item_series: rows.slice(i, i + 100),
+        });
         if (itemErr) throw itemErr;
       }
     }
-    const { error: runErr } = await sb
-      .from("simulation_runs")
-      .update({ ...result.runUpdate, ended_at: new Date().toISOString() })
-      .eq("id", runId);
+    const { error: runErr } = await sb.rpc("persist_browser_result", {
+      p_run_id: runId, p_project_id: projectId, _actor_user_id: currentSessionSubject(),
+      p_run_update: { ...result.runUpdate, ended_at: new Date().toISOString() },
+    });
     if (runErr) throw runErr;
     return true;
   } catch (err) {

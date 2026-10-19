@@ -29,20 +29,24 @@ it rather than duplicating it.
 | | |
 |---|---|
 | Read capability | any project member |
-| Write capability | **no user-facing write path** |
+| Write capability | `data_edit_inputs` |
 | Minimum project role | `editor` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
-| Policies on the table | 2 — all carry a predicate |
+| Policies on the table | 6 — all carry a predicate |
 
-Two policies through the project's organization, the same pair `tier2_suppliers` carries: `org_is_current_user_org(p.organization_id, p.organization)` for SELECT, and the same predicate plus modeler-or-admin for writes. `audited: true` SINCE WP 3.2. No trigger existed before it, because WP 2.3 instrumented the tables the contract DESCRIBED and this was not one of them — the qualifier in `dataPlaneAudit.test.ts` is exactly the hole, and writing this sidecar is what made it visible. `20260916000016` adds the three triggers. On a table nothing writes they will never fire, which is the point: the rule is about every tier-2 table, not about the ones that happen to be busy.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; browser writes require `data_edit_inputs` on the project. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: Two policies through the project's organization, the same pair `tier2_suppliers` carries: `org_is_current_user_org(p.organization_id, p.organization)` for SELECT, and the same predicate plus modeler-or-admin for writes. `audited: true` SINCE WP 3.2. No trigger existed before it, because WP 2.3 instrumented the tables the contract DESCRIBED and this was not one of them — the qualifier in `dataPlaneAudit.test.ts` is exactly the hole, and writing this sidecar is what made it visible. `20260916000016` adds the three triggers. On a table nothing writes they will never fire, which is the point: the rule is about every tier-2 table, not about the ones that happen to be busy.
 
-<details><summary>2 RLS policies</summary>
+<details><summary>6 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| Multi-tier: modifiers only | ALL | all | `20260915000004_org_identity_dual_read.sql` |
-| Multi-tier: organization access | SELECT | all | `20260915000004_org_identity_dual_read.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -218,6 +222,6 @@ When the row was last written. Server-stamped by trigger.
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/multi_tier_supply_chain.contract.yaml`, table created by `20250820145837_5a2d95f1-7a5f-4bbb-8ac8-995d53011bce.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

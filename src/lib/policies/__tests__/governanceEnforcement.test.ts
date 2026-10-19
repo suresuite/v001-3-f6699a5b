@@ -147,14 +147,11 @@ describe("D28 — the truth table of what is actually unconditional", () => {
    * which were withdrawn, is what a result's reader needs to see; it names no project
    * and no person, and no API role can write it (§16 · WP 15.2).
    */
+  // D309/D310 remove the tenant entries; reference catalogs retain public reads.
   const EXPECTED_UNCONDITIONAL = [
-    "ai_models", "ai_providers", "analysis_kinds", "approved_users", "bom_multi_level", "bom_single_level",
-    "capabilities", "chat_plans", "customers", "dataset_versions", "docs_section_releases", "experiments",
-    "external_evidence", "inbound_logistics", "materials", "model_validations",
-    "outbound_logistics", "plan_role_allowances", "policy_defaults", "policy_overrides", "policy_presets",
-    "policy_versions", "products", "project_memory", "project_role_capabilities",
-    "proposals", "recovery_playbooks", "risk_data", "role_capabilities",
-    "run_item_series", "run_replications", "scenarios", "sim_engine_builds", "sim_engines", "simulation_runs", "suppliers",
+    "ai_models", "ai_providers", "analysis_kinds", "approved_users", "capabilities",
+    "docs_section_releases", "plan_role_allowances", "policy_presets", "project_role_capabilities",
+    "risk_data", "role_capabilities", "sim_engine_builds", "sim_engines",
   ];
 
   it("no table has gained an unconditional policy that this list does not name", () => {
@@ -183,7 +180,7 @@ describe("D28 — the truth table of what is actually unconditional", () => {
     expect(stale, "these are no longer unconditional — remove them from the list").toEqual([]);
   });
 
-  it("unconditional WRITE is the subset that matters most, and it is six tables", () => {
+  it("no unconditional WRITE policy remains", () => {
     // Read-everything is a confidentiality problem. Write-everything is an
     // integrity one, and anon holds INSERT/UPDATE (and DELETE on scenarios) on
     // exactly these — see §16's WP 2.4 entry for the grant inventory.
@@ -195,10 +192,7 @@ describe("D28 — the truth table of what is actually unconditional", () => {
       }
     }
     // `dataset_versions` left this list in WP 11.1 (§4 D265).
-    expect([...writable].sort()).toEqual([
-      "experiments", "policy_versions", "run_item_series",
-      "run_replications", "scenarios", "simulation_runs",
-    ]);
+    expect([...writable].sort()).toEqual([]);
   });
 });
 

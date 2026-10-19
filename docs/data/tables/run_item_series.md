@@ -40,28 +40,19 @@ partially or get corrected — the write fails.
 | Minimum project role | `viewer` |
 | Tier transitions audited | **no** — invariant `audit-actor` is not met here yet |
 | Row-level security | enabled |
-| Policies on the table | 2 — **2 with no predicate** |
+| Policies on the table | 5 — all carry a predicate |
 
-`write: simulation_lab` because the table has two PREDICATE-LESS write policies — `run_item_series_auth_all` (authenticated) and `run_item_series_anon_write` (anon and authenticated, widened by WP 7.1 stage 1a in `20260919000010`) — and a policy with no predicate is a user-facing write path whether or not a page uses it, so `governanceEnforcement.test.ts` refuses a `null` claim here exactly as it did for `run_replications`. The capability named is the one that gates the action which writes these rows: running a simulation, here an inspection run from Run & Validate. TWO WRITERS, both upserting on `(run_id, kind, item_id)` in chunks of 100: the Fly worker with the service role (`_write_item_series`, which FAILS the run rather than reporting it green when the rows do not persist), and the browser engine as `anon` (`pyodideEngine.persistEngineResult`, best-effort). The second is why this is one of the eleven tables §4 D154 measured as genuinely writable from the browser's `anon` role — D28's standing decision (document, do not change), WP 7.1's to close. `min_project_role` is `viewer` because nothing here enforces a role today, not because a viewer ought to be able to write results. Deleting the run or the project removes its rows (`ON DELETE CASCADE` on both foreign keys). NOT AUDITED, and that is the tier: `audit-actor` covers tiers 2–4, and a row here is the output of one run and an input to nothing.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; direct browser mutations are closed and authorized RPCs retain their own role gates. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: `write: simulation_lab` because the table has two PREDICATE-LESS write policies — `run_item_series_auth_all` (authenticated) and `run_item_series_anon_write` (anon and authenticated, widened by WP 7.1 stage 1a in `20260919000010`) — and a policy with no predicate is a user-facing write path whether or not a page uses it, so `governanceEnforcement.test.ts` refuses a `null` claim here exactly as it did for `run_replications`. The capability named is the one that gates the action which writes these rows: running a simulation, here an inspection run from Run & Validate. TWO WRITERS, both upserting on `(run_id, kind, item_id)` in chunks of 100: the Fly worker with the service role (`_write_item_series`, which FAILS the run rather than reporting it green when the rows do not persist), and the browser engine as `anon` (`pyodideEngine.persistEngineResult`, best-effort). The second is why this is one of the eleven tables §4 D154 measured as genuinely writable from the browser's `anon` role — D28's standing decision (document, do not change), WP 7.1's to close. `min_project_role` is `viewer` because nothing here enforces a role today, not because a viewer ought to be able to write results. Deleting the run or the project removes its rows (`ON DELETE CASCADE` on both foreign keys). NOT AUDITED, and that is the tier: `audit-actor` covers tiers 2–4, and a row here is the output of one run and an input to nothing.
 
-> **What the database actually permits is wider than the row above.**
-> 2 policies here grant access with
-> **no predicate at all** (`USING (true)`), so the capability named above is what the
-> product intends to check, not what the database enforces:
->
-> - `run_item_series_auth_all` — `ALL` to `authenticated`
-> - `run_item_series_anon_write` — `ALL` to `anon`, `authenticated`
->
-> Some of these permit **writes**. See PLAN.md D28: the application runs as the
-> `anon` role with no auth session and the anon key ships in the frontend bundle, so
-> closing these is a migration with an auth model behind it rather than a policy edit.
-
-<details><summary>2 RLS policies</summary>
+<details><summary>5 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| run_item_series_auth_all | ALL | authenticated | `20260720000001_run_item_series.sql` |
-| run_item_series_anon_write | ALL | anon, authenticated | `20260919000010_anon_policies_widen.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -221,6 +212,6 @@ When the row was first inserted. An upsert of the same key does not re-stamp it.
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/run_item_series.contract.yaml`, table created by `20260720000001_run_item_series.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

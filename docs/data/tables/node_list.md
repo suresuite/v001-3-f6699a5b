@@ -42,22 +42,24 @@ partially or get corrected — the write fails.
 | | |
 |---|---|
 | Read capability | any project member |
-| Write capability | **no user-facing write path** |
+| Write capability | `data_edit_inputs` |
 | Minimum project role | `viewer` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
-| Policies on the table | 4 — all carry a predicate |
+| Policies on the table | 6 — all carry a predicate |
 
-Read follows project reachability. Written by `refresh_node_list_for_project`, which took only a project id until WP 4.3 gave it a two-argument overload that names the actor — `combine-project` had the actor all along and nothing told the trigger, the same shape as `assign_material_supplier` in WP 3.3. Also written by `geocode-locations` through PostgREST, which is D36's class and is NOT closed here. `audited: true` as of WP 4.3.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; browser writes require `data_edit_inputs` on the project. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: Read follows project reachability. Written by `refresh_node_list_for_project`, which took only a project id until WP 4.3 gave it a two-argument overload that names the actor — `combine-project` had the actor all along and nothing told the trigger, the same shape as `assign_material_supplier` in WP 3.3. Also written by `geocode-locations` through `apply_geocode`, which binds the verified actor in the same transaction as the coordinate update (D309 candidate; not deployed). `audited: true` as of WP 4.3.
 
-<details><summary>4 RLS policies</summary>
+<details><summary>6 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| Node list: project access delete | DELETE | all | `20260915000004_org_identity_dual_read.sql` |
-| Node list: project access insert | INSERT | all | `20260915000004_org_identity_dual_read.sql` |
-| Node list: project access update | UPDATE | all | `20260915000004_org_identity_dual_read.sql` |
-| Node list: project access view | SELECT | all | `20260915000004_org_identity_dual_read.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -473,6 +475,6 @@ Tiers upstream of the focal plant: 0 the plant itself, 1 a direct supplier, 2 an
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/node_list.contract.yaml`, table created by `20250829101944_b2ded57f-be29-4ae7-afff-38b3712e92e5.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

@@ -23,6 +23,11 @@ governance:
   audited: true
   rls_enabled: true
   note: >-
+    D309/D310 candidate (not deployed): browser reads require a verified active
+    principal and scoped project/owner access. Anonymous tenant grants are revoked;
+    direct browser mutations are closed and authorized RPCs retain their own role gates.
+    The generated schema owns the exact policies; D310 owns live-grant evidence.
+    Historical context before this candidate:
     No page and no API role writes it. Two writers, both SECURITY DEFINER and both
     inside somebody else's statement: the statement triggers on the thirteen hashed
     tables (`_graph_state_touch_*`) raise `dirty`, and `project_graph_hashes` stores

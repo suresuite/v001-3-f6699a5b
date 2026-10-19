@@ -14,11 +14,16 @@ natural_key_unique:
 
 governance:
   read: project_member
-  write: project_member
+  write: simulation_lab
   min_project_role: editor
   audited: true
   rls_enabled: true
   note: >-
+    D309/D310 candidate (not deployed): browser reads require a verified active
+    principal and scoped project/owner access. Anonymous tenant grants are revoked;
+    browser writes require `simulation_lab` on the project.
+    The generated schema owns the exact policies; D310 owns live-grant evidence.
+    Historical context before this candidate:
     Tier 4 — the DECISION plane. Audited from WP 6.4. Reached only through its
     profile: `profile_id` is NOT NULL and CASCADEs, so this table has no rows of
     its own to govern separately.

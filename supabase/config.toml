@@ -80,8 +80,8 @@ verify_jwt = true
 #
 # It is not therefore unguarded. It verifies the password ITSELF, server-side, through
 # `authenticate_approved_user` with the service role — it does not accept the client's
-# claim to have already logged in — and it answers 501 while `SUPABASE_JWT_SECRET` is
-# unset, which it is today. A wrong password and an unknown address get the same 401, so
+# claim to have already logged in — and it fails closed with 503 while `APP_SESSION_JWT_SECRET` or its
+# throttle configuration is unset. A wrong password and an unknown address get the same 401, so
 # the endpoint does not say whether an address is registered.
 verify_jwt = false
 

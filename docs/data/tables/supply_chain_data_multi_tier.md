@@ -26,18 +26,19 @@
 | Minimum project role | `viewer` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
-| Policies on the table | 4 — all carry a predicate |
+| Policies on the table | 5 — all carry a predicate |
 
-Written by `rebuild_supply_chain_lanes` — the ONE ETL since WP 8.2 — and never by a page. It had TWO writers until then, this and the `combine-project` edge function, disagreeing about what `level` meant (§4 D140); the edge function's lane build is deleted and it now calls the RPC. Invariant I2: pages never write tier 3. `write: null` is therefore a statement, not an omission — there is no user-facing write path and there must not be one. For precision, since WP 2.4 checked it: three PROJECT-SCOPED write policies do exist here, serving that ETL path. They are consistent with `write: null`, which names the capability gating a USER-facing write and not the existence of any policy — and unlike `dataset_versions` they carry a real predicate, so they do not admit an arbitrary holder of the table grant.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; direct browser mutations are closed and authorized RPCs retain their own role gates. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: Written by `rebuild_supply_chain_lanes` — the ONE ETL since WP 8.2 — and never by a page. It had TWO writers until then, this and the `combine-project` edge function, disagreeing about what `level` meant (§4 D140); the edge function's lane build is deleted and it now calls the RPC. Invariant I2: pages never write tier 3. `write: null` is therefore a statement, not an omission — there is no user-facing write path and there must not be one. For precision, since WP 2.4 checked it: three PROJECT-SCOPED write policies do exist here, serving that ETL path. They are consistent with `write: null`, which names the capability gating a USER-facing write and not the existence of any policy — and unlike `dataset_versions` they carry a real predicate, so they do not admit an arbitrary holder of the table grant.
 
-<details><summary>4 RLS policies</summary>
+<details><summary>5 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| Supply chain data multi-tier: project access view | SELECT | all | `20250908191450_810873d6-5329-4d67-80f4-e96bbe46c340.sql` |
-| Supply chain data multi-tier: project access insert | INSERT | all | `20250908191450_810873d6-5329-4d67-80f4-e96bbe46c340.sql` |
-| Supply chain data multi-tier: project access update | UPDATE | all | `20250908191450_810873d6-5329-4d67-80f4-e96bbe46c340.sql` |
-| Supply chain data multi-tier: project access delete | DELETE | all | `20250908191450_810873d6-5329-4d67-80f4-e96bbe46c340.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -347,6 +348,6 @@ How deep in the BILL OF MATERIALS this edge's UPSTREAM end sits — 0 a finished
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/supply_chain_data_multi_tier.contract.yaml`, table created by `20250908191450_810873d6-5329-4d67-80f4-e96bbe46c340.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

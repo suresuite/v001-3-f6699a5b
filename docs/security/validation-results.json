@@ -1,0 +1,50 @@
+{
+  "source_commit": "8d87e6cae9a111de68273dd8f55b7f8f9b5cfc23",
+  "baseline_commit": "3ff0b45bc3128bde30c862315035cfb6eb01a8dd",
+  "deployed": false,
+  "production_protection_verified": false,
+  "checks": {
+    "lint-final": {
+      "exit_code": 1,
+      "log_sha256": "2065dc92abd9ead673f8151fedb60a6176e4dfa5834de36456b70098f978d042"
+    },
+    "tests-final": {
+      "exit_code": 0,
+      "log_sha256": "cceb958a744e0614bda6e0621783f20fe314a2579b472ab75b4fe042598df6fc"
+    },
+    "requested-contract-final": {
+      "exit_code": 1,
+      "log_sha256": "43d33660886b87acb8113c961575a4ddd5284114ebd88c660536afe55edd1ad2"
+    },
+    "contract-final": {
+      "exit_code": 0,
+      "log_sha256": "75bd66cdf74bf8b25d52b63ed83af085ab2ed1f77f2d7810f0b3640420717e6f"
+    },
+    "requested-build-audit-final": {
+      "exit_code": 1,
+      "log_sha256": null
+    },
+    "bundle-final": {
+      "exit_code": 1,
+      "log_sha256": "eeceb4e09bfe88559619cd652e3339f2bb49074369ab488c18423fc2252fd114"
+    },
+    "dependencies-audit-final": {
+      "exit_code": 1,
+      "log_sha256": "618d7aacdedc93f58321d41587f93799589f17c6c0b66d6d6895e7b05572b29a"
+    },
+    "sql-default-final": {
+      "exit_code": 0,
+      "log_sha256": "cea450908a751195b38f0294615152487b15d733cf8154ab8578d211fbbf19ef"
+    },
+    "sql-fixtures-final": {
+      "exit_code": 0,
+      "log_sha256": "06e377e17f4024272f037919a96dde7b114f0678729535f4dde1b70232a39b25"
+    },
+    "sql-artifact-final": {
+      "exit_code": 0,
+      "log_sha256": "533b1983bea09da3193f7afd6a0aac1f0f3305bd63ab5057c19007a6f2052bd3"
+    }
+  },
+  "tested_local_commit": "1f41518f6b9de4a1485615eb0851481276e70659",
+  "source_tree": "5f58c82b34b60db5a9744567e6d86a3dae7017c3"
+}

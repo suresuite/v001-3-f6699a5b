@@ -39,15 +39,19 @@ partially or get corrected — the write fails.
 | Minimum project role | `editor` |
 | Tier transitions audited | **no** — invariant `audit-actor` is not met here yet |
 | Row-level security | enabled |
-| Policies on the table | 1 — all carry a predicate |
+| Policies on the table | 5 — all carry a predicate |
 
-RLS reaches the project through the RUN — `EXISTS (SELECT 1 FROM ingest_runs r WHERE r.id = ingest_run_id AND has_project_access(r.project_id))`. WP 3.1 rewrote it: the original went through `project_erp_links`, which a run without a link cannot satisfy. Two things about this table were invisible to the contract until that rewrite, and both are worth recording. Its policy was created inside a `DO $$ EXECUTE format(...) $$` loop, which `introspect.mjs` does not read, so the contract recorded RLS enabled and ZERO policies and the generated page published that — D28's blind spot from the other side, hiding protection rather than exposure. The policies are now four literal statements. `audited: false`: no tier-2 transition happens here, and the writer is the service role (D36). The transition that DOES need an audit row is promotion, which WP 3.3 makes an audited upsert.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; direct browser mutations are closed and authorized RPCs retain their own role gates. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: RLS reaches the project through the RUN — `EXISTS (SELECT 1 FROM ingest_runs r WHERE r.id = ingest_run_id AND has_project_access(r.project_id))`. WP 3.1 rewrote it: the original went through `project_erp_links`, which a run without a link cannot satisfy. Two things about this table were invisible to the contract until that rewrite, and both are worth recording. Its policy was created inside a `DO $$ EXECUTE format(...) $$` loop, which `introspect.mjs` does not read, so the contract recorded RLS enabled and ZERO policies and the generated page published that — D28's blind spot from the other side, hiding protection rather than exposure. The policies are now four literal statements. `audited: false`: no tier-2 transition happens here, and the writer is the service role (D36). The transition that DOES need an audit row is promotion, which WP 3.3 makes an audited upsert.
 
-<details><summary>1 RLS policy</summary>
+<details><summary>5 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| ingest_staged_bom_lines: project access | ALL | authenticated | `20260916000012_ingest_rename_and_widen.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -280,6 +284,6 @@ master or transactional. Master rows describe things that persist — an item, a
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/ingest_staged_bom_lines.contract.yaml`, table created by `20260829120000_erp_connector_phase1_2.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

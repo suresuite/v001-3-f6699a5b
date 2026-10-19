@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- Organization plan · D207 — each ORGANIZATION is valid for 1 week, 1 month, 1 quarter
 -- or 1 year and may have 1, 2, 3 or 5 users and projects (or unlimited; D218 widened
 -- the list to 10, 20, 50 and 100 as well — `520` asserts it), and the
@@ -67,11 +68,12 @@ BEGIN
     (v_a1,    'D207 a1',    'd207a1@example.invalid', extensions.crypt('pw-a1-1', extensions.gen_salt('bf')),   'user',        'D207 Org A', v_org_a, false, now() + interval '30 days'),
     (v_b1,    'D207 b1',    'd207b1@example.invalid', extensions.crypt('pw-b1-1', extensions.gen_salt('bf')),   'modeler',     'D207 Org B', v_org_b, false, now() + interval '30 days');
 
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
 
   -- ══ §1 · the period ══
   FOR v_period IN SELECT unnest(ARRAY['week', 'month', 'quarter', 'year']) LOOP
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_super);
     v_until := public.admin_set_org_access_period(v_super, 'd207s@example.invalid', v_org_a, v_period);
     RESET ROLE;
     SELECT access_valid_from INTO v_from FROM public.organizations WHERE id = v_org_a;
@@ -114,7 +116,8 @@ BEGIN
     RAISE EXCEPTION 'D207/420 §1: a period without a start was accepted';
   EXCEPTION WHEN check_violation THEN NULL; END;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_set_org_access_period(v_super, 'd207s@example.invalid', v_org_a, 'fortnight');
     RESET ROLE;
     RAISE EXCEPTION 'D207/420 §1: the verb accepted period ''fortnight''';
@@ -124,7 +127,8 @@ BEGIN
     IF v_msg NOT LIKE 'invalid access period%' THEN RAISE; END IF;
   END;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_a1);
     PERFORM public.admin_set_org_limits(v_a1, 'd207a1@example.invalid', v_org_a, NULL, NULL);
     RESET ROLE;
     RAISE EXCEPTION 'D207/420 §1: a plain user set their organization''s limits';
@@ -134,7 +138,8 @@ BEGIN
     IF v_msg <> 'forbidden' THEN RAISE; END IF;
   END;
 
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   v_until := public.admin_set_org_access_period(v_super, 'd207s@example.invalid', v_org_a, NULL);
   RESET ROLE;
   SELECT * INTO r FROM public.organizations WHERE id = v_org_a;
@@ -147,8 +152,10 @@ BEGIN
   END IF;
 
   -- ══ §2 · sign-in ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE service_role;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_org_access_period(v_super, 'd207s@example.invalid', v_org_a, 'week');
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   SELECT count(*) INTO v_n FROM public.authenticate_approved_user('d207a1@example.invalid', 'pw-a1-1');
   RESET ROLE;
   IF v_n <> 1 THEN
@@ -157,7 +164,8 @@ BEGIN
 
   -- The week ended one second ago.
   UPDATE public.organizations SET access_valid_from = now() - interval '7 days' - interval '1 second' WHERE id = v_org_a;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE service_role;
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   SELECT count(*) INTO v_n FROM public.authenticate_approved_user('d207a1@example.invalid', 'pw-a1-1');
   RESET ROLE;
   IF v_n <> 0 THEN
@@ -171,7 +179,8 @@ BEGIN
 
   -- The instant of the end is already ended.
   UPDATE public.organizations SET access_valid_from = now() - interval '7 days' WHERE id = v_org_a;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE service_role;
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   SELECT count(*) INTO v_n FROM public.authenticate_approved_user('d207a1@example.invalid', 'pw-a1-1');
   RESET ROLE;
   IF v_n <> 0 THEN
@@ -179,7 +188,8 @@ BEGIN
   END IF;
 
   -- A super admin in the same organization is not locked out.
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE service_role;
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   SELECT count(*) INTO v_n FROM public.authenticate_approved_user('d207s@example.invalid', 'pw-super-1');
   RESET ROLE;
   IF v_n <> 1 THEN
@@ -187,7 +197,8 @@ BEGIN
   END IF;
 
   -- The other organization is untouched.
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE service_role;
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   SELECT count(*) INTO v_n FROM public.authenticate_approved_user('d207b1@example.invalid', 'pw-b1-1');
   RESET ROLE;
   IF v_n <> 1 THEN
@@ -196,16 +207,19 @@ BEGIN
 
   -- §5 read, while it has ended: expired for the member, exempt for the super admin.
   -- Each request is its own transaction in production: the admin verb's GUC is gone.
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
-  SELECT * INTO r FROM public.get_my_profile(v_a1);
-  RESET ROLE;
-  IF NOT r.access_expired OR r.access_exempt THEN
-    RAISE EXCEPTION 'D207/420 §5: get_my_profile said expired % exempt % for a member of an ended organization', r.access_expired, r.access_exempt;
-  END IF;
+  PERFORM pg_temp.database_maintenance();
+  v_msg := NULL;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_a1);
+    PERFORM * FROM public.get_my_profile(v_a1);
+    RESET ROLE;
+  EXCEPTION WHEN insufficient_privilege THEN RESET ROLE; v_msg := 'refused'; END;
+  IF v_msg IS NULL THEN RAISE EXCEPTION 'Expired organization retained protected browser access'; END IF;
   -- Each request is its own transaction in production: the admin verb's GUC is gone.
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   SELECT * INTO r FROM public.get_my_profile(v_super);
   RESET ROLE;
   IF r.access_expired OR NOT r.access_exempt OR r.access_valid_until IS DISTINCT FROM now() THEN
@@ -213,8 +227,10 @@ BEGIN
   END IF;
 
   -- Renewed — the same period, from now — the member signs in.
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE service_role;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_org_access_period(v_super, 'd207s@example.invalid', v_org_a, 'week');
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   SELECT count(*) INTO v_n FROM public.authenticate_approved_user('d207a1@example.invalid', 'pw-a1-1');
   RESET ROLE;
   IF v_n <> 1 THEN
@@ -223,7 +239,8 @@ BEGIN
 
   -- Suspension is still reported as suspension.
   UPDATE public.approved_users SET is_active = false WHERE id = v_b1;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE service_role;
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   SELECT count(*) INTO v_n FROM public.authenticate_approved_user('d207b1@example.invalid', 'pw-b1-1');
   RESET ROLE;
   IF v_n <> 0 OR NOT EXISTS (SELECT 1 FROM public.audit_logs
@@ -234,13 +251,16 @@ BEGIN
   UPDATE public.approved_users SET is_active = true WHERE id = v_b1;
 
   -- ══ §3 · the user limit ══  (Org A holds the super admin and a1: two accounts.)
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_org_limits(v_super, 'd207s@example.invalid', v_org_a, NULL, 3);
+  PERFORM pg_temp.browser_session(v_super);
   v_u := public.admin_create_user(v_super, 'd207s@example.invalid', 'D207 a2', 'd207a2@example.invalid',
            'pw-a2-12345', 'user', v_org_a);
   RESET ROLE;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_create_user(v_super, 'd207s@example.invalid', 'D207 a3', 'd207a3@example.invalid',
               'pw-a3-12345', 'user', v_org_a);
     RESET ROLE;
@@ -254,7 +274,8 @@ BEGIN
   END;
   -- A move into the full organization is refused, through the admin verb.
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_update_user(v_super, 'd207s@example.invalid', v_b1, 'D207 b1', v_org_a);
     RESET ROLE;
     RAISE EXCEPTION 'D207/420 §3: an account was moved into a full organization';
@@ -262,25 +283,31 @@ BEGIN
   END;
   -- An update that keeps the organization is not counted; lowering removes nobody.
   UPDATE public.approved_users SET name = 'D207 a2 renamed' WHERE id = v_u;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_org_limits(v_super, 'd207s@example.invalid', v_org_a, NULL, 1);
   RESET ROLE;
   IF (SELECT count(*) FROM public.approved_users WHERE organization_id = v_org_a) <> 3 THEN
     RAISE EXCEPTION 'D207/420 §3: lowering the user limit changed the organization''s accounts';
   END IF;
   -- Unlimited is unlimited.
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_org_limits(v_super, 'd207s@example.invalid', v_org_a, NULL, NULL);
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_create_user(v_super, 'd207s@example.invalid', 'D207 a3', 'd207a3@example.invalid',
             'pw-a3-12345', 'user', v_org_a);
   RESET ROLE;
 
   -- ══ §4 · the project limit ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_org_limits(v_super, 'd207s@example.invalid', v_org_a, 2, NULL);
+  PERFORM pg_temp.browser_session(v_a1);
   v_p1 := public.create_project(p_name => 'D207 one', p_plant => 'D207 plant', p_model => 'Make-To-Order',
             p_bom_level => 'single', p_user_id => v_a1, p_user_email => 'd207a1@example.invalid',
             p_user_name => 'D207 a1', p_data_type => 'curated');
+  PERFORM pg_temp.browser_session(v_u);
   PERFORM public.create_project(p_name => 'D207 two', p_plant => 'D207 plant', p_model => 'Make-To-Order',
             p_bom_level => 'single', p_user_id => v_u, p_user_email => 'd207a2@example.invalid',
             p_user_name => 'D207 a2', p_data_type => 'curated');
@@ -289,7 +316,8 @@ BEGIN
     RAISE EXCEPTION 'D207/420 §4: create_project did not stamp the organization, or the limit refused below it';
   END IF;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_a1);
     PERFORM public.create_project(p_name => 'D207 three', p_plant => 'D207 plant', p_model => 'Make-To-Order',
               p_bom_level => 'single', p_user_id => v_a1, p_user_email => 'd207a1@example.invalid',
               p_user_name => 'D207 a1', p_data_type => 'curated');
@@ -305,11 +333,14 @@ BEGIN
   -- An update that keeps the organization is not counted.
   UPDATE public.projects SET name = 'D207 one renamed' WHERE id = v_p1;
   -- Unlimited is unlimited; lowering deletes nothing and refuses the next.
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_org_limits(v_super, 'd207s@example.invalid', v_org_a, NULL, NULL);
+  PERFORM pg_temp.browser_session(v_a1);
   PERFORM public.create_project(p_name => 'D207 three', p_plant => 'D207 plant', p_model => 'Make-To-Order',
             p_bom_level => 'single', p_user_id => v_a1, p_user_email => 'd207a1@example.invalid',
             p_user_name => 'D207 a1', p_data_type => 'curated');
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_org_limits(v_super, 'd207s@example.invalid', v_org_a, 1, NULL);
   RESET ROLE;
   IF (SELECT count(*) FROM public.projects WHERE organization_id = v_org_a) <> 3 THEN
@@ -328,7 +359,8 @@ BEGIN
     RAISE EXCEPTION 'D207/420 §4: a project was moved into a full organization';
   EXCEPTION WHEN check_violation THEN NULL; END;
   -- An organization whose period ended cannot be given a project, whatever its limit.
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_org_access_period(v_super, 'd207s@example.invalid', v_org_b, 'month');
   RESET ROLE;
   UPDATE public.organizations SET access_valid_from = now() - interval '2 months' WHERE id = v_org_b;
@@ -342,7 +374,8 @@ BEGIN
   END;
 
   -- ══ §5 · the reads ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   SELECT * INTO r FROM public.admin_list_organizations(v_super, 'd207s@example.invalid') WHERE id = v_org_a;
   RESET ROLE;
   IF r.access_period IS DISTINCT FROM 'week' OR r.access_expired
@@ -352,7 +385,8 @@ BEGIN
     RAISE EXCEPTION 'D207/420 §5: admin_list_organizations said period % until % expired % limits %/% members % projects %',
       r.access_period, r.access_valid_until, r.access_expired, r.project_limit, r.user_limit, r.members, r.projects;
   END IF;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   SELECT * INTO r FROM public.admin_list_organizations(v_super, 'd207s@example.invalid') WHERE id = v_org_b;
   RESET ROLE;
   IF NOT r.access_expired THEN
@@ -360,8 +394,9 @@ BEGIN
   END IF;
 
   -- Each request is its own transaction in production: the admin verb's GUC is gone.
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_a1);
   SELECT * INTO r FROM public.get_my_profile(v_a1);
   RESET ROLE;
   IF r.access_period IS DISTINCT FROM 'week' OR r.access_expired OR r.access_exempt
@@ -373,7 +408,8 @@ BEGIN
   END IF;
 
   -- ══ §6 · creation takes all three choices ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   v_org_n := public.admin_create_organization(v_super, 'd207s@example.invalid', 'D207 New', NULL, 'quarter', 5, 2);
   RESET ROLE;
   SELECT * INTO r FROM public.organizations WHERE id = v_org_n;

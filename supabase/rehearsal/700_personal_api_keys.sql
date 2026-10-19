@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- PERSONAL API KEYS — `20261002000001`, Phase 12 / WP 12.3.
 --
 -- A personal key acts as the user who created it. Each section calls the key RPCs as
@@ -40,9 +41,11 @@ BEGIN
     (v_admin,   'D700 admin',   'd700a@example.invalid',  'x', 'admin',       'D700 A', v_org_a, true),
     (v_super_b, 'D700 super B', 'd700sb@example.invalid', 'x', 'super_admin', 'D700 B', v_org_b, true);
 
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_owner);
   SELECT id INTO v_pkey FROM public.create_api_key(v_owner, 'd700o@example.invalid', 'mine',
     ARRAY['read:data'], 'test', NULL, NULL, NULL, 'personal');
+  PERFORM pg_temp.browser_session(v_admin);
   SELECT id INTO v_okey FROM public.create_api_key(v_admin, 'd700a@example.invalid', 'org',
     ARRAY['read:data'], 'test');
   RESET ROLE;
@@ -79,7 +82,8 @@ BEGIN
   -- §4
   v_refused := false;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_super_b);
     PERFORM public.create_api_key(v_super_b, 'd700sb@example.invalid', 'impersonal',
       ARRAY['read:data'], 'test', NULL, NULL, v_org_a, 'personal');
   EXCEPTION WHEN raise_exception THEN
@@ -91,14 +95,16 @@ BEGIN
   -- §5
   v_refused := false;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_admin);
     PERFORM public.rotate_api_key(v_admin, 'd700a@example.invalid', v_pkey, 0);
   EXCEPTION WHEN raise_exception THEN
     v_refused := SQLERRM LIKE '%only its owner can rotate a personal key%';
   END;
   RESET ROLE;
   IF NOT v_refused THEN RAISE EXCEPTION '§5: an administrator rotated someone else''s personal key'; END IF;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_owner);
   SELECT id INTO v_rot FROM public.rotate_api_key(v_owner, 'd700o@example.invalid', v_pkey, 0);
   RESET ROLE;
   SELECT principal, created_by INTO v_kind, v_by FROM public.api_keys WHERE id = v_rot;
@@ -110,7 +116,8 @@ BEGIN
   END IF;
 
   -- §6
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_admin);
   SELECT count(*) INTO v_n FROM public.list_api_keys(v_admin, 'd700a@example.invalid') l
    WHERE (l.id = v_pkey AND l.principal = 'personal') OR (l.id = v_okey AND l.principal = 'org');
   RESET ROLE;

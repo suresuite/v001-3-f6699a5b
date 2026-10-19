@@ -2012,7 +2012,7 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
     ]
   },
   "all-tables": {
-    "minutes": 220,
+    "minutes": 221,
     "sections": [
       {
         "id": "how-to-read-this",
@@ -2045,6 +2045,10 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
       {
         "id": "bom_single_level",
         "title": "bom_single_level"
+      },
+      {
+        "id": "browser_session_config",
+        "title": "browser_session_config"
       },
       {
         "id": "capabilities",

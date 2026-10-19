@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- WP 7.2 (a) · §4 D161 + D213 · ONE ACCOUNT CAN BE DELETED, AND WHAT IT DID STAYS —
 -- WITH ITS ACTOR UNKNOWN AND EVERYTHING ELSE UNCHANGED.
 --
@@ -59,6 +60,7 @@ BEGIN
   INSERT INTO public.ai_budgets (scope, scope_id, period) VALUES ('user', v_target, 'monthly');
 
   -- The target's work — one of each actor column this migration concerns.
+  PERFORM pg_temp.browser_session(v_target);
   v_landed := public.ingest_land_file(v_p, v_target, 'csv', 'master', 'customers',
     'd213.csv', 'ingest', 'd213/d213.csv', 'text/csv', 10, repeat('d', 64),
     jsonb_build_array(jsonb_build_object('source_row_number', 2,
@@ -78,12 +80,13 @@ BEGIN
   SELECT to_jsonb(r) INTO v_ar FROM public.analysis_runs r WHERE r.id = v_arun;
 
   -- The browser's shape: no GUC, no session.
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
 
   -- ══ §1 · refusals ══
   v_msg := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_admin);
     PERFORM public.admin_delete_user(v_admin, 'd213a@example.invalid', v_target, 'd213t@example.invalid');
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN v_msg := SQLERRM; RESET ROLE; END;
@@ -93,7 +96,8 @@ BEGIN
 
   v_code := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_delete_user(v_super, 'd213s@example.invalid', v_target, 'D213 Target');
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN v_code := SQLSTATE; RESET ROLE; END;
@@ -103,7 +107,8 @@ BEGIN
 
   v_code := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_delete_user(v_super, 'd213s@example.invalid', gen_random_uuid(), 'd213t@example.invalid');
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN v_code := SQLSTATE; RESET ROLE; END;
@@ -113,7 +118,8 @@ BEGIN
 
   v_msg := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_delete_user(v_super, 'd213s@example.invalid', v_super, 'd213s@example.invalid');
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN v_msg := SQLERRM; RESET ROLE; END;
@@ -123,7 +129,8 @@ BEGIN
 
   v_msg := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_delete_user(v_super, 'd213s@example.invalid', v_super2, 'D213S2@example.invalid');
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN v_msg := SQLERRM; RESET ROLE; END;
@@ -133,7 +140,8 @@ BEGIN
 
   v_code := NULL; v_msg := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_delete_user(v_super, 'd213s@example.invalid', v_owner, 'd213o@example.invalid');
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN v_code := SQLSTATE; v_msg := SQLERRM; RESET ROLE; END;
@@ -191,7 +199,8 @@ BEGIN
     FOR EACH ROW EXECUTE FUNCTION pg_temp.d213_refuse();
   v_msg := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_delete_user(v_super, 'd213s@example.invalid', v_target, 'd213t@example.invalid');
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN v_msg := SQLERRM; RESET ROLE; END;
@@ -208,10 +217,11 @@ BEGIN
   END IF;
 
   -- ══ §4 · the delete ══
-  PERFORM set_config('app.current_user_id', '', true);   -- §5 must not read a value left behind
+  PERFORM pg_temp.database_maintenance();   -- §5 must not read a value left behind
   SELECT COALESCE(max(seq), 0) INTO v_seq FROM public.audit_logs;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
   -- Case and whitespace in the confirmation are forgiven; the email itself is not.
+  PERFORM pg_temp.browser_session(v_super);
   v_out := public.admin_delete_user(v_super, 'd213s@example.invalid', v_target, '  D213T@example.invalid ');
   RESET ROLE;
 

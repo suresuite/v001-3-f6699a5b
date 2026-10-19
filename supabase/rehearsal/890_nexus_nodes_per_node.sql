@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- §4 D307 · NEXUS NODES ARE SCORED PER NODE, KEPT ON node_list, AND READ BY PROJECT.
 --
 -- What only a database can say about `20261009000003`:
@@ -43,7 +44,7 @@ BEGIN
   INSERT INTO public.approved_users (id, email, name, password_hash, organization_id)
     VALUES (v_user, 'd307@example.invalid', 'D307 modeler', 'x', v_org),
            (v_stranger, 'd307s@example.invalid', 'D307 stranger', 'x', v_org2);
-  PERFORM set_config('app.current_user_id', v_user::text, true);
+  PERFORM pg_temp.browser_session(v_user);
   INSERT INTO public.projects (id, name, modeler_id, plant_name, organization_id)
     VALUES (v_project, 'D307 nexus', v_user, 'D307P', v_org);
 
@@ -64,6 +65,7 @@ BEGIN
   UPDATE public.node_list SET is_critical_node = true, critical_node_score = 0.9
    WHERE project_id = v_project AND node_id = 'GONE';
 
+  PERFORM pg_temp.browser_session(v_user);
   v_run := (public.analysis_get_or_start(
               v_project, 'critical_nodes',
               jsonb_build_object('method', 'demand_at_risk', 'threshold', 0.1, 'plant_name', NULL),
@@ -71,12 +73,13 @@ BEGIN
   SELECT input_hash INTO v_hash FROM public.analysis_runs WHERE id = v_run;
 
   -- ── 3 (set up) · POISON the session actor, so only the RPC can fix it ─────
-  PERFORM set_config('app.current_user_id', v_stranger::text, true);
+  PERFORM pg_temp.browser_session(v_stranger);
   ALTER TABLE public.audit_logs DISABLE TRIGGER audit_logs_guard_change;
   DELETE FROM public.audit_logs WHERE plane = 'data' AND target_type = 'node_list';
   ALTER TABLE public.audit_logs ENABLE TRIGGER audit_logs_guard_change;
 
   -- ── 1 · one score per node, stamped, and the stale flag cleared ───────────
+  PERFORM pg_temp.browser_session(v_user);
   v_res := public.analysis_apply_critical_nodes(
     v_run,
     jsonb_build_array(
@@ -119,7 +122,7 @@ BEGIN
       'D307 §3: % node_list audit row(s) name someone other than the writer. The GUC '
       'was poisoned with the stranger first, so the RPC did not set app.current_user_id.', v_n;
   END IF;
-  PERFORM set_config('app.current_user_id', v_user::text, true);
+  PERFORM pg_temp.browser_session(v_user);
 
   -- ── 2 · the score survives the lanes being rebuilt (D196) ────────────────
   DELETE FROM public.supply_chain_data WHERE project_id = v_project;
@@ -136,6 +139,7 @@ BEGIN
   END IF;
 
   -- ── 5 (set up) · complete the run with node results ──────────────────────
+  PERFORM pg_temp.browser_session(v_user);
   PERFORM public.analysis_complete_run(
     v_run,
     jsonb_build_array(
@@ -158,6 +162,7 @@ BEGIN
   -- ── 4 · the writer refuses a finished run and a run of another kind ──────
   v_refused := false;
   BEGIN
+    PERFORM pg_temp.browser_session(v_user);
     PERFORM public.analysis_apply_critical_nodes(v_run, '[]'::jsonb, v_user);
   EXCEPTION WHEN SQLSTATE 'P0A01' THEN v_refused := true;
   END;
@@ -165,11 +170,13 @@ BEGIN
     RAISE EXCEPTION 'D307 §4: the mirror accepted a write from a finished run';
   END IF;
 
+  PERFORM pg_temp.browser_session(v_user);
   v_other := (public.analysis_get_or_start(
                 v_project, 'network_metrics', jsonb_build_object('d307', true),
                 'network_metrics@d307', v_user) ->> 'run_id')::uuid;
   v_refused := false;
   BEGIN
+    PERFORM pg_temp.browser_session(v_user);
     PERFORM public.analysis_apply_critical_nodes(v_other, '[]'::jsonb, v_user);
   EXCEPTION WHEN invalid_parameter_value THEN v_refused := true;
   END;
@@ -188,6 +195,7 @@ BEGIN
          'running', started_at + interval '1 hour', actor_user_id, input_scope, dataset_version_id
     FROM public.analysis_runs WHERE id = v_run
   RETURNING id INTO v_old;
+  PERFORM pg_temp.browser_session(v_user);
   PERFORM public.analysis_complete_run(
     v_old,
     jsonb_build_array(jsonb_build_object('entity_type', 'supply_chain_row',
@@ -198,6 +206,7 @@ BEGIN
   -- ── 5 · the read: nodes, from the node run, drivers in rank order ────────
   UPDATE public.node_list SET echelon = 'supplier'
    WHERE project_id = v_project AND node_id IN ('S1', 'S2');
+  PERFORM pg_temp.browser_session(v_user);
   v_stats := public.get_critical_node_stats(v_project, v_user);
   IF (v_stats ->> 'run_id')::uuid IS DISTINCT FROM v_run THEN
     RAISE EXCEPTION 'D307 §5: the read answered from run % — expected the node run %, '
@@ -220,6 +229,7 @@ BEGIN
   -- ── 6 · a reader who cannot see the project, or names nobody, is refused ─
   v_refused := false;
   BEGIN
+    PERFORM pg_temp.browser_session(v_stranger);
     PERFORM public.get_critical_node_stats(v_project, v_stranger);
   EXCEPTION WHEN insufficient_privilege THEN v_refused := true;
   END;
@@ -228,8 +238,9 @@ BEGIN
   END IF;
   v_refused := false;
   BEGIN
+    PERFORM pg_temp.browser_session(NULL);
     PERFORM public.get_critical_node_stats(v_project, NULL);
-  EXCEPTION WHEN null_value_not_allowed THEN v_refused := true;
+  EXCEPTION WHEN insufficient_privilege THEN v_refused := true;
   END;
   IF NOT v_refused THEN
     RAISE EXCEPTION 'D307 §6: the read answered a reader who named nobody';

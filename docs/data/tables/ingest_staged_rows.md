@@ -45,15 +45,19 @@ partially or get corrected — the write fails.
 | Minimum project role | `editor` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
-| Policies on the table | 1 — all carry a predicate |
+| Policies on the table | 5 — all carry a predicate |
 
-RLS reaches the project through the RUN — `has_project_access(r.project_id)` — never through `project_erp_links`, because a CSV run has no link and the old predicate could not reach it at all (WP 3.1). `authenticated` holds SELECT and nothing else: tier 1 is written by the landing function and read by the review screen, and a client that could INSERT here would be a client that could put a row into tier 1 without a file behind it. `audited: true` by the RPC route, not by a trigger: `ingest_land_file` writes one `plane='data'` audit row per landing, naming the uploader, and it can name them because the actor is a parameter rather than a session GUC (D36's failure mode, avoided rather than inherited). `supabase/rehearsal/070` asserts the row, the actor and the refusal.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; direct browser mutations are closed and authorized RPCs retain their own role gates. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: RLS reaches the project through the RUN — `has_project_access(r.project_id)` — never through `project_erp_links`, because a CSV run has no link and the old predicate could not reach it at all (WP 3.1). `authenticated` holds SELECT and nothing else: tier 1 is written by the landing function and read by the review screen, and a client that could INSERT here would be a client that could put a row into tier 1 without a file behind it. `audited: true` by the RPC route, not by a trigger: `ingest_land_file` writes one `plane='data'` audit row per landing, naming the uploader, and it can name them because the actor is a parameter rather than a session GUC (D36's failure mode, avoided rather than inherited). `supabase/rehearsal/070` asserts the row, the actor and the refusal.
 
-<details><summary>1 RLS policy</summary>
+<details><summary>5 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| ingest_staged_rows: project access | ALL | authenticated | `20260916000014_ingest_staged_rows.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -276,6 +280,6 @@ When the row was staged. Server-stamped, never the client's clock.
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/ingest_staged_rows.contract.yaml`, table created by `20260916000014_ingest_staged_rows.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

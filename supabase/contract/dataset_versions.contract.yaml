@@ -25,7 +25,7 @@ surfaces:
   - page: "DeveloperApi.tsx"
     via: "rpc list_dataset_versions"
     grain: table
-    evidence: "src/pages/DeveloperApi.tsx:350"
+    evidence: "src/pages/DeveloperApi.tsx:373"
     confirmed: true
   - page: "ProductLevelNetwork.tsx"
     via: "rpc project_freshness (GraphVersionChip → FreshnessBadge, WP 10.1)"
@@ -55,6 +55,11 @@ governance:
   audited: true
   rls_enabled: true
   note: >-
+    D309/D310 candidate (not deployed): browser reads require a verified active
+    principal and scoped project/owner access. Anonymous tenant grants are revoked;
+    direct browser mutations are closed and authorized RPCs retain their own role gates.
+    The generated schema owns the exact policies; D310 owns live-grant evidence.
+    Historical context before this candidate:
     Written by the `_build_dataset_snapshot` database function, never by a page —
     that is the INTENT, and `write: null` records it. **And since WP 11.1 the
     database enforces it** (§4 D265): from WP 2.4 to WP 11.1 the live policy

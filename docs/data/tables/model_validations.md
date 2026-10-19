@@ -50,26 +50,19 @@ partially or get corrected — the write fails.
 | Minimum project role | `analyst` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
-| Policies on the table | 1 — **1 with no predicate** |
+| Policies on the table | 5 — all carry a predicate |
 
-Tier 4 — a DECISION. Readable by every API role (`model_validations_read_all`, D28's pinned list); written only through SECURITY DEFINER functions: `record_validated_model` (Save Validated Model — authenticates the actor through the shared preamble and enforces the adoption rule: every selected KPI passed, or a recorded face-validation statement), the legacy `record_model_validation` (its agent caller), and `revoke_model_validation`; all three reach one insert path. Audited at statement grain since WP 10.3. A BEFORE UPDATE trigger refuses every change but the lifecycle — and three fill-once completions: the engine id, the simulation hash (WP 11.2), and the planning period with its code, set by `set_model_planning_period` (same writer gate as saving the model) on a model saved without one (WP 10.5 follow-up).
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; direct browser mutations are closed and authorized RPCs retain their own role gates. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: Tier 4 — a DECISION. Readable by every API role (`model_validations_read_all`, D28's pinned list); written only through SECURITY DEFINER functions: `record_validated_model` (Save Validated Model — authenticates the actor through the shared preamble and enforces the adoption rule: every selected KPI passed, or a recorded face-validation statement), the legacy `record_model_validation` (its agent caller), and `revoke_model_validation`; all three reach one insert path. Audited at statement grain since WP 10.3. A BEFORE UPDATE trigger refuses every change but the lifecycle — and three fill-once completions: the engine id, the simulation hash (WP 11.2), and the planning period with its code, set by `set_model_planning_period` (same writer gate as saving the model) on a model saved without one (WP 10.5 follow-up).
 
-> **What the database actually permits is wider than the row above.**
-> 1 policy here grants access with
-> **no predicate at all** (`USING (true)`), so the capability named above is what the
-> product intends to check, not what the database enforces:
->
-> - `model_validations_read_all` — `SELECT` to `anon`, `authenticated`
->
-> See PLAN.md D28: the application runs as the
-> `anon` role with no auth session and the anon key ships in the frontend bundle, so
-> closing these is a migration with an auth model behind it rather than a policy edit.
-
-<details><summary>1 RLS policy</summary>
+<details><summary>5 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| model_validations_read_all | SELECT | anon, authenticated | `20260710000001_model_validations.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -681,6 +674,6 @@ The planning period the model is FOR (`2026Q3`), chosen by the modeller when the
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/model_validations.contract.yaml`, table created by `20260710000001_model_validations.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

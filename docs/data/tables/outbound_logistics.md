@@ -40,34 +40,24 @@ partially or get corrected — the write fails.
 | | |
 |---|---|
 | Read capability | any project member |
-| Write capability | `data_editing` |
+| Write capability | `data_edit_inputs` |
 | Minimum project role | `editor` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
-| Policies on the table | 4 — **2 with no predicate** |
+| Policies on the table | 6 — all carry a predicate |
 
-`write` names the capability that exists today. WP 2.2 splits `data_editing` into `data_edit_inputs` (tier 2) and `data_edit_policies` (tier 4); this row becomes `data_edit_inputs` then, and all twelve sidecars change together.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; browser writes require `data_edit_inputs` on the project. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: `write` names the capability that exists today. WP 2.2 splits `data_editing` into `data_edit_inputs` (tier 2) and `data_edit_policies` (tier 4); this row becomes `data_edit_inputs` then, and all twelve sidecars change together.
 
-> **What the database actually permits is wider than the row above.**
-> 2 policies here grant access with
-> **no predicate at all** (`USING (true)`), so the capability named above is what the
-> product intends to check, not what the database enforces:
->
-> - `outbound_logistics_auth_read` — `SELECT` to `authenticated`
-> - `outbound_logistics_anon_read` — `SELECT` to `anon`, `authenticated`
->
-> See PLAN.md D28: the application runs as the
-> `anon` role with no auth session and the anon key ships in the frontend bundle, so
-> closing these is a migration with an auth model behind it rather than a policy edit.
-
-<details><summary>4 RLS policies</summary>
+<details><summary>6 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| outbound_logistics_auth_read | SELECT | authenticated | `20260705000001_open_logistics_reads.sql` |
-| Outbound: modifiers only | ALL | all | `20260915000004_org_identity_dual_read.sql` |
-| Outbound: organization access | SELECT | all | `20260915000004_org_identity_dual_read.sql` |
-| outbound_logistics_anon_read | SELECT | anon, authenticated | `20260919000010_anon_policies_widen.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -459,6 +449,6 @@ A triangular row's upper bound — a rate in the row's `time_unit`, weekly after
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/outbound_logistics.contract.yaml`, table created by `20250820145837_5a2d95f1-7a5f-4bbb-8ac8-995d53011bce.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

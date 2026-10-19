@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- Phase 14 / WP 14.3 · A CUSTOMER'S CONTRACTED FLOOR LANDS AND REACHES THE SNAPSHOT.
 --
 -- WP 14.3 makes `customers.sla_fill_floor_pct` consumed (each of the customer's
@@ -35,10 +36,12 @@ BEGIN
     jsonb_build_object('source_row_number', 3, 'raw', '{}'::jsonb,
       'parsed', jsonb_build_object('customer_id', 'C2', 'segment', 'spot'),
       'findings', '[]'::jsonb));
+  PERFORM pg_temp.browser_session(v_user);
   v_res := public.ingest_land_file(
     v_project, v_user, 'csv', 'master', 'customers',
     'customers.csv', 'ingest', 'p/wp143/c.csv', 'text/csv', 128, repeat('e', 64), v_rows);
   v_run := (v_res ->> 'run_id')::uuid;
+  PERFORM pg_temp.browser_session(v_user);
   v_res := public.ingest_apply_run(v_run, v_user);
   IF (v_res ->> 'rows_promoted')::int <> 2 THEN
     RAISE EXCEPTION 'WP 14.3: the customers promotion moved % row(s), expected 2 — %',

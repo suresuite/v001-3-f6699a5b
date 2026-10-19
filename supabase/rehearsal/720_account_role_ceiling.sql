@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- §4 D276 · ONE RULE FOR THE FOUR PROJECT RIGHTS; AN AGENT MAY NOT APPROVE WHAT ITS APPROVER
 -- MAY NOT DO BY HAND; /admin/roles READS THE RULE ITSELF.
 --
@@ -95,14 +96,20 @@ BEGIN
     (v_p,  'D276 p',  v_owner, 'D276P',  'D276 Org',  v_org,  'single'),
     (v_p2, 'D276 p2', v_owner, 'D276P2', 'D276 Org2', v_org2, 'single');
 
+  PERFORM pg_temp.browser_session(v_super);
+
   PERFORM public.admin_set_project_member(v_super, 'd276s@example.invalid', v_ued,   v_p,  'editor', NULL, 'D276');
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_project_member(v_super, 'd276s@example.invalid', v_med,   v_p,  'editor', NULL, 'D276');
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_project_member(v_super, 'd276s@example.invalid', v_mview, v_p,  'viewer', NULL, 'D276');
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_project_member(v_super, 'd276s@example.invalid', v_over,  v_p,  'editor', NULL, 'D276');
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_project_member(v_super, 'd276s@example.invalid', v_o2ed,  v_p2, 'editor', NULL, 'D276');
   INSERT INTO public.user_capabilities (user_id, capability_key, allowed) VALUES (v_over, 'simulation_lab', true);
   INSERT INTO public.org_capabilities (org_id, capability_key, allowed) VALUES (v_org2, 'export', false);
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
 
   -- ── §1 the rule ──────────────────────────────────────────────────────────
   FOR v_r IN SELECT * FROM (VALUES
@@ -178,6 +185,7 @@ BEGIN
       RAISE EXCEPTION 'D276/720 §5: artifact type % declares no project right', t;
     END IF;
   END LOOP;
+  PERFORM pg_temp.browser_session(v_med);
   IF public.agent_project_right_refusal(v_med, v_p, 'not_an_artifact') IS NULL THEN
     RAISE EXCEPTION 'D276/720 §5: an undeclared artifact type was not refused';
   END IF;
@@ -188,7 +196,8 @@ BEGIN
   RETURNING id INTO v_prop;
   v_code := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_mview);
     PERFORM public.review_agent_proposal(v_prop, 'approve', v_mview, 'd276v@example.invalid', NULL);
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN
@@ -197,19 +206,21 @@ BEGIN
   IF v_code IS NULL OR v_msg NOT LIKE 'forbidden: approving this proposal needs Edit Policies%' THEN
     RAISE EXCEPTION 'D276/720 §5: a modeler Viewer approved a policy bundle (%: %)', v_code, v_msg;
   END IF;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_med);
   PERFORM public.review_agent_proposal(v_prop, 'approve', v_med, 'd276m@example.invalid', NULL);
   RESET ROLE;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
   IF (SELECT status FROM public.proposals WHERE id = v_prop) IS DISTINCT FROM 'approved' THEN
     RAISE EXCEPTION 'D276/720 §5: a modeler Editor could not approve a policy bundle';
   END IF;
 
   -- ── §6 /admin/roles ──────────────────────────────────────────────────────
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   v_acc := public.get_role_access(v_super, 'd276s@example.invalid');
   RESET ROLE;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
   FOR t IN SELECT jsonb_array_elements_text(v_acc -> 'project_scoped') LOOP
     v_d := v_acc -> 'effective' -> 'user' -> 'editor' -> t;
     IF v_d IS DISTINCT FROM public.project_right_decide(false, NULL, 'editor',
@@ -234,30 +245,33 @@ BEGIN
   END IF;
   v_code := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_med);
     PERFORM public.get_role_access(v_med, 'd276m@example.invalid');
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN RESET ROLE; v_code := SQLERRM;
   END;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
   IF v_code IS DISTINCT FROM 'forbidden' THEN
     RAISE EXCEPTION 'D276/720 §6: a modeler read /admin/roles (%)', v_code;
   END IF;
 
   -- ── §7 the preview ───────────────────────────────────────────────────────
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   v_r := public.admin_preview_role_capability(v_super, 'd276s@example.invalid', 'user', 'simulation_lab', true);
   RESET ROLE;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
   IF (v_r ->> 'project_scoped')::boolean IS NOT TRUE
      OR EXISTS (SELECT 1 FROM jsonb_array_elements(v_r -> 'changes') c
                  WHERE c ->> 'user_id' IN (v_ued::text, v_over::text)) THEN
     RAISE EXCEPTION 'D276/720 §7: turning Run Simulations on for user accounts previewed as %', v_r;
   END IF;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   v_r := public.admin_preview_role_capability(v_super, 'd276s@example.invalid', 'modeler', 'export', false);
   RESET ROLE;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
   IF EXISTS (SELECT 1 FROM jsonb_array_elements(v_r -> 'changes') c WHERE c ->> 'user_id' = v_med::text)
      OR EXISTS (SELECT 1 FROM jsonb_array_elements(v_r -> 'changes') c WHERE c ->> 'user_id' = v_o2ed::text)
      OR EXISTS (SELECT 1 FROM jsonb_array_elements(v_r -> 'changes') c WHERE c ->> 'user_id' = v_mview::text) THEN
@@ -270,17 +284,20 @@ BEGIN
   -- ── §8 the server's policy writers read the same rule (D275, D279) ────────
   v_code := NULL;
   BEGIN
+    PERFORM pg_temp.browser_session(v_mview);
     PERFORM public.save_policy_defaults(v_p, 'inventory', '{"d276": "modeler viewer"}'::jsonb, _actor_user_id => v_mview);
   EXCEPTION WHEN insufficient_privilege THEN v_code := SQLERRM;
   END;
-  PERFORM set_config('app.current_user_id', '', true);
-  IF v_code IS NULL OR v_code NOT LIKE 'forbidden:%' THEN
+  PERFORM pg_temp.database_maintenance();
+  IF v_code IS NULL OR v_code NOT LIKE 'forbidden%' THEN
     RAISE EXCEPTION 'D276/720 §8: a modeler Viewer wrote a policy (%)', v_code;
   END IF;
+  PERFORM pg_temp.browser_session(v_ued);
   PERFORM public.save_policy_defaults(v_p, 'inventory', '{"d276": "user editor"}'::jsonb, _actor_user_id => v_ued);
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
+  PERFORM pg_temp.browser_session(v_med);
   PERFORM public.save_policy_defaults(v_p, 'inventory', '{"d276": "modeler editor"}'::jsonb, _actor_user_id => v_med);
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
 
   RAISE NOTICE 'D276/720: one rule — the project role decides where held (D279) — agents ask the same right, and /admin/roles reads the rule';
 END $d276$;

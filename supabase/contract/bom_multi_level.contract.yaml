@@ -65,7 +65,7 @@ surfaces:
 
 governance:
   read: null
-  write: "data_editing"
+  write: data_edit_inputs
   min_project_role: editor
   # WP 2.3 created `audit_<table>_insert/update/delete`, three AFTER … FOR EACH
   # STATEMENT triggers calling `audit_tier_write`. This flag said `false` for
@@ -75,6 +75,11 @@ governance:
   audited: true
   rls_enabled: true
   note: >-
+    D309/D310 candidate (not deployed): browser reads require a verified active
+    principal and scoped project/owner access. Anonymous tenant grants are revoked;
+    browser writes require `data_edit_inputs` on the project.
+    The generated schema owns the exact policies; D310 owns live-grant evidence.
+    Historical context before this candidate:
     `write` names the capability that exists today. WP 2.2 splits `data_editing`
     into `data_edit_inputs` (tier 2) and `data_edit_policies` (tier 4); this row
     becomes `data_edit_inputs` then, and all twelve sidecars change together.

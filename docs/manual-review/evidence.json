@@ -1,6 +1,6 @@
 {
   "inspected_commit": "32aa35b8f4f525ce9c75c49685d0866803840af3",
-  "scope": "Source review and isolated local execution; not a deployment audit.",
+  "scope": "Source review and isolated local execution; D309\u2013D312 candidate, not a deployment audit. Roles/capabilities claims reviewed against the authorization boundary; release blockers remain in PLAN.md \u00a716. API-key guide reviewed: extraction preserves project allowlists, organization re-checks and 404 concealment; resolver exceptions fail closed with the documented 503. Isolated scope tests cover the shared implementation. Personal-key writes now retain the verified owner and project role; organization keys retain explicit scope authorization. Cancellation uses an attributed project/run-bound RPC. API-key and roles guides were reviewed and updated for this candidate.",
   "sources": [
     {
       "path": "src/components/UploadWizard.tsx",
@@ -66,19 +66,19 @@
       "path": "supabase/functions/api/index.ts",
       "symbols": "listProjects, RunCreateSchema, routes, authenticate",
       "manual_page": "getting-an-api-key",
-      "sha256": "b82f4c3605dbf7d1baa754304d7f1faf79e55b8d223b66e4d4b94e29a24e6898"
+      "sha256": "9a2b5043769ec4e7beedf4f518055d033d692dac4fec7b84099660243c8e448c"
     },
     {
       "path": "supabase/functions/sim-command/index.ts",
       "symbols": "Deno.serve authorization and project check",
       "manual_page": "roles-and-capabilities",
-      "sha256": "9eeaf77106f6c34814de0346b76af532ef883b56ccd4331a991ed157117ae4be"
+      "sha256": "bf6dbf2e7f5e8317081328b385e7c22ff4e30bfd86c39db7fc7e2de8b141b380"
     },
     {
       "path": "supabase/functions/_shared/dispatch.ts",
       "symbols": "dispatchExperimentRun",
       "manual_page": "roles-and-capabilities",
-      "sha256": "ab355628adac0125571a5cccdccbd4cb5291412ebefe735a5d7d5cffe6d2537a"
+      "sha256": "f2a7fbb9a58fe11796116385e307d8d9bfa1ce1f8cf2b9cd041b5dab0d7f3edc"
     },
     {
       "path": "supabase/migrations/20261002000007_project_role_decides.sql",

@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- WP 6.2 · THE TWO GOVERNANCE PREDICATES DISAGREE, AND THE ORG STAMP HAS HOLES.
 --
 -- This file adds NO capability. It pins two facts that decide whether a later
@@ -71,8 +72,8 @@ BEGIN
     VALUES ('WP62 Editor', 'wp62-editor@example.invalid', 'x', 'user', v_org)
     RETURNING id INTO v_editor;
 
-  INSERT INTO public.projects (id, name, modeler_id, plant_name)
-    VALUES (gen_random_uuid(), 'WP62 Governance', v_modeler, 'WP62G')
+  INSERT INTO public.projects (id, name, modeler_id, plant_name, organization_id)
+    VALUES (gen_random_uuid(), 'WP62 Governance', v_modeler, 'WP62G', v_org)
     RETURNING id INTO v_project;
 
   -- A GENUINE member, not a delegation: `project_members` with a standing role.
@@ -84,7 +85,7 @@ BEGIN
   --
   -- Asserted first because it is the baseline: if this failed, the disagreements
   -- below would be evidence of a broken fixture rather than of a divergence.
-  PERFORM set_config('app.current_user_id', v_modeler::text, true);
+  PERFORM pg_temp.browser_session(v_modeler);
   IF NOT public.has_project_access(v_project) THEN
     RAISE EXCEPTION 'WP 6.2 / D66: the project''s own modeler fails has_project_access — the fixture is wrong, not the finding';
   END IF;
@@ -99,7 +100,7 @@ BEGIN
   -- until D279 the row rules refused them. This is the half `rehearsal/100` found
   -- by running; `20261002000007` taught `has_project_access` the project role, so
   -- the two predicates now agree on an Editor.
-  PERFORM set_config('app.current_user_id', v_editor::text, true);
+  PERFORM pg_temp.browser_session(v_editor);
   v_access := public.has_project_access(v_project);
   v_role   := public.effective_project_role(v_editor, v_project);
   IF v_role IS DISTINCT FROM 'editor' THEN
@@ -124,7 +125,7 @@ BEGIN
   -- tests; it needs `effective_project_role` to learn what an organization admin
   -- is in project terms first, which is a governance-vocabulary decision and
   -- belongs with the auth model (D28 / WP 7.1).
-  PERFORM set_config('app.current_user_id', v_admin::text, true);
+  PERFORM pg_temp.browser_session(v_admin);
   v_access := public.has_project_access(v_project);
   v_role   := public.effective_project_role(v_admin, v_project);
   IF NOT v_access THEN
@@ -244,7 +245,7 @@ BEGIN
   --
   -- It also needs `app.current_user_id`: a project inserted with no session GUC
   -- gets no uuid at all, whatever organizations exist.
-  PERFORM set_config('app.current_user_id', v_modeler::text, true);
+  PERFORM pg_temp.browser_session(v_modeler);
   INSERT INTO public.projects (name, modeler_id, plant_name)
     VALUES ('WP62 Creator Has Org', v_modeler, 'WP62O')
     RETURNING organization_id INTO v_org_id;
@@ -266,7 +267,7 @@ BEGIN
     IF (SELECT organization_id FROM public.approved_users WHERE id = v_orgless) IS NOT NULL THEN
       RAISE EXCEPTION 'WP 6.2 / D96: the section-3 user gained an org uuid — the fixture no longer tests the chain';
     END IF;
-    PERFORM set_config('app.current_user_id', v_orgless::text, true);
+    PERFORM pg_temp.browser_session(v_orgless);
     INSERT INTO public.projects (name, modeler_id, plant_name)
       VALUES ('WP62 Creator Has No Org', v_orgless, 'WP62X')
       RETURNING organization_id INTO v_org_id;
@@ -279,7 +280,7 @@ BEGIN
   END;
 
   -- And with no session at all, the stamp has nothing to read.
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
   INSERT INTO public.projects (name, modeler_id, plant_name)
     VALUES ('WP62 No Session', v_modeler, 'WP62Z')
     RETURNING organization, organization_id INTO v_txt, v_org_id;
@@ -307,7 +308,7 @@ BEGIN
     v_del  integer;
     v_mtp  uuid;
   BEGIN
-    PERFORM set_config('app.current_user_id', v_admin::text, true);
+    PERFORM pg_temp.browser_session(v_admin);
     INSERT INTO public.projects (name, modeler_id, plant_name, organization_id)
       VALUES ('WP62 Multi Tier', v_admin, 'WP62M', v_org) RETURNING id INTO v_mtp;
     INSERT INTO public.multi_tier_supply_chain
@@ -318,6 +319,7 @@ BEGIN
     -- rows; `projectLanes.ts` calls it from /policies and /simulation-lab. So the
     -- table has a live reader feeding two pages, and dropping it would break
     -- them — which is what the sidecar's own `surfaces` block said all along.
+    PERFORM pg_temp.browser_session(v_admin);
     v_ds := public.get_project_datasets(v_mtp, v_admin, 'wp62-admin@example.invalid');
     IF v_ds IS NULL THEN
       RAISE EXCEPTION 'WP 6.2 / D58: get_project_datasets returned NULL — the fixture cannot test the reader';
@@ -337,6 +339,7 @@ BEGIN
 
     -- 6b · THE DELETE PATH, exactly as `DataManager.tsx` invokes it: the "Delete
     -- ALL data" button passes `p_dataset := 'all'`.
+    PERFORM pg_temp.browser_session(v_admin);
     v_del := public.delete_project_dataset(v_mtp, 'all', v_admin, 'wp62-admin@example.invalid');
     IF v_del < 1 THEN
       RAISE EXCEPTION 'WP 6.2 / D58: delete_project_dataset(all) reported % row(s); the multi_tier row was not counted', v_del;
@@ -384,6 +387,7 @@ BEGIN
     -- The signature is `(p_rows jsonb, p_user_id uuid, p_user_email text)` and the
     -- project comes from INSIDE the rows — read off `pg_get_function_identity_arguments`
     -- rather than assumed from the other bulk writers, which take it as a parameter.
+    PERFORM pg_temp.browser_session(v_admin);
     PERFORM public.bulk_insert_multi_tier_supply_chain(
       jsonb_build_array(jsonb_build_object(
         'project_id', v_mtp, 'plant_name', 'WP62M',

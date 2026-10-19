@@ -82,8 +82,8 @@ export async function mintSessionToken(input: MintInput): Promise<MintedToken> {
     iat,
     exp,
     // States where the subject came from. This is not a GoTrue claim and is not read by
-    // anything — it is here so that a token found in a log can be traced to this path
-    // rather than mistaken for one GoTrue issued.
+    // older stage-1 code. The verified boundary now requires this marker so this path
+    // is distinguished from a GoTrue identity.
     app_identity: "approved_users",
   };
 

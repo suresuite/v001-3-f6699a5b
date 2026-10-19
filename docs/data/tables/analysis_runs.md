@@ -46,15 +46,19 @@ partially or get corrected — the write fails.
 | Minimum project role | `viewer` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
-| Policies on the table | 1 — all carry a predicate |
+| Policies on the table | 5 — all carry a predicate |
 
-Read follows project reachability (`has_project_access`), uuid-only since WP 3.0. `write: null` is a STATEMENT, not an omission: there is no user-facing write path and there must not be one. Every write goes through `analysis_get_or_start`, `analysis_complete_run` and `analysis_fail_run`, each of which takes the actor as a PARAMETER and routes it through `assert_writer_may_act` — so the audit trigger names a person rather than recording `actor_known: false` (G4). There is deliberately NO write policy on this table, which makes `no-tier-skip` (I2) a property of the schema here rather than of today's callers. The RPCs AUTHENTICATE and do not AUTHORIZE: `20260917000005` removed a role gate from the shared preamble after it was found to refuse an organization admin on a live path, and making `min_project_role` load-bearing is D66 and WP 6.2's.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; direct browser mutations are closed and authorized RPCs retain their own role gates. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: Read follows project reachability (`has_project_access`), uuid-only since WP 3.0. `write: null` is a STATEMENT, not an omission: there is no user-facing write path and there must not be one. Every write goes through `analysis_get_or_start`, `analysis_complete_run` and `analysis_fail_run`, each of which takes the actor as a PARAMETER and routes it through `assert_writer_may_act` — so the audit trigger names a person rather than recording `actor_known: false` (G4). There is deliberately NO write policy on this table, which makes `no-tier-skip` (I2) a property of the schema here rather than of today's callers. The RPCs AUTHENTICATE and do not AUTHORIZE: `20260917000005` removed a role gate from the shared preamble after it was found to refuse an organization admin on a live path, and making `min_project_role` load-bearing is D66 and WP 6.2's.
 
-<details><summary>1 RLS policy</summary>
+<details><summary>5 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| analysis_runs_select | SELECT | all | `20260917000006_analysis_store.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -380,6 +384,6 @@ The VERSION of the level the run keyed on ("Firm graph v5") — the `graph_level
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/analysis_runs.contract.yaml`, table created by `20260917000006_analysis_store.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- Phase 14 / WP 14.2 · DEMAND PER CUSTOMER × PRODUCT ROW REACHES THE SNAPSHOT.
 --
 -- `20261003000001` gives the per-row demand spec a home on `outbound_logistics`,
@@ -59,10 +60,12 @@ BEGIN
       'parsed', jsonb_build_object('customer_id', 'C2', 'product_id', 'P1',
         'volume', 40, 'time_unit', 'week', 'expected_lead_time', 1, 'unit_price', 12),
       'findings', '[]'::jsonb));
+  PERFORM pg_temp.browser_session(v_user);
   v_res := public.ingest_land_file(
     v_project, v_user, 'csv', 'transactional', 'outbound_logistics',
     'outbound.csv', 'ingest', 'p/wp142/out.csv', 'text/csv', 200, repeat('a', 64), v_rows);
   v_run := (v_res ->> 'run_id')::uuid;
+  PERFORM pg_temp.browser_session(v_user);
   v_res := public.ingest_apply_run(v_run, v_user);
   IF (v_res ->> 'rows_promoted')::int <> 2 THEN
     RAISE EXCEPTION 'WP 14.2: the outbound promotion moved % row(s), expected 2 — %',
@@ -97,6 +100,7 @@ BEGIN
       'parsed', jsonb_build_object('customer_id', 'C1', 'product_id', 'P1',
                                    'period_start', '2026-12-01', 'time_unit', 'month', 'quantity', 1000),
       'findings', '[]'::jsonb));
+  PERFORM pg_temp.browser_session(v_user);
   v_res := public.ingest_land_file(
     v_project, v_user, 'csv', 'transactional', 'demand_forecasts',
     'forecast.csv', 'ingest', 'p/wp142/fc.csv', 'text/csv', 200, repeat('b', 64), v_rows);
@@ -106,6 +110,8 @@ BEGIN
   IF v_n <> 0 THEN
     RAISE EXCEPTION 'WP 14.2: % forecast row(s) reached tier 2 at LANDING time (I2)', v_n;
   END IF;
+
+  PERFORM pg_temp.browser_session(v_user);
 
   v_res := public.ingest_apply_run(v_run, v_user);
   IF (v_res ->> 'rows_promoted')::int <> 3 THEN
@@ -200,9 +206,11 @@ BEGIN
       'parsed', jsonb_build_object('customer_id', 'C1', 'product_id', 'P1',
                                    'period_start', '2026-11-09', 'time_unit', 'week', 'quantity', 95),
       'findings', '[]'::jsonb));
+  PERFORM pg_temp.browser_session(v_user);
   v_res := public.ingest_land_file(
     v_project, v_user, 'csv', 'transactional', 'demand_forecasts',
     'forecast2.csv', 'ingest', 'p/wp142/fc2.csv', 'text/csv', 100, repeat('c', 64), v_rows);
+  PERFORM pg_temp.browser_session(v_user);
   v_res := public.ingest_apply_run((v_res ->> 'run_id')::uuid, v_user);
   SELECT count(*), max(quantity) INTO v_n, v_num FROM public.demand_forecasts
    WHERE project_id = v_project AND period_start = '2026-11-09';
@@ -219,6 +227,7 @@ BEGIN
   END;
 
   -- ── 6 · a wrong forecast upload can be removed, and only the forecast ────
+  PERFORM pg_temp.browser_session(v_user);
   PERFORM public.delete_project_dataset(v_project, 'demand_forecasts', v_user, 'wp142@example.invalid');
   SELECT count(*) INTO v_n FROM public.demand_forecasts WHERE project_id = v_project;
   IF v_n <> 0 THEN

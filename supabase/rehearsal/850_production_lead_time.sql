@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- Phase 16 / WP 16.5 · A PRODUCT'S PRODUCTION LEAD TIME LANDS, NORMALIZES AND
 -- REACHES THE SNAPSHOT.
 --
@@ -51,9 +52,11 @@ BEGIN
     jsonb_build_object('source_row_number', 4, 'raw', '{}'::jsonb,
       'parsed', jsonb_build_object('product_id', 'P3', 'fulfillment_mode', 'mto'),
       'findings', '[]'::jsonb));
+  PERFORM pg_temp.browser_session(v_user);
   v_res := public.ingest_land_file(
     v_project, v_user, 'csv', 'master', 'products',
     'products.csv', 'ingest', 'p/wp155/p.csv', 'text/csv', 128, repeat('e', 64), v_rows);
+  PERFORM pg_temp.browser_session(v_user);
   v_res := public.ingest_apply_run((v_res ->> 'run_id')::uuid, v_user);
   IF (v_res ->> 'rows_promoted')::int <> 3 THEN
     RAISE EXCEPTION 'WP 16.5: the products promotion moved % row(s), expected 3 — %',
@@ -83,9 +86,11 @@ BEGIN
   END IF;
 
   -- ── 2 · re-promotion is idempotent ──────────────────────────────────────
+  PERFORM pg_temp.browser_session(v_user);
   v_res := public.ingest_land_file(
     v_project, v_user, 'csv', 'master', 'products',
     'products.csv', 'ingest', 'p/wp155/p2.csv', 'text/csv', 128, repeat('f', 64), v_rows);
+  PERFORM pg_temp.browser_session(v_user);
   v_res := public.ingest_apply_run((v_res ->> 'run_id')::uuid, v_user);
   SELECT count(*) INTO v_n FROM public.products
    WHERE project_id = v_project AND product_id = 'P1'

@@ -1,3 +1,4 @@
+import { browserIdentity, requireProject } from "../_shared/requestIdentity.ts";
 // Phase 3 / WP 3.2 / §8.1–8.4 — `ingest-file`: THE SERVER-SIDE PARSE.
 //
 // Upload → tier 0 + a run → parse → contract-driven validation → tier 1 → the
@@ -24,17 +25,9 @@
 // Adding a column to an upload is a sidecar edit; it is not a code change, and
 // `contract:generate -- --check` fails if the two drift.
 //
-// IDENTITY, STATED PLAINLY. This application does not use Supabase Auth: it
-// authenticates against `approved_users` and keeps the user in localStorage, so
-// the uploader's id arrives ASSERTED BY THE CLIENT, exactly as it does for
-// `ingest-bom-multi-level` and every other ingest function (PLAN.md §4 D28, a
-// standing decision). What the landing adds is that the assertion is CHECKED
-// against the database: `ingest_land_file` sets `app.current_user_id` to the
-// asserted actor and refuses the landing unless `has_project_access()` answers
-// true for them. A caller therefore cannot land a file into a project its claimed
-// user cannot reach. It can still claim to be another user who can, and that is
-// D28 and not something this package closes — said here so that the audit row
-// this function writes is read for what it is.
+// D309: the signed browser principal is resolved before service-role operations.
+// Submitted actor IDs must match it; project capability and run ownership are
+// checked before landing, diff or promotion. The SQL writer keeps the audit actor.
 
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -75,7 +68,10 @@ serve(async (req) => {
     const file = form.get("file");
     const dataset = String(form.get("dataset") ?? "");
     const projectId = String(form.get("project_id") ?? "");
-    const userId = String(form.get("user_id") ?? "");
+    const identityClient = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "");
+    const who = await browserIdentity(req, identityClient, { id: form.get("user_id") ?? undefined });
+    if (who instanceof Response) return who;
+    const userId = who.id;
     // THREE MODES, AND WP 3.4 CHANGED WHAT THE MIDDLE ONE DOES.
     //
     //   `parse`  — returns the parsed rows and lands nothing. It exists for the
@@ -95,6 +91,14 @@ serve(async (req) => {
     //              no file.
     const mode = String(form.get("mode") ?? "land");
 
+    let authorizedProject = projectId;
+    if (mode === "apply" || mode === "diff") {
+      const { data, error } = await identityClient.from("ingest_runs").select("project_id").eq("id", String(form.get("run_id") ?? "")).maybeSingle();
+      if (error || !data || (projectId && data.project_id !== projectId)) return json({ error: "Access denied" }, 403);
+      authorizedProject = data.project_id;
+    }
+    if (!authorizedProject) return json({ error: "Missing project" }, 400);
+    await requireProject(identityClient, who, authorizedProject, "data_edit_inputs");
     if (mode === "apply") {
       const runId = String(form.get("run_id") ?? "");
       if (!runId) return json({ success: false, error: "Missing run_id." }, 400);

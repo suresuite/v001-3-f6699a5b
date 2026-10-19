@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- WP 6.5a · D169 — THE REVIEW SCREEN CAN READ THE RUN IT JUST LANDED.
 --
 -- The first production upload landed (tier 0 + tier 1, §15 run `35783395994`) and the
@@ -35,6 +36,7 @@ BEGIN
     VALUES (v_project, 'WP65 review', v_user, 'WP65R');
 
   -- Two rows landed OUT of line order, so §2's ordering assertion can fail.
+  PERFORM pg_temp.browser_session(v_user);
   v_run := (public.ingest_land_file(
     v_project, v_user, 'csv', 'master', 'customers',
     'review.csv', 'ingest', 'wp65r/review.csv', 'text/csv', 64, repeat('c', 64),
@@ -50,7 +52,7 @@ BEGIN
   -- ══ §1 · the defect: anon reads the table and gets NOTHING, silently ══
   SELECT relrowsecurity INTO v_rls_was FROM pg_class WHERE oid = 'public.ingest_runs'::regclass;
   ALTER TABLE public.ingest_runs ENABLE ROW LEVEL SECURITY;
-  PERFORM set_config('app.current_user_id', v_user::text, true);
+  PERFORM pg_temp.browser_session(v_user);
   BEGIN
     SET LOCAL ROLE anon;
     SELECT count(*) INTO v_rows FROM public.ingest_runs WHERE id = v_run;
@@ -59,7 +61,7 @@ BEGIN
     RESET ROLE;
     v_rows := 0;   -- no grant at all is the same answer for the screen: nothing to show
   END;
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
   IF NOT v_rls_was THEN
     ALTER TABLE public.ingest_runs DISABLE ROW LEVEL SECURITY;
   END IF;
@@ -70,7 +72,8 @@ BEGIN
   END IF;
 
   -- ══ §2 · the RPC, AS anon, returns the whole review ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_user);
   v_review := public.ingest_run_review(v_user, v_run);
   RESET ROLE;
 
@@ -94,7 +97,8 @@ BEGIN
   -- ══ §3 · a reader without access is REFUSED, not shown a blank ══
   v_code := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_outsider);
     v_review := public.ingest_run_review(v_outsider, v_run);
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN
@@ -108,6 +112,7 @@ BEGIN
   -- ══ §4 · unknown run and NULL reader ══
   v_code := NULL;
   BEGIN
+    PERFORM pg_temp.browser_session(v_user);
     v_review := public.ingest_run_review(v_user, gen_random_uuid());
   EXCEPTION WHEN OTHERS THEN v_code := SQLSTATE;
   END;
@@ -116,10 +121,11 @@ BEGIN
   END IF;
   v_code := NULL;
   BEGIN
+    PERFORM pg_temp.browser_session(NULL);
     v_review := public.ingest_run_review(NULL, v_run);
   EXCEPTION WHEN OTHERS THEN v_code := SQLSTATE;
   END;
-  IF v_code IS DISTINCT FROM '22004' THEN
+  IF v_code IS DISTINCT FROM '42501' THEN
     RAISE EXCEPTION 'WP 6.5a/350 §4: a NULL reader ended with SQLSTATE %, expected 22004 (null_value_not_allowed)', COALESCE(v_code, '(none)');
   END IF;
 

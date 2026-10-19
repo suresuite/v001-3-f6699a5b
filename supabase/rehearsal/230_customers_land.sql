@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- WP 6.2 · THE TENTH DATASET LANDS, AND THE TWO ENGINE-READ COLUMNS ARRIVE.
 --
 -- `20260919000001` makes `customers` a landable dataset because a GATE said it
@@ -68,6 +69,8 @@ BEGIN
       'parsed',   jsonb_build_object('customer_id','C-3'),
       'findings', '[]'::jsonb));
 
+  PERFORM pg_temp.browser_session(v_user);
+
   v_res := public.ingest_land_file(
     v_project, v_user, 'csv', 'master', 'customers',
     'customers.csv', 'ingest', 'p/wp62/1.csv', 'text/csv', 256,
@@ -95,6 +98,7 @@ BEGIN
   END IF;
 
   -- ── 2 · THE PROMOTION RESOLVES THE ARBITER AND THE SERVER-SET COLUMNS ─────
+  PERFORM pg_temp.browser_session(v_user);
   v_res := public.ingest_apply_run(v_run1, v_user);
   IF (v_res ->> 'rows_promoted')::int <> 3 THEN
     RAISE EXCEPTION 'WP 6.2: the promotion moved % row(s), expected 3 — %',
@@ -205,11 +209,14 @@ BEGIN
                                      'segment','strategic','priority_weight', 9),
       'findings', '[]'::jsonb));
 
+  PERFORM pg_temp.browser_session(v_user);
+
   v_res := public.ingest_land_file(
     v_project, v_user, 'csv', 'master', 'customers',
     'customers.csv', 'ingest', 'p/wp62/2.csv', 'text/csv', 128,
     repeat('d', 64), v_rows);
   v_run2 := (v_res ->> 'run_id')::uuid;
+  PERFORM pg_temp.browser_session(v_user);
   v_res := public.ingest_apply_run(v_run2, v_user);
 
   IF (v_res ->> 'rows_updated')::int <> 1 THEN
@@ -243,6 +250,7 @@ BEGIN
   -- to everything. `ingest_target_is_promotable` is the guard, and an injection
   -- through `_target_table` is what it exists to stop.
   BEGIN
+    PERFORM pg_temp.browser_session(v_user);
     v_res := public.ingest_land_file(
       v_project, v_user, 'csv', 'master', 'approved_users',
       'nope.csv', 'ingest', 'p/wp62/3.csv', 'text/csv', 16,
@@ -250,6 +258,7 @@ BEGIN
         'source_row_number', 2, 'raw', '{}'::jsonb,
         'parsed', jsonb_build_object('email','x@y.invalid'), 'findings', '[]'::jsonb)));
     v_run2 := (v_res ->> 'run_id')::uuid;
+    PERFORM pg_temp.browser_session(v_user);
     PERFORM public.ingest_apply_run(v_run2, v_user);
     RAISE EXCEPTION 'WP 6.2: a promotion into `approved_users` SUCCEEDED — the promotable list is not a guard';
   EXCEPTION
@@ -277,6 +286,8 @@ BEGIN
     INSERT INTO public.projects (id, name, modeler_id, plant_name)
       VALUES (v_sup_project, 'WP62 suppliers blank', v_user, 'WP62S');
 
+    PERFORM pg_temp.browser_session(v_user);
+
     v_res := public.ingest_land_file(
       v_sup_project, v_user, 'csv', 'master', 'suppliers',
       'suppliers.csv', 'ingest', 'p/wp62/4.csv', 'text/csv', 128,
@@ -292,6 +303,7 @@ BEGIN
           'parsed', jsonb_build_object('supplier_id','S0002','name','Global Metals'),
           'findings', '[]'::jsonb)));
     v_sup_run := (v_res ->> 'run_id')::uuid;
+    PERFORM pg_temp.browser_session(v_user);
     v_res := public.ingest_apply_run(v_sup_run, v_user);
 
     IF (v_res ->> 'rows_promoted')::int <> 2 THEN
@@ -345,6 +357,7 @@ BEGIN
           'level','error','field','customer_id','code','required_blank','row',2,
           'message','Row 2, column "customer_id": required and blank.')))));
     v_bad_run := (v_res ->> 'run_id')::uuid;
+    PERFORM pg_temp.browser_session(v_user);
     v_res := public.ingest_apply_run(v_bad_run, v_user);
     IF (v_res ->> 'rows_promoted')::int <> 0 THEN
       RAISE EXCEPTION 'WP 6.2: a row with an error finding promoted % row(s); expected 0',

@@ -1,3 +1,5 @@
+import { validAiResolution } from "../_shared/capabilityResolution.ts";
+import { browserIdentity } from "../_shared/requestIdentity.ts";
 // project-ai-chat — the single conversational surface (Layer A) plus the
 // Stage 0 agent plumbing (ai-agents.md §9.1): telemetry, router seam,
 // server-side capability re-check. The legacy non-tools mode (anonymized
@@ -123,7 +125,18 @@ serve(async (req) => {
   } catch (_e) {
     return jsonResponse({ error: 'Invalid JSON body.', type: 'BAD_REQUEST' });
   }
-  const { projectId, message, conversationHistory, userId, userEmail, mode, model, agentId, threadId, threadMode } = body;
+  const identityClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+  const who = await browserIdentity(req, identityClient, { id: body.userId, email: body.userEmail }, typeof body.projectId === 'string' ? body.projectId : undefined);
+  if (who instanceof Response) return who;
+  const { projectId, message, conversationHistory, mode, model, agentId, threadId, threadMode } = body;
+  const userId = who.id, userEmail = who.email;
+  if (typeof threadId === 'string') {
+    const { data: thread, error } = await identityClient.from('chat_threads').select('user_id,project_id').eq('id', threadId).maybeSingle();
+    if (error || !thread || thread.user_id !== userId || (thread.project_id ?? null) !== (projectId ?? null)) {
+      return jsonResponse({ error: 'Thread unavailable.', type: 'FORBIDDEN' });
+    }
+  }
+
 
   // §17.3 suggested actions: mode:"suggest" is a deterministic, capability-
   // filtered project read — no LLM. Flag off ⇒ the request falls through to
@@ -137,10 +150,12 @@ serve(async (req) => {
       const sbClient = createClient(
         Deno.env.get('SUPABASE_URL') ?? '',
         Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+        { global: { headers: { Authorization: req.headers.get('authorization')! } } },
       );
       const sbAdmin = createClient(
         Deno.env.get('SUPABASE_URL') ?? '',
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+        { global: { headers: { Authorization: req.headers.get('authorization')! } } },
       );
       const { error: accessErr } = await sbClient.rpc('get_project_dataset_counts', {
         p_project_id: projectId,
@@ -150,7 +165,8 @@ serve(async (req) => {
       if (accessErr) {
         return jsonResponse({ error: "You don't have access to this project.", type: 'FORBIDDEN' });
       }
-      const { data: caps } = await sbAdmin.rpc('get_my_capabilities', { _user_id: userId });
+      const { data: caps, error: capsErr } = await sbAdmin.rpc('get_my_capabilities', { _user_id: userId });
+      if (capsErr || !validAiResolution(caps)) return jsonResponse({ error: 'Permissions unavailable.', type: 'FORBIDDEN' });
       const c = (caps ?? {}) as Record<string, unknown>;
       const features = (c.features as Record<string, boolean>) ?? {};
       const isSuper = Boolean(c.is_super_admin);
@@ -208,13 +224,15 @@ serve(async (req) => {
     // Initialize Supabase client
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: req.headers.get('authorization')! } } }
     );
 
     // Service-role client for internal tables (usage logs, telemetry, chat store).
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: req.headers.get('authorization')! } } }
     );
 
     // --- AI usage logging helper (fire-and-forget; never throws) ---
@@ -327,13 +345,13 @@ serve(async (req) => {
       const { data: caps, error: capsErr } = await supabaseAdmin.rpc('get_my_capabilities', {
         _user_id: userId,
       });
-      if (!capsErr && caps && typeof caps === 'object') {
+      if (!capsErr && validAiResolution(caps)) {
         const c = caps as Record<string, any>;
         capFeatures = (c.features as Record<string, boolean>) ?? {};
         const isSuper = Boolean(c.is_super_admin);
         capIsSuper = isSuper;
         if (!isSuper) {
-          if (c.features && c.features.ai_chat !== true) {
+          if (c.features?.ai_chat !== true) {
             return jsonResponse({
               error: "The AI assistant isn't enabled for your account. Contact an administrator.",
               type: 'FORBIDDEN',
@@ -348,7 +366,7 @@ serve(async (req) => {
               type: 'FORBIDDEN',
             });
           }
-          const b = c.budgets ?? {};
+          const b = c.budgets;
           const num = (v: unknown): number | null => (v == null ? null : Number(v));
           const monthly = num(b.monthly_usd), daily = num(b.daily_usd), rpd = num(b.rpd);
           const mtdCost = Number(b.mtd_cost_usd ?? 0), todayCost = Number(b.today_cost_usd ?? 0);
@@ -372,11 +390,11 @@ serve(async (req) => {
             });
           }
         }
-      } else if (capsErr) {
-        console.warn('[capability-recheck] resolver failed, proceeding:', capsErr.message);
+      } else {
+        return jsonResponse({ error: 'Permissions unavailable.', type: 'FORBIDDEN' });
       }
-    } catch (e) {
-      console.warn('[capability-recheck] failed, proceeding:', e instanceof Error ? e.message : e);
+    } catch {
+      return jsonResponse({ error: 'Permissions unavailable.', type: 'FORBIDDEN' });
     }
 
     const history = Array.isArray(conversationHistory)

@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- §4 D247 · CAPACITY: ORGANIZATION POOL + ROLE SHARE (WP 10.7).
 --
 -- §1 an under-share run is admitted, and its reservation is a ledger row naming
@@ -237,6 +238,7 @@ BEGIN
    WHERE id = (v_res ->> 'run_id')::uuid;
 
   -- ══ §9 · an organization's override of a role's share ══
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_role_allowance(v_super, 'r610s@example.invalid', v_org, 'analyst', 100, 25, 5);
   IF (public._capacity_state(v_proj, v_analyst) -> 'share' ->> 'max_concurrent')::int <> 5 THEN
     RAISE EXCEPTION 'R615 §9: the organization''s override did not replace the default: %',
@@ -294,11 +296,13 @@ BEGIN
     RAISE EXCEPTION 'R615 §12: the default period is not 90 days (%, %)',
       public.run_series_retention(v_proj), public.run_series_retention(v_proj3);
   END IF;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_org_capacity(v_super, 'r610s@example.invalid', v_org, 1000, 1000, 50, 10, 30);
   SELECT series_expires_at INTO v_exp FROM public.simulation_runs WHERE id = v_run3;
   IF v_exp IS NULL OR v_exp > now() + interval '31 days' OR v_exp < now() + interval '29 days' THEN
     RAISE EXCEPTION 'R615 §12: a 30-day plan did not re-date the organization''s standard runs (%)', v_exp;
   END IF;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_org_capacity(v_super, 'r610s@example.invalid', v_org, 1000, 1000, 50, 10, NULL);
   IF (SELECT series_expires_at FROM public.simulation_runs WHERE id = v_run3) IS NOT NULL
      OR public.run_series_retention(v_proj) IS NOT NULL THEN
@@ -312,7 +316,8 @@ BEGIN
      OR has_function_privilege('authenticated', 'public._storage_used(uuid,uuid)', 'EXECUTE') THEN
     RAISE EXCEPTION 'R615 §13: an internal capacity helper is an API door';
   END IF;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_analyst);
   v_res := public.get_my_capacity(v_proj, v_analyst);
   BEGIN
     SELECT count(*) INTO v_n FROM public.run_usage;
@@ -320,6 +325,7 @@ BEGIN
   END;
   v_state := NULL;
   BEGIN
+    PERFORM pg_temp.browser_session(v_owner);
     PERFORM public.admin_set_role_allowance(v_owner, 'r610o@example.invalid', v_org, 'viewer', 100, 100, NULL);
   EXCEPTION WHEN OTHERS THEN v_state := 'refused';
   END;

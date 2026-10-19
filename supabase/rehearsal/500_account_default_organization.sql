@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- §4 D216 · AN ACCOUNT'S DEFAULT ORGANIZATION — WHERE EVERY SIGN-IN LANDS.
 --
 -- Every claim below is about what the database DOES when the browser calls as `anon`
@@ -46,9 +47,11 @@ BEGIN
     (v_u2,    'M500 two',   'm500u2@example.invalid', extensions.crypt('pw-u2-1',    extensions.gen_salt('bf')), 'admin',       'M500 Org A', v_org_a);
 
   -- The browser's shape: no GUC, no session.
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_add_org_member(v_super, 'm500s@example.invalid', v_u1, v_org_b, NULL);
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_add_org_member(v_super, 'm500s@example.invalid', v_u1, v_org_h, NULL);
   RESET ROLE;
   -- One transaction stamps every membership with the same `joined_at`; make the DEFAULT
@@ -58,10 +61,11 @@ BEGIN
   UPDATE public.organization_members SET joined_at = now() - interval '1 day'  WHERE user_id = v_u1 AND org_id = v_org_h;
 
   -- ══ §1 · the verb ══
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
   v_msg := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_u2);
     PERFORM public.admin_set_default_org(v_u2, 'm500u2@example.invalid', v_u1, v_org_h);
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN RESET ROLE; v_msg := SQLERRM; END;
@@ -69,10 +73,11 @@ BEGIN
     RAISE EXCEPTION 'M500 §1: an app admin who is not a super admin set a default organization';
   END IF;
 
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
   v_msg := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_super);
     PERFORM public.admin_set_default_org(v_super, 'm500s@example.invalid', v_u1, v_org_s);
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN RESET ROLE; v_msg := SQLERRM; END;
@@ -80,9 +85,11 @@ BEGIN
     RAISE EXCEPTION 'M500 §1: a default outside the account''s organizations got %', COALESCE(v_msg, '(no error — it was set)');
   END IF;
 
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_default_org(v_super, 'm500s@example.invalid', v_u1, v_org_b);
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_default_org(v_super, 'm500s@example.invalid', v_u1, v_org_h);
   RESET ROLE;
   SELECT count(*) INTO v_n FROM public.organization_members WHERE user_id = v_u1 AND is_default;
@@ -109,8 +116,9 @@ BEGIN
   END IF;
 
   -- ══ §2 · sign-in lands in the default ══
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_u1);
   PERFORM public.switch_my_organization(v_org_b, v_u1);
   RESET ROLE;
   IF (SELECT organization_id FROM public.approved_users WHERE id = v_u1) IS DISTINCT FROM v_org_b THEN
@@ -118,8 +126,9 @@ BEGIN
   END IF;
   -- The account's FIRST sign-in in this file, so its `auth.sign_in` row is written here
   -- (the log keeps one per account per minute, and is append-only).
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE service_role;
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   SELECT count(*) INTO v_n FROM public.authenticate_approved_user('m500u1@example.invalid', 'pw-u1-1');
   RESET ROLE;
   IF v_n <> 1 THEN
@@ -137,7 +146,8 @@ BEGIN
     RAISE EXCEPTION 'M500 §2: the sign-in row does not record the move to the default';
   END IF;
   -- Already in the default: it stays.
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE service_role;
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   SELECT count(*) INTO v_n FROM public.authenticate_approved_user('m500u1@example.invalid', 'pw-u1-1');
   RESET ROLE;
   IF v_n <> 1 OR (SELECT organization_id FROM public.approved_users WHERE id = v_u1) IS DISTINCT FROM v_org_h THEN
@@ -148,19 +158,22 @@ BEGIN
   UPDATE public.organizations
      SET access_period = 'week', access_valid_from = now() - interval '7 days' - interval '1 second'
    WHERE id = v_org_h;
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE service_role;
   -- A switch INTO an ended organization is refused (D210), so move to A while Home is
   -- ended by the one path that can: sign-in's own fallback.
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   SELECT count(*) INTO v_n FROM public.authenticate_approved_user('m500u1@example.invalid', 'pw-u1-1');
   RESET ROLE;
   IF v_n <> 1 OR (SELECT organization_id FROM public.approved_users WHERE id = v_u1) IS DISTINCT FROM v_org_a THEN
     RAISE EXCEPTION 'M500 §3: with the default AND the active one ended, sign-in did not fall back to the earliest current (A): %, % row(s)',
       (SELECT organization FROM public.approved_users WHERE id = v_u1), v_n;
   END IF;
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE service_role;
+  PERFORM pg_temp.browser_session(v_u1);
   PERFORM public.switch_my_organization(v_org_b, v_u1);
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   SELECT count(*) INTO v_n FROM public.authenticate_approved_user('m500u1@example.invalid', 'pw-u1-1');
   RESET ROLE;
   IF v_n <> 1 OR (SELECT organization_id FROM public.approved_users WHERE id = v_u1) IS DISTINCT FROM v_org_b THEN
@@ -169,8 +182,9 @@ BEGIN
   UPDATE public.organizations SET access_period = NULL, access_valid_from = NULL WHERE id = v_org_h;
 
   -- ══ §4 · leaving the ACTIVE organization re-points to the default ══  (active B)
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_remove_org_member(v_super, 'm500s@example.invalid', v_u1, v_org_b);
   RESET ROLE;
   IF (SELECT organization_id FROM public.approved_users WHERE id = v_u1) IS DISTINCT FROM v_org_h THEN
@@ -179,14 +193,17 @@ BEGIN
   END IF;
 
   -- ══ §5 · the three reads agree ══
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_u1);
   SELECT count(*) INTO v_n FROM public.list_my_organizations(v_u1) WHERE is_default AND org_id = v_org_h;
   RESET ROLE;
+  PERFORM pg_temp.browser_session(v_u1);
   IF v_n <> 1 OR (SELECT count(*) FROM public.list_my_organizations(v_u1) WHERE is_default) <> 1 THEN
     RAISE EXCEPTION 'M500 §5: list_my_organizations does not mark exactly Home as the default';
   END IF;
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   v_out := public.admin_get_user_memberships(v_super, 'm500s@example.invalid', v_u1);
   RESET ROLE;
   IF v_out ->> 'default_organization_id' IS DISTINCT FROM v_org_h::text
@@ -194,8 +211,9 @@ BEGIN
           WHERE (e ->> 'is_default')::boolean AND e ->> 'id' = v_org_h::text) <> 1 THEN
     RAISE EXCEPTION 'M500 §5: admin_get_user_memberships does not name Home as the default: %', v_out -> 'organizations';
   END IF;
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   SELECT count(*) INTO v_n
     FROM public.admin_list_users(v_super, 'm500s@example.invalid') u,
          jsonb_array_elements(u.memberships) e
@@ -207,27 +225,33 @@ BEGIN
 
   -- ══ §6 · no default ══
   -- Removing the default membership removes the default with it.
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_add_org_member(v_super, 'm500s@example.invalid', v_u1, v_org_b, NULL);
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_remove_org_member(v_super, 'm500s@example.invalid', v_u1, v_org_h);
   RESET ROLE;
   IF EXISTS (SELECT 1 FROM public.organization_members WHERE user_id = v_u1 AND is_default) THEN
     RAISE EXCEPTION 'M500 §6: removing the default membership left a default';
   END IF;
   -- A NULL clears it.
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_default_org(v_super, 'm500s@example.invalid', v_u1, v_org_a);
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.admin_set_default_org(v_super, 'm500s@example.invalid', v_u1, NULL);
   RESET ROLE;
   IF EXISTS (SELECT 1 FROM public.organization_members WHERE user_id = v_u1 AND is_default) THEN
     RAISE EXCEPTION 'M500 §6: a NULL default did not clear it';
   END IF;
   -- With no default, sign-in keeps where the account last worked (before D216).
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE service_role;
+  PERFORM pg_temp.browser_session(v_u1);
   PERFORM public.switch_my_organization(v_org_b, v_u1);
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   SELECT count(*) INTO v_n FROM public.authenticate_approved_user('m500u1@example.invalid', 'pw-u1-1');
   RESET ROLE;
   IF v_n <> 1 OR (SELECT organization_id FROM public.approved_users WHERE id = v_u1) IS DISTINCT FROM v_org_b THEN

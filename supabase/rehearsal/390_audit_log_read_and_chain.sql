@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- Audit · D185, D186 — THE AUDIT LOG CAN BE READ, RECORDS SIGN-INS, AND IS TAMPER-EVIDENT.
 --
 -- Every claim below is about what the database DOES for a particular role or after a
@@ -46,14 +47,14 @@ BEGIN
     VALUES (v_project, 'A390 project', v_user, 'A390P');
 
   -- One admin-plane row, the way an /admin RPC writes it.
-  PERFORM set_config('app.current_user_id', v_super::text, true);
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.log_admin_action('org.update', 'organizations', gen_random_uuid()::text,
                                   '{"name":"old"}'::jsonb, '{"name":"new"}'::jsonb);
 
   -- One data-plane row: a tier-2 write by the ordinary user.
-  PERFORM set_config('app.current_user_id', v_user::text, true);
+  PERFORM pg_temp.browser_session(v_user);
   INSERT INTO public.suppliers (project_id, supplier_id) VALUES (v_project, 'A390-S1');
-  PERFORM set_config('app.current_user_id', '', true);
+  PERFORM pg_temp.database_maintenance();
 
   -- ══ §1 · the defect: anon reads the table directly and gets NOTHING ══
   SELECT relrowsecurity INTO v_rls_was FROM pg_class WHERE oid = 'public.audit_logs'::regclass;
@@ -74,7 +75,8 @@ BEGIN
   END IF;
 
   -- ══ §2 · the read, AS anon ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_super);
   v_out := public.admin_audit_log_read(v_super, 'a390s@example.invalid', now() - interval '1 day');
   RESET ROLE;
   IF NOT EXISTS (SELECT 1 FROM jsonb_array_elements(v_out -> 'rows') e
@@ -88,18 +90,21 @@ BEGIN
   END IF;
 
   -- The plane filter.
+  PERFORM pg_temp.browser_session(v_super);
   v_out := public.admin_audit_log_read(v_super, 'a390s@example.invalid', now() - interval '1 day', 'admin');
   IF EXISTS (SELECT 1 FROM jsonb_array_elements(v_out -> 'rows') e WHERE e ->> 'plane' <> 'admin') THEN
     RAISE EXCEPTION 'A390 §2: plane=admin returned another plane';
   END IF;
 
   -- The window: everything here was written at now(), so a window opening after it is empty.
+  PERFORM pg_temp.browser_session(v_super);
   v_out := public.admin_audit_log_read(v_super, 'a390s@example.invalid', now() + interval '1 second');
   IF (v_out ->> 'total')::int <> 0 THEN
     RAISE EXCEPTION 'A390 §2: a window opening after every row still returned %', v_out ->> 'total';
   END IF;
 
   -- The limit truncates rows, never the summary.
+  PERFORM pg_temp.browser_session(v_super);
   v_out := public.admin_audit_log_read(v_super, 'a390s@example.invalid', now() - interval '1 day', NULL, 1);
   IF jsonb_array_length(v_out -> 'rows') <> 1 OR (v_out ->> 'total')::int < 2 THEN
     RAISE EXCEPTION 'A390 §2: limit 1 returned % rows of total %', jsonb_array_length(v_out -> 'rows'), v_out ->> 'total';
@@ -111,7 +116,8 @@ BEGIN
   -- A reader who is not a super admin is refused, not emptied.
   v_code := NULL;
   BEGIN
-    SET LOCAL ROLE anon;
+    SET LOCAL ROLE authenticated;
+    PERFORM pg_temp.browser_session(v_user);
     PERFORM public.admin_audit_log_read(v_user, 'a390u@example.invalid', now() - interval '1 day');
     RESET ROLE;
   EXCEPTION WHEN OTHERS THEN
@@ -123,6 +129,7 @@ BEGIN
   END IF;
 
   -- ══ §3 · the data plane names its actor and its project ══
+  PERFORM pg_temp.browser_session(v_super);
   v_out := public.admin_audit_log_read(v_super, 'a390s@example.invalid', now() - interval '1 day', 'data');
   IF NOT EXISTS (SELECT 1 FROM jsonb_array_elements(v_out -> 'rows') e
                   WHERE e ->> 'target_type' = 'suppliers' AND e ->> 'action' = 'insert'
@@ -138,12 +145,14 @@ BEGIN
   END IF;
 
   -- ══ §4 · sign-ins ══
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE service_role;
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   SELECT count(*) INTO v_n FROM public.authenticate_approved_user('A390U@example.invalid', 'right-pw-2');
   RESET ROLE;
   IF v_n <> 1 THEN
     RAISE EXCEPTION 'A390 §4: a right password returned % rows — the login itself changed', v_n;
   END IF;
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   SELECT * INTO v_auth FROM public.authenticate_approved_user('a390u@example.invalid', 'right-pw-2');
   IF v_auth.user_id IS DISTINCT FROM v_user OR v_auth.user_role IS DISTINCT FROM 'user'
      OR v_auth.user_name IS DISTINCT FROM 'A390 user' THEN
@@ -155,6 +164,7 @@ BEGIN
     RAISE EXCEPTION 'A390 §4: two sign-ins inside a minute wrote % rows, expected 1 (throttle)', v_n;
   END IF;
 
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   SELECT count(*) INTO v_n FROM public.authenticate_approved_user('a390u@example.invalid', 'wrong');
   IF v_n <> 0 THEN
     RAISE EXCEPTION 'A390 §4: a wrong password returned % rows', v_n;
@@ -166,6 +176,7 @@ BEGIN
   END IF;
 
   SELECT count(*) INTO v_rows FROM public.audit_logs;
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
   PERFORM * FROM public.authenticate_approved_user('nobody-a390@example.invalid', 'x');
   IF (SELECT count(*) FROM public.audit_logs) <> v_rows THEN
     RAISE EXCEPTION 'A390 §4: an unknown address wrote an audit row — anyone could grow the log';
@@ -213,6 +224,7 @@ BEGIN
     RAISE EXCEPTION 'A390 §6: % row(s) left unsealed after their own insert',
       (SELECT count(*) FROM public.audit_logs WHERE seq IS NULL);
   END IF;
+  PERFORM pg_temp.browser_session(v_super);
   v_out := public.admin_audit_log_verify(v_super, 'a390s@example.invalid');
   IF NOT (v_out ->> 'ok')::boolean
      OR (v_out ->> 'checked')::bigint <> (SELECT count(*) FROM public.audit_logs)
@@ -226,18 +238,21 @@ BEGIN
   -- (a) an edited row
   SELECT id, seq INTO v_id, v_seq FROM public.audit_logs WHERE actor_user_id = v_super AND action = 'org.update';
   UPDATE public.audit_logs SET after = '{"name":"tampered"}'::jsonb WHERE id = v_id;
+  PERFORM pg_temp.browser_session(v_super);
   v_out := public.admin_audit_log_verify(v_super, 'a390s@example.invalid');
   IF (v_out ->> 'ok')::boolean OR (v_out -> 'first_break' ->> 'seq')::bigint <> v_seq
      OR v_out -> 'first_break' ->> 'reason' NOT LIKE '%edited%' THEN
     RAISE EXCEPTION 'A390 §6a: an edited row was not named: %', v_out;
   END IF;
   UPDATE public.audit_logs SET after = '{"name":"new"}'::jsonb WHERE id = v_id;
+  PERFORM pg_temp.browser_session(v_super);
   IF NOT (public.admin_audit_log_verify(v_super, 'a390s@example.invalid') ->> 'ok')::boolean THEN
     RAISE EXCEPTION 'A390 §6a: restoring the content did not restore the chain';
   END IF;
 
   -- (b) a row re-linked to hide what came before it
   UPDATE public.audit_logs SET prev_hash = repeat('f', 64) WHERE id = v_id;
+  PERFORM pg_temp.browser_session(v_super);
   v_out := public.admin_audit_log_verify(v_super, 'a390s@example.invalid');
   IF (v_out ->> 'ok')::boolean OR (v_out -> 'first_break' ->> 'seq')::bigint <> v_seq THEN
     RAISE EXCEPTION 'A390 §6b: a broken link was not named: %', v_out;
@@ -246,6 +261,7 @@ BEGIN
   -- (c) a deleted row, in the middle
   SELECT (v_out -> 'first_break' ->> 'seq')::bigint INTO v_seq;   -- keep the number for the message
   DELETE FROM public.audit_logs WHERE id = v_id;
+  PERFORM pg_temp.browser_session(v_super);
   v_out := public.admin_audit_log_verify(v_super, 'a390s@example.invalid');
   IF (v_out ->> 'ok')::boolean OR v_out -> 'first_break' ->> 'reason' NOT LIKE '%missing%' THEN
     RAISE EXCEPTION 'A390 §6c: a deleted row was not named: %', v_out;

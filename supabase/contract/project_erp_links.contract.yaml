@@ -34,6 +34,11 @@ governance:
   min_project_role: editor
   audited: false
   note: >-
+    D309/D310 candidate (not deployed): browser reads require a verified active
+    principal and scoped project/owner access. Anonymous tenant grants are revoked;
+    direct browser mutations are closed and authorized RPCs retain their own role gates.
+    The generated schema owns the exact policies; D310 owns live-grant evidence.
+    Historical context before this candidate:
     One FOR ALL policy — `has_project_access(project_id)` — so reading and
     writing a link are the same permission: whoever can administer the project
     can connect it to a source and disconnect it. That is deliberate and it is

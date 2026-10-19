@@ -25,14 +25,14 @@ export type UndescribedGroup = {
 };
 
 /** The contract version these figures came from. §6.4: a version, never a date. */
-export const CONTRACT_VERSION = "dcc3d4d8a285";
+export const CONTRACT_VERSION = "d11fbbefaac3";
 export const ENGINE_VERSION = "0.8.0";
-export const LAST_MIGRATION = "20261009000003_nexus_demand_at_risk.sql";
+export const LAST_MIGRATION = "20261019000010_api_scenario_actor.sql";
 
 export const COUNTS = {
-  "tablesInSchema": 94,
-  "tablesDescribed": 77,
-  "columnsDescribed": 1024,
+  "tablesInSchema": 95,
+  "tablesDescribed": 78,
+  "columnsDescribed": 1028,
   "tablesUndescribed": 17
 } as const;
 
@@ -321,7 +321,7 @@ export const TIERS: GlanceTier[] = [
       {
         "table": "recovery_playbooks",
         "grain": "One named recovery strategy a scenario can apply after a disruption — the levers, their order and their parameters. A system playbook (`is_system`, `project_id` NULL) ships with the product; a project playbook belongs to one project.",
-        "columns": 9,
+        "columns": 10,
         "owner": "engine"
       },
       {
@@ -345,7 +345,7 @@ export const TIERS: GlanceTier[] = [
       {
         "table": "experiments",
         "grain": "One designed experiment over a project: a name, a design (full factorial or Latin hypercube), the factors and levels it varies, and the `scenarios` it cloned — one per design row — to run. A design a person authors, grouping runs that were MADE to be compared. UNREACHABLE TODAY: the only screen that writes or reads it, `ExperimentDesigner.tsx`, is mounted by no route (§4 D115), so although `useExperiments` reads and writes the table, no page a user can open reaches that code.",
-        "columns": 10,
+        "columns": 11,
         "owner": "engine"
       },
       {
@@ -527,6 +527,12 @@ export const TIERS: GlanceTier[] = [
         "grain": "One row per analysis kind: which LEVEL of the graph it reads. The one place that is stated — `analysis_get_or_start` reads it to choose the hash a run is keyed on, so a price edit does not invalidate a centrality. What each kind's parameters mean is stated in `analysis_runs.contract.yaml`'s catalog; `analysisKindsParity.test.ts` fails when the two disagree about which kinds exist.",
         "columns": 6,
         "owner": "analysis"
+      },
+      {
+        "table": "browser_session_config",
+        "grain": "One deployment's accepted browser-session issuer; a singleton maintained before user traffic.",
+        "columns": 2,
+        "owner": "platform"
       },
       {
         "table": "risk_data",

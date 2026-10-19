@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- WP 3.3 · THE PROMOTION IS AN UPSERT THAT NORMALIZES AND LEAVES A TRAIL.
 --
 -- `070` proves WP 3.2's landing still behaves exactly as it did — it is run
@@ -59,11 +60,15 @@ BEGIN
                                      'lead_time', 4, 'unit_price', 5),
       'findings', '[]'::jsonb));
 
+  PERFORM pg_temp.browser_session(v_user);
+
   v_first := public.ingest_land_file(
     v_project, v_user, 'csv', 'transactional', 'inbound_logistics',
     'inbound.csv', 'ingest', 'p/wp33/1.csv', 'text/csv', 512,
     repeat('a', 64), v_rows);
   v_run1 := (v_first ->> 'run_id')::uuid;
+
+  PERFORM pg_temp.browser_session(v_user);
 
   v_first := public.ingest_apply_run(v_run1, v_user);
   IF (v_first ->> 'rows_promoted')::int <> 2 THEN
@@ -127,11 +132,14 @@ BEGIN
   SELECT array_agg(id ORDER BY supplier_id) INTO v_ids
     FROM public.inbound_logistics WHERE project_id = v_project;
 
+  PERFORM pg_temp.browser_session(v_user);
+
   v_second := public.ingest_land_file(
     v_project, v_user, 'csv', 'transactional', 'inbound_logistics',
     'inbound.csv', 'ingest', 'p/wp33/2.csv', 'text/csv', 512,
     repeat('a', 64), v_rows);
   v_run2 := (v_second ->> 'run_id')::uuid;
+  PERFORM pg_temp.browser_session(v_user);
   v_second := public.ingest_apply_run(v_run2, v_user);
 
   SELECT count(*) INTO v_n FROM public.inbound_logistics WHERE project_id = v_project;
@@ -175,6 +183,7 @@ BEGIN
   -- Two rows with the same natural key in ONE statement make `ON CONFLICT DO
   -- UPDATE` raise 21000, "cannot affect row a second time". Without `DISTINCT ON`
   -- the whole upload fails with an error naming nothing the uploader can act on.
+  PERFORM pg_temp.browser_session(v_user);
   v_second := public.ingest_land_file(
     v_project, v_user, 'csv', 'transactional', 'inbound_logistics',
     'repeats.csv', 'ingest', 'p/wp33/3.csv', 'text/csv', 512,
@@ -191,6 +200,7 @@ BEGIN
                                      'volume', 99, 'time_unit', 'week', 'lead_time', 1, 'unit_price', 1),
         'findings', '[]'::jsonb)));
   v_run2 := (v_second ->> 'run_id')::uuid;
+  PERFORM pg_temp.browser_session(v_user);
   v_second := public.ingest_apply_run(v_run2, v_user);
 
   IF (v_second ->> 'rows_superseded')::int <> 1 THEN
@@ -317,6 +327,8 @@ BEGIN
       public.ingest_target_natural_key('materials');
   END IF;
 
+  PERFORM pg_temp.browser_session(v_user);
+
   v_landed := public.ingest_land_file(
     v_project, v_user, 'csv', 'master', 'materials',
     'materials.csv', 'ingest', 'p/wp33m/1.csv', 'text/csv', 256,
@@ -329,6 +341,8 @@ BEGIN
         'parsed', jsonb_build_object('material_id','MAT-2','name','Gasket','cost', 2),
         'findings', '[]'::jsonb)));
   v_run := (v_landed ->> 'run_id')::uuid;
+
+  PERFORM pg_temp.browser_session(v_user);
 
   v_applied := public.ingest_apply_run(v_run, v_user);
   IF (v_applied ->> 'rows_promoted')::int <> 2 THEN
@@ -343,6 +357,7 @@ BEGIN
   END IF;
 
   -- The same file again: an upsert on the PRIMARY KEY, not two rows.
+  PERFORM pg_temp.browser_session(v_user);
   v_landed := public.ingest_land_file(
     v_project, v_user, 'csv', 'master', 'materials',
     'materials.csv', 'ingest', 'p/wp33m/2.csv', 'text/csv', 256,
@@ -351,6 +366,7 @@ BEGIN
       jsonb_build_object('source_row_number', 2, 'raw', '{}'::jsonb,
         'parsed', jsonb_build_object('material_id','MAT-1','name','Widget','cost', 9),
         'findings', '[]'::jsonb)));
+  PERFORM pg_temp.browser_session(v_user);
   v_applied := public.ingest_apply_run((v_landed ->> 'run_id')::uuid, v_user);
 
   SELECT count(*) INTO v_n FROM public.materials WHERE project_id = v_project;
@@ -403,6 +419,7 @@ BEGIN
   ALTER TABLE public.audit_logs DISABLE TRIGGER audit_logs_guard_change;
   DELETE FROM public.audit_logs WHERE plane = 'data';
   ALTER TABLE public.audit_logs ENABLE TRIGGER audit_logs_guard_change;
+  PERFORM pg_temp.browser_session(v_user);
   PERFORM public.assign_material_supplier(v_project, 'MAT-A', 'SUP-A', v_user, 'wp33d36@example.invalid');
 
   SELECT count(*) INTO v_n FROM public.inbound_logistics
@@ -424,6 +441,7 @@ BEGIN
   -- unique indexes owes every EXISTING writer this check: assigning a supplier
   -- that is already assigned must be a no-op, not a 23505 at a user who did
   -- nothing wrong.
+  PERFORM pg_temp.browser_session(v_user);
   PERFORM public.assign_material_supplier(v_project, 'MAT-A', 'SUP-A', v_user, 'wp33d36@example.invalid');
   SELECT count(*) INTO v_n FROM public.inbound_logistics
    WHERE project_id = v_project AND supplier_id = 'SUP-A' AND material_id = 'MAT-A';

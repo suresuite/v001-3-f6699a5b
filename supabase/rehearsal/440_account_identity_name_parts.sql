@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- Account · D209 — THE ACCOUNT HOLDER'S FIRST AND LAST NAME ARE A READING OF
 -- `approved_users.name`, NOT WRITABLE ON THEIR OWN, AND THE OWNER CAN CHANGE ONLY
 -- THEIR USER NAME.
@@ -62,9 +63,11 @@ BEGIN
   END IF;
 
   -- ══ §4 · the owner changes their user name, and only that ══
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.browser_session(v_user);
   PERFORM public.update_own_profile(p_display_name => '  gracie ', p_user_id => v_user);
+  PERFORM pg_temp.browser_session(v_user);
   SELECT * INTO v_row FROM public.get_my_profile(v_user);
   RESET ROLE;
   IF v_row.display_name IS DISTINCT FROM 'gracie' THEN

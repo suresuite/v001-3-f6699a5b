@@ -36,20 +36,24 @@ it rather than duplicating it.
 | | |
 |---|---|
 | Read capability | any project member |
-| Write capability | **no user-facing write path** |
+| Write capability | `data_edit_inputs` |
 | Minimum project role | `editor` |
 | Tier transitions audited | yes |
 | Row-level security | enabled |
-| Policies on the table | 2 — all carry a predicate |
+| Policies on the table | 6 — all carry a predicate |
 
-Two policies, both routed through the project's organization — `org_is_current_user_org(p.organization_id, p.organization)` for SELECT and the same predicate plus modeler-or-admin for writes. It is the dual-read shape WP 3.0 made uuid-only at the predicate (D29); the one remaining text branch is `organizations`' own read policy (D47, WP 6.2), not this one. `audited: true` SINCE WP 3.2, and the sequence is worth keeping. WP 2.3 instrumented twelve tier-2/3/4 tables and this was not among them, because nothing in the contract described it: `dataPlaneAudit.test.ts` requires the three triggers on every tier-2/3/4 table IN THE CONTRACT, so a table with no sidecar was outside the rule and nobody could see that its writes were unattributable. Writing this sidecar turned that gate red in the same session, and `20260916000016` is the gate being obeyed rather than a decision taken. It matters here more than most: `ingest_apply_run` promotes a CSV into this table, and a promotion into an unaudited table is the `audit-actor` hole this package exists to close.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; browser writes require `data_edit_inputs` on the project. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: Two policies, both routed through the project's organization — `org_is_current_user_org(p.organization_id, p.organization)` for SELECT and the same predicate plus modeler-or-admin for writes. It is the dual-read shape WP 3.0 made uuid-only at the predicate (D29); the one remaining text branch is `organizations`' own read policy (D47, WP 6.2), not this one. `audited: true` SINCE WP 3.2, and the sequence is worth keeping. WP 2.3 instrumented twelve tier-2/3/4 tables and this was not among them, because nothing in the contract described it: `dataPlaneAudit.test.ts` requires the three triggers on every tier-2/3/4 table IN THE CONTRACT, so a table with no sidecar was outside the rule and nobody could see that its writes were unattributable. Writing this sidecar turned that gate red in the same session, and `20260916000016` is the gate being obeyed rather than a decision taken. It matters here more than most: `ingest_apply_run` promotes a CSV into this table, and a promotion into an unaudited table is the `audit-actor` hole this package exists to close.
 
-<details><summary>2 RLS policies</summary>
+<details><summary>6 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| Tier2: organization access view | SELECT | all | `20260915000004_org_identity_dual_read.sql` |
-| Tier2: project access modify | ALL | all | `20260915000004_org_identity_dual_read.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_write | ALL | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_insert_fence | INSERT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_update_fence | UPDATE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
+| security_delete_fence | DELETE | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -305,6 +309,6 @@ The tier-1 staged row this was promoted from (WP 3.3). Its `source_row_number` i
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/tier2_suppliers.contract.yaml`, table created by `20250903080405_20fc5df9-f98e-4fa3-a7bd-98fc7a2e7d23.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

@@ -16,11 +16,16 @@ natural_key_unique:
 
 governance:
   read: project_member
-  write: project_member
+  write: simulation_lab
   min_project_role: editor
   audited: true
   rls_enabled: true
   note: >-
+    D309/D310 candidate (not deployed): browser reads require a verified active
+    principal and scoped project/owner access. Anonymous tenant grants are revoked;
+    browser writes require `simulation_lab` on the project.
+    The generated schema owns the exact policies; D310 owns live-grant evidence.
+    Historical context before this candidate:
     Tier 4 — the DECISION plane. These rows are what a person chose, as against
     the dataset they chose it over and the result it produced, which is why
     `result-binding` (I8) needs all three. Audited from WP 6.4: the three

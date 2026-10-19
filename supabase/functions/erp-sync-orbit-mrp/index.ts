@@ -1,3 +1,4 @@
+import { browserIdentity, requireProject, requireInternal } from "../_shared/requestIdentity.ts";
 // ERP/MRP connector — Phase 1 (single read-only connector pilot) + Phase 2
 // (scheduled sync + audit) for orbit-mrp, per
 // docs/design/erp-mrp-integration-plan.md (G18).
@@ -194,7 +195,7 @@ async function actionListCompanies(userToken: string) {
 async function actionLink(
   supabaseWithUserAuth: ReturnType<typeof createClient>,
   admin: ReturnType<typeof createClient>,
-  body: { project_id: string; external_company_id: string; external_company_name?: string; oauth_token: string },
+  body: { project_id: string; external_company_id: string; external_company_name?: string; oauth_token: string; verified_user_id: string },
 ) {
   const orbitBaseUrl = Deno.env.get("ORBIT_MRP_BASE_URL") ?? "";
   const client = new OrbitMrpClient(orbitBaseUrl, body.oauth_token);
@@ -204,8 +205,8 @@ async function actionLink(
     return json({ error: "Your orbit-mrp session does not have access to that company." }, 403);
   }
 
-  const { data: userRes } = await supabaseWithUserAuth.auth.getUser();
-  if (!userRes?.user) return json({ error: "Not authenticated" }, 401);
+  const userRes = { user: { id: body.verified_user_id } };
+  if (!userRes.user.id) return json({ error: "Not authenticated" }, 401);
 
   const tokenRef = `erp_link_${crypto.randomUUID()}`;
   // Store the token in Vault via the service-role client (never in a table
@@ -408,9 +409,9 @@ async function applyStagedRun(admin: ReturnType<typeof createClient>, runId: str
   return data as { run_id: string; rows_promoted: number; rows_updated: number };
 }
 
-async function actionApply(admin: ReturnType<typeof createClient>, supabaseWithUserAuth: ReturnType<typeof createClient>, body: { run_id: string }) {
-  const { data: userRes } = await supabaseWithUserAuth.auth.getUser();
-  if (!userRes?.user) return json({ error: "Not authenticated" }, 401);
+async function actionApply(admin: ReturnType<typeof createClient>, supabaseWithUserAuth: ReturnType<typeof createClient>, body: { run_id: string; verified_user_id: string }) {
+  const userRes = { user: { id: body.verified_user_id } };
+  if (!userRes.user.id) return json({ error: "Not authenticated" }, 401);
   // RLS on ingest_runs (via the run's own project_id) already refuses this select
   // if the caller lacks project access — fail-closed by construction.
   const { data: run, error } = await supabaseWithUserAuth.from("ingest_runs").select("id").eq("id", body.run_id).single();
@@ -444,13 +445,29 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
+    if (body.action === "run_due_schedules") {
+      try { requireInternal(req, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""); }
+      catch { return json({ error: "Access denied" }, 403); }
+      return await actionRunDueSchedules(admin);
+    }
+    const who = await browserIdentity(req, admin);
+    if (who instanceof Response) return who;
+    body.verified_user_id = who.id;
+    let projectId = body.project_id;
+    if (body.action === "sync" || body.action === "apply") {
+      const table = body.action === "sync" ? "project_erp_links" : "ingest_runs";
+      const { data, error } = await admin.from(table).select("project_id").eq("id", body.link_id ?? body.run_id).maybeSingle();
+      if (error || !data) return json({ error: "Access denied" }, 403);
+      projectId = data.project_id;
+    }
+    if (body.action !== "list_companies") await requireProject(admin, who, String(projectId ?? ""), "data_edit_inputs");
     switch (body.action) {
       case "list_companies":
         return await actionListCompanies(body.oauth_token);
       case "link":
         return await actionLink(supabaseWithUserAuth, admin, body);
       case "sync":
-        return await actionSync(admin, { link_id: body.link_id, triggered_by_user_id: (await supabaseWithUserAuth.auth.getUser()).data.user?.id });
+        return await actionSync(admin, { link_id: body.link_id, triggered_by_user_id: who.id });
       case "apply":
         return await actionApply(admin, supabaseWithUserAuth, body);
       case "run_due_schedules":

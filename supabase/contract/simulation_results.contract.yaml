@@ -32,6 +32,11 @@ governance:
   audited: false
   rls_enabled: true
   note: >-
+    D309/D310 candidate (not deployed): browser reads require a verified active
+    principal and scoped project/owner access. Anonymous tenant grants are revoked;
+    direct browser mutations are closed and authorized RPCs retain their own role gates.
+    The generated schema owns the exact policies; D310 owns live-grant evidence.
+    Historical context before this candidate:
     Two policies, both routed through the project's organization
     (`org_is_current_user_org(p.organization_id, p.organization)`, the WP 2.1
     dual-read shape): SELECT for any member of the project's organization, and

@@ -41,15 +41,16 @@ partially or get corrected — the write fails.
 | Minimum project role | `owner` |
 | Tier transitions audited | **no** — invariant `audit-actor` is not met here yet |
 | Row-level security | enabled |
-| Policies on the table | 1 — all carry a predicate |
+| Policies on the table | 2 — all carry a predicate |
 
-`write: null` is LITERAL and load-bearing. The table has a SELECT policy and NO insert/update/delete policy, so RLS denies writes by default and the SECURITY DEFINER RPCs are the only way in. That is not an oversight to be tidied up later: D28 says every policy here is PERMISSIVE and permissive policies OR, so a "deny writes" policy added beside anything else would deny nothing. The ABSENCE of a policy is the enforcement. `audited: false` — a membership change writes no audit row; WP 2.3 is where that becomes true, and this table is one of the reasons it matters. Since D211 the writers are the WP 3.4 owner trigger and `admin_set_project_member` / `admin_remove_project_member` (active super admin, /admin/users/:userId), which log to `admin_audit_logs` and refuse to change the project modeler's own row. Since D212 `admin_transfer_project` writes it too, because ownership is this row as well as `projects.modeler_id`: the owner becomes a standing `owner`, the previous owner's row is removed, and on an organization change so is the row of every account outside the target organization.
+D309/D310 candidate (not deployed): browser reads require a verified active principal and scoped project/owner access. Anonymous tenant grants are revoked; direct browser mutations are closed and authorized RPCs retain their own role gates. The generated schema owns the exact policies; D310 owns live-grant evidence. Historical context before this candidate: `write: null` is LITERAL and load-bearing. The table has a SELECT policy and NO insert/update/delete policy, so RLS denies writes by default and the SECURITY DEFINER RPCs are the only way in. That is not an oversight to be tidied up later: D28 says every policy here is PERMISSIVE and permissive policies OR, so a "deny writes" policy added beside anything else would deny nothing. The ABSENCE of a policy is the enforcement. `audited: false` — a membership change writes no audit row; WP 2.3 is where that becomes true, and this table is one of the reasons it matters. Since D211 the writers are the WP 3.4 owner trigger and `admin_set_project_member` / `admin_remove_project_member` (active super admin, /admin/users/:userId), which log to `admin_audit_logs` and refuse to change the project modeler's own row. Since D212 `admin_transfer_project` writes it too, because ownership is this row as well as `projects.modeler_id`: the owner becomes a standing `owner`, the previous owner's row is removed, and on an organization change so is the row of every account outside the target organization.
 
-<details><summary>1 RLS policy</summary>
+<details><summary>2 RLS policies</summary>
 
 | Policy | Command | Roles | Added by |
 |---|---|---|---|
-| project_members: read own and co-members | SELECT | all | `20260915000005_project_membership_and_delegation.sql` |
+| security_read | SELECT | authenticated | `20261019000002_project_scoped_rls.sql` |
+| security_read_fence | SELECT | PUBLIC | `20261019000002_project_scoped_rls.sql` |
 
 </details>
 
@@ -195,6 +196,6 @@ When it was last changed. Server-stamped by DEFAULT only; no trigger maintains i
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `d11fbbefaac3`, engine `0.8.0`,
 sidecar `supabase/contract/project_members.contract.yaml`, table created by `20260915000005_project_membership_and_delegation.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

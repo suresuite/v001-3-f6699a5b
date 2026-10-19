@@ -1,3 +1,4 @@
+import { browserIdentity, requireInternal, requireProject } from "../_shared/requestIdentity.ts";
 // report-render — the §16 file-workspace edge function (ai-agents.md §16.1
 // apply mapping, §16.2 retention law, §16.3 telemetry; v1.2 Phase 3).
 //
@@ -75,10 +76,16 @@ serve(async (req) => {
   const storage = (svc as any).storage;
 
   try {
+    if (action === "render" || action === "sweep") {
+      try { requireInternal(req, serviceKey); }
+      catch { return new Response(JSON.stringify({ error: "Access denied" }), { status: 403, headers: corsHeaders }); }
+    }
     // ── download: ownership check → 60-minute signed URL (§16.2) ────────────
     if (action === "download") {
       const fileId = typeof body.fileId === "string" ? body.fileId : null;
-      const userId = typeof body.userId === "string" ? body.userId : null;
+      const who = await browserIdentity(req, svc, { id: body.userId });
+      if (who instanceof Response) return who;
+      const userId = who.id;
       if (!fileId || !userId) {
         return jsonResponse({ error: "Missing required parameters: fileId, userId", type: "BAD_REQUEST" });
       }
@@ -92,6 +99,7 @@ serve(async (req) => {
         // Not-found and not-owned collapse into one answer — no existence oracle.
         return jsonResponse({ error: "File not found.", type: "NOT_FOUND" });
       }
+      if (file.project_id) await requireProject(svc, who, String(file.project_id));
       const { data: signed, error: signErr } = await storage
         .from("workspace")
         .createSignedUrl(String(file.path), SIGNED_URL_TTL_SECONDS);

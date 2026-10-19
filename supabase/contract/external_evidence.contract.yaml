@@ -24,6 +24,11 @@ governance:
   audited: true
   rls_enabled: true
   note: >-
+    D309/D310 candidate (not deployed): browser reads require a verified active
+    principal and scoped project/owner access. Anonymous tenant grants are revoked;
+    direct browser mutations are closed and authorized RPCs retain their own role gates.
+    The generated schema owns the exact policies; D310 owns live-grant evidence.
+    Historical context before this candidate:
     Tier 4 — the DECISION plane: what a person or an agent CHOSE, as against the dataset they
     chose it over and the result it produced. `result-binding` (I8) needs all three, which is
     why WP 6.3 keeps the results and this package takes the decisions. Audited from WP 6.4: the

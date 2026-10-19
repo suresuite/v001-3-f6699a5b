@@ -60,7 +60,6 @@ export function useExperiments(projectId: string | null | undefined) {
       status?: string;
     }): Promise<Experiment> => {
       if (!projectId) throw new Error("No project selected");
-      const { data: u } = await supabase.auth.getUser();
       const { data, error } = await sb
         .from("experiments")
         .insert({
@@ -70,7 +69,7 @@ export function useExperiments(projectId: string | null | undefined) {
           factors: input.factors,
           scenario_ids: input.scenario_ids,
           status: input.status ?? "running",
-          created_by: u.user?.id ?? null,
+          created_by: null,
         })
         .select()
         .single();

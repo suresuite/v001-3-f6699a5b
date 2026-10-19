@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- §4 D208 · DELETING AN ORGANIZATION DELETES ITS PROJECTS AND ITS ACCOUNTS — ALL OF
 -- IT OR NONE OF IT — AND IT IS NOT SUSPENSION.
 --
@@ -73,7 +74,9 @@ BEGIN
     (v_p, 'D208P', 'PR', 'MA', 2), (v_q, 'D208Q', 'PR', 'MA', 2);
   INSERT INTO public.inbound_logistics (project_id, plant_name, supplier_id, material_id, volume, time_unit) VALUES
     (v_p, 'D208P', 'SU', 'MA', 1, 'week'), (v_q, 'D208Q', 'SU', 'MA', 1, 'week');
+  PERFORM pg_temp.browser_session(v_mod);
   PERFORM public.combine_project_into_supply_chain(v_p, v_mod, 'd208m@example.invalid');
+  PERFORM pg_temp.browser_session(v_super);
   PERFORM public.combine_project_into_supply_chain(v_q, v_super, 'd208s@example.invalid');
 
   INSERT INTO public.network_nodes (project_id, plant_name, uid) VALUES (v_p, 'D208P', 'N1');
@@ -81,6 +84,7 @@ BEGIN
     VALUES (v_p, 'D208P', 'D208 profile') RETURNING id INTO v_prof;
   INSERT INTO public.disruption_scenario_settings (profile_id, key, value) VALUES (v_prof, 'k', '"v"');
   -- The modeler uploads a CSV into the doomed project: D161's shape, inside the scope.
+  PERFORM pg_temp.browser_session(v_mod);
   PERFORM public.ingest_land_file(v_p, v_mod, 'csv', 'master', 'customers',
     'd208.csv', 'ingest', 'd208/d208.csv', 'text/csv', 10, repeat('e', 64),
     jsonb_build_array(jsonb_build_object('source_row_number', 2,
@@ -102,6 +106,7 @@ BEGIN
 
   -- ══ §1 · refusals ══
   v_msg := NULL;
+  PERFORM pg_temp.browser_session(v_admin);
   BEGIN PERFORM public.admin_delete_organization(v_admin, 'd208a@example.invalid', v_doomed, v_slug);
   EXCEPTION WHEN OTHERS THEN v_msg := SQLERRM; END;
   IF v_msg IS DISTINCT FROM 'forbidden' THEN
@@ -109,6 +114,7 @@ BEGIN
   END IF;
 
   v_code := NULL;
+  PERFORM pg_temp.browser_session(v_super);
   BEGIN PERFORM public.admin_delete_organization(v_super, 'd208s@example.invalid', v_doomed, 'D208 Doomed');
   EXCEPTION WHEN OTHERS THEN v_code := SQLSTATE; END;
   IF v_code IS DISTINCT FROM '22023' THEN
@@ -116,6 +122,7 @@ BEGIN
   END IF;
 
   v_code := NULL;
+  PERFORM pg_temp.browser_session(v_super);
   BEGIN PERFORM public.admin_delete_organization(v_super, 'd208s@example.invalid', gen_random_uuid(), v_slug);
   EXCEPTION WHEN OTHERS THEN v_code := SQLSTATE; END;
   IF v_code IS DISTINCT FROM 'P0002' THEN
@@ -123,6 +130,7 @@ BEGIN
   END IF;
 
   v_msg := NULL;
+  PERFORM pg_temp.browser_session(v_super2);
   BEGIN PERFORM public.admin_delete_organization(v_super2, 'd208s2@example.invalid', v_doomed, v_slug);
   EXCEPTION WHEN OTHERS THEN v_msg := SQLERRM; END;
   IF v_msg IS NULL OR v_msg NOT LIKE '%your own organization%' THEN
@@ -130,6 +138,7 @@ BEGIN
   END IF;
 
   v_msg := NULL;
+  PERFORM pg_temp.browser_session(v_super);
   BEGIN PERFORM public.admin_delete_organization(v_super, 'd208s@example.invalid', v_doomed, v_slug);
   EXCEPTION WHEN OTHERS THEN v_msg := SQLERRM; END;
   IF v_msg IS NULL OR v_msg NOT LIKE '%super admin%' OR v_msg NOT LIKE '%d208s2@example.invalid%' THEN
@@ -154,6 +163,7 @@ BEGIN
   EXECUTE format('CREATE TRIGGER d208_refuse BEFORE DELETE ON public.organizations
     FOR EACH ROW WHEN (OLD.id = %L::uuid) EXECUTE FUNCTION pg_temp.d208_refuse()', v_doomed);
   v_msg := NULL;
+  PERFORM pg_temp.browser_session(v_super);
   BEGIN PERFORM public.admin_delete_organization(v_super, 'd208s@example.invalid', v_doomed, v_slug);
   EXCEPTION WHEN OTHERS THEN v_msg := SQLERRM; END;
   DROP TRIGGER d208_refuse ON public.organizations;
@@ -173,10 +183,11 @@ BEGIN
   END LOOP;
 
   -- ══ §3 · the delete ══
-  PERFORM set_config('app.current_user_id', '', true);   -- §4 must not read the setup's actor
+  PERFORM pg_temp.database_maintenance();   -- §4 must not read the setup's actor
   -- §4 reads only what the delete wrote: the setup's lane inserts fire the D142 rebuild,
   -- whose own deletes carry the setup's actor, and `created_at` is transaction start.
   SELECT COALESCE(max(seq), 0) INTO v_seq FROM public.audit_logs;
+  PERFORM pg_temp.browser_session(v_super);
   v_out := public.admin_delete_organization(v_super, 'd208s@example.invalid', v_doomed, v_slug);
   IF (v_out->>'projects')::int <> 2 OR (v_out->>'users')::int <> 2 THEN
     RAISE EXCEPTION 'D208/430 §3: expected 2 projects and 2 accounts deleted, the function reported %', v_out;

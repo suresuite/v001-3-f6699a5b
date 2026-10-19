@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- §4 D257 · `project_freshness` NAMES ITS READER — `20261001000018`.
 --
 -- The browser calls as `anon`, and no session says who it is (D155). `project_freshness`
@@ -62,12 +63,13 @@ DECLARE
   v_who  uuid;
   v_out  jsonb;
 BEGIN
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
   FOREACH v_who IN ARRAY ARRAY[
       '00000000-0000-4000-8000-000000025711'::uuid,   -- owner
       '00000000-0000-4000-8000-000000025712'::uuid,   -- admin
       '00000000-0000-4000-8000-000000025713'::uuid]   -- super_admin
   LOOP
+    PERFORM pg_temp.browser_session(v_who);
     v_out := public.project_freshness(p_project_id => v_proj, p_user_id => v_who);
     IF (v_out ->> 'project_id')::uuid IS DISTINCT FROM v_proj OR NOT (v_out ? 'tables') THEN
       RAISE EXCEPTION 'D257/650 §2: the answer for % is not a freshness payload: %', v_who, v_out;
@@ -76,7 +78,7 @@ BEGIN
   RESET ROLE;
 
   -- ── §3 · still refused for a reader who may not see the project ──
-  SET LOCAL ROLE anon;
+  SET LOCAL ROLE authenticated;
   BEGIN
     PERFORM public.project_freshness(p_project_id => v_proj,
               p_user_id => '00000000-0000-4000-8000-000000025714');
@@ -92,8 +94,8 @@ END $d257b$;
 -- so "nothing set" is true rather than assumed.
 DO $d257c$
 BEGIN
-  PERFORM set_config('app.current_user_id', '', true);
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.database_maintenance();
+  SET LOCAL ROLE authenticated;
   BEGIN
     PERFORM public.project_freshness(p_project_id => '00000000-0000-4000-8000-000000025721');
     RAISE EXCEPTION 'D257/650 §4: an unnamed anon caller was answered';
@@ -106,7 +108,7 @@ END $d257c$;
 -- ── §5 · naming no one does not blank an actor already set ──
 DO $d257d$
 BEGIN
-  PERFORM set_config('app.current_user_id', '00000000-0000-4000-8000-000000025711', true);
+  PERFORM pg_temp.browser_session('00000000-0000-4000-8000-000000025711');
   PERFORM public.project_freshness(p_project_id => '00000000-0000-4000-8000-000000025721');
   PERFORM public.project_freshness('00000000-0000-4000-8000-000000025721');
 END $d257d$;

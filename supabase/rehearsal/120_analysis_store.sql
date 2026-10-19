@@ -1,3 +1,4 @@
+\ir helpers/verified-session.sql
 -- WP 4.2 · THE ANALYSIS STORE — A REPEAT REQUEST ON AN UNCHANGED PROJECT IS A
 -- HIT, AND THE RUN THAT PRODUCED IT NAMES ITS ACTOR.
 --
@@ -88,6 +89,9 @@ BEGIN
   INSERT INTO public.projects (id, name, modeler_id, plant_name)
     VALUES (v_project, 'WP42 analysis store', v_owner, 'WP42P');
 
+  INSERT INTO public.project_members(project_id,user_id,project_role) VALUES
+    (v_project,v_editor,'editor'),(v_project,v_analyst,'analyst') ON CONFLICT(project_id,user_id) DO UPDATE SET project_role=EXCLUDED.project_role;
+
   -- Tier-2 input rows, so the project has a non-empty `hash_inputs` to key on.
   INSERT INTO public.suppliers (project_id, supplier_id) VALUES (v_project, 'S1');
   INSERT INTO public.materials (project_id, material_id, cost) VALUES (v_project, 'M1', 10);
@@ -107,6 +111,7 @@ BEGIN
   -- not create a second one. On `main` this section never reaches here.
 
   PERFORM set_config('app.current_user_id', v_analyst::text, true);  -- POISON
+  PERFORM pg_temp.browser_session(v_editor);
   v_r1 := public.analysis_get_or_start(
             v_project, 'network_metrics', '{"weighted": true}'::jsonb, 'nm@1', v_editor);
 
@@ -118,6 +123,7 @@ BEGIN
   v_run1 := (v_r1 ->> 'run_id')::uuid;
 
   -- The caller computes here. The store's contract is that it claimed the key.
+  PERFORM pg_temp.browser_session(v_editor);
   PERFORM public.analysis_complete_run(
     v_run1,
     '[{"entity_type":"node","entity_id":"S1","metrics":{"degree":0.5}},
@@ -125,6 +131,7 @@ BEGIN
     '{"nodes": 2}'::jsonb, '[]'::jsonb, v_editor);
 
   PERFORM set_config('app.current_user_id', v_analyst::text, true);  -- POISON
+  PERFORM pg_temp.browser_session(v_editor);
   v_r2 := public.analysis_get_or_start(
             v_project, 'network_metrics', '{"weighted": true}'::jsonb, 'nm@1', v_editor);
 
@@ -182,6 +189,7 @@ BEGIN
   END IF;
 
   PERFORM set_config('app.current_user_id', v_analyst::text, true);  -- POISON
+  PERFORM pg_temp.browser_session(v_editor);
   v_r3 := public.analysis_get_or_start(
             v_project, 'network_metrics', '{"weighted": true}'::jsonb, 'nm@1', v_editor);
 
@@ -204,6 +212,8 @@ BEGIN
       v_r3 ->> 'input_hash', v_r3 ->> 'input_scope', public.current_level_hash(v_project, v_r3 ->> 'input_scope');
   END IF;
 
+  PERFORM pg_temp.browser_session(v_editor);
+
   PERFORM public.analysis_complete_run(
     v_run2, '[{"entity_type":"node","entity_id":"S1","metrics":{"degree":0.75}}]'::jsonb,
     '{"nodes": 1}'::jsonb, '[]'::jsonb, v_editor);
@@ -225,6 +235,7 @@ BEGIN
   END IF;
 
   PERFORM set_config('app.current_user_id', v_analyst::text, true);  -- POISON
+  PERFORM pg_temp.browser_session(v_editor);
   v_r4 := public.analysis_get_or_start(
             v_project, 'network_metrics', '{"weighted": true}'::jsonb, 'nm@1', v_editor);
 
@@ -252,6 +263,7 @@ BEGIN
   -- answer: both are true, each about its own code.
 
   PERFORM set_config('app.current_user_id', v_analyst::text, true);  -- POISON
+  PERFORM pg_temp.browser_session(v_editor);
   v_r1 := public.analysis_get_or_start(
             v_project, 'network_metrics', '{"weighted": true}'::jsonb, 'nm@2', v_editor);
   IF (v_r1 ->> 'cache_hit')::boolean IS DISTINCT FROM false THEN
@@ -260,6 +272,7 @@ BEGIN
       'the key precisely so a changed analyzer does not serve its predecessor''s '
       'answer.';
   END IF;
+  PERFORM pg_temp.browser_session(v_editor);
   PERFORM public.analysis_complete_run(
     (v_r1 ->> 'run_id')::uuid,
     '[{"entity_type":"node","entity_id":"S1","metrics":{"degree":0.5}}]'::jsonb,
@@ -267,6 +280,7 @@ BEGIN
 
   -- The `nm@1` answer is still there and still reachable.
   PERFORM set_config('app.current_user_id', v_analyst::text, true);  -- POISON
+  PERFORM pg_temp.browser_session(v_editor);
   v_r2 := public.analysis_get_or_start(
             v_project, 'network_metrics', '{"weighted": true}'::jsonb, 'nm@1', v_editor);
   IF (v_r2 ->> 'run_id')::uuid IS DISTINCT FROM v_run1
@@ -279,6 +293,7 @@ BEGIN
 
   -- Params are part of the key too, on the same argument.
   PERFORM set_config('app.current_user_id', v_analyst::text, true);  -- POISON
+  PERFORM pg_temp.browser_session(v_editor);
   v_r3 := public.analysis_get_or_start(
             v_project, 'network_metrics', '{"weighted": false}'::jsonb, 'nm@1', v_editor);
   IF (v_r3 ->> 'cache_hit')::boolean IS DISTINCT FROM false THEN
@@ -287,9 +302,11 @@ BEGIN
   -- …and jsonb key ORDER is not part of it, because a caller writing the same
   -- params differently must not miss. `jsonb` normalises key order, which is
   -- why the hash is taken over `jsonb` and never over the text a caller sent.
+  PERFORM pg_temp.browser_session(v_editor);
   PERFORM public.analysis_complete_run(
     (v_r3 ->> 'run_id')::uuid, '[]'::jsonb, '{}'::jsonb, '[]'::jsonb, v_editor);
   PERFORM set_config('app.current_user_id', v_analyst::text, true);  -- POISON
+  PERFORM pg_temp.browser_session(v_editor);
   v_r4 := public.analysis_get_or_start(
             v_project, 'network_metrics', '{"weighted": false}'::jsonb, 'nm@1', v_editor);
   IF (v_r4 ->> 'cache_hit')::boolean IS DISTINCT FROM true THEN
@@ -305,6 +322,7 @@ BEGIN
   -- RPC setting it (§16 · WP 4.1 · E is what happens when it is not poisoned).
 
   PERFORM set_config('app.current_user_id', v_analyst::text, true);  -- POISON
+  PERFORM pg_temp.browser_session(v_editor);
   v_r1 := public.analysis_get_or_start(
             v_project, 'prominence', '{}'::jsonb, 'pr@1', v_editor);
 
@@ -361,10 +379,11 @@ BEGIN
   -- A run that cannot name its actor is refused outright, the way
   -- `assert_writer_may_act` refuses one (WP 4.1's `20260917000005`).
   BEGIN
+    PERFORM pg_temp.browser_session(NULL);
     PERFORM public.analysis_get_or_start(
       v_project, 'prominence', '{}'::jsonb, 'pr@1', NULL);
     RAISE EXCEPTION 'WP 4.2 §5 — a NULL actor was accepted.';
-  EXCEPTION WHEN null_value_not_allowed THEN
+  EXCEPTION WHEN insufficient_privilege THEN
     NULL;  -- the expected refusal
   END;
 
@@ -407,8 +426,10 @@ BEGIN
 
   v_hash1 := public.current_graph_hash(v_project);
   PERFORM set_config('app.current_user_id', v_analyst::text, true);  -- POISON
+  PERFORM pg_temp.browser_session(v_editor);
   v_r2 := public.analysis_get_or_start(
             v_project, 'critical_nodes', '{}'::jsonb, 'cn@1', v_editor);
+  PERFORM pg_temp.browser_session(v_editor);
   PERFORM public.analysis_complete_run(
     (v_r2 ->> 'run_id')::uuid,
     '[{"entity_type":"node","entity_id":"S1","metrics":{"critical":true}}]'::jsonb,
@@ -454,8 +475,10 @@ BEGIN
   -- free.
 
   PERFORM set_config('app.current_user_id', v_analyst::text, true);  -- POISON
+  PERFORM pg_temp.browser_session(v_editor);
   v_r1 := public.analysis_get_or_start(
             v_project, 'lead_time_fit', '{}'::jsonb, 'lt@1', v_editor);
+  PERFORM pg_temp.browser_session(v_editor);
   PERFORM public.analysis_fail_run((v_r1 ->> 'run_id')::uuid, '["boom"]'::jsonb, v_editor);
 
   -- the failure is KEPT
@@ -470,6 +493,7 @@ BEGIN
 
   -- …and the key is FREE, so the retry can claim it
   PERFORM set_config('app.current_user_id', v_analyst::text, true);  -- POISON
+  PERFORM pg_temp.browser_session(v_editor);
   v_r2 := public.analysis_get_or_start(
             v_project, 'lead_time_fit', '{}'::jsonb, 'lt@1', v_editor);
   IF (v_r2 ->> 'run_id')::uuid IS NOT DISTINCT FROM (v_r1 ->> 'run_id')::uuid THEN
@@ -480,11 +504,13 @@ BEGIN
       'WP 4.2 §9 — the retry after a failure reported cache_hit=%; a failed run '
       'holds no answer and must never be served as one.', v_r2 ->> 'cache_hit';
   END IF;
+  PERFORM pg_temp.browser_session(v_editor);
   PERFORM public.analysis_complete_run((v_r2 ->> 'run_id')::uuid, '[]'::jsonb, '{}'::jsonb, '[]'::jsonb, v_editor);
 
   -- A run is finished ONCE. Completing a completed run would rewrite an answer
   -- through the front door, which sections 6 and 9 exist together to prevent.
   BEGIN
+    PERFORM pg_temp.browser_session(v_editor);
     PERFORM public.analysis_complete_run((v_r2 ->> 'run_id')::uuid, '[]'::jsonb, '{}'::jsonb, '[]'::jsonb, v_editor);
     RAISE EXCEPTION 'WP 4.2 §9 — a succeeded run was completed a second time.';
   EXCEPTION WHEN sqlstate 'P0A01' THEN
@@ -504,6 +530,7 @@ BEGIN
   -- cannot be written here and is `scripts/wp42-concurrency.mjs`.
 
   PERFORM set_config('app.current_user_id', v_analyst::text, true);  -- POISON
+  PERFORM pg_temp.browser_session(v_editor);
   v_r1 := public.analysis_get_or_start(
             v_project, 'inflight', '{}'::jsonb, 'if@1', v_editor);   -- claims, does NOT complete
   IF (v_r1 ->> 'cache_hit')::boolean IS DISTINCT FROM false THEN
@@ -511,6 +538,7 @@ BEGIN
   END IF;
 
   PERFORM set_config('app.current_user_id', v_analyst::text, true);  -- POISON
+  PERFORM pg_temp.browser_session(v_editor);
   v_r2 := public.analysis_get_or_start(
             v_project, 'inflight', '{}'::jsonb, 'if@1', v_editor);   -- asks again, mid-flight
   IF (v_r2 ->> 'cache_hit')::boolean IS DISTINCT FROM false THEN

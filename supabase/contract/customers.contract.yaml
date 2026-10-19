@@ -42,11 +42,16 @@ natural_key_intended: [project_id, customer_id]
 
 governance:
   read: project_member
-  write: project_modeler_or_admin
+  write: data_edit_inputs
   min_project_role: editor
   audited: true
   rls_enabled: true
   note: >-
+    D309/D310 candidate (not deployed): browser reads require a verified active
+    principal and scoped project/owner access. Anonymous tenant grants are revoked;
+    browser writes require `data_edit_inputs` on the project.
+    The generated schema owns the exact policies; D310 owns live-grant evidence.
+    Historical context before this candidate:
     Adopted with RLS enabled and no `anon` policy. The logistics lanes carry an
     `*_anon_read` policy because the public network pages render them (D28, a
     standing decision); nothing reads this table at all, so there was no reader

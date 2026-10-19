@@ -33,6 +33,11 @@ governance:
   audited: true
   rls_enabled: true
   note: >-
+    D309/D310 candidate (not deployed): browser reads require a verified active
+    principal and scoped project/owner access. Anonymous tenant grants are revoked;
+    direct browser mutations are closed and authorized RPCs retain their own role gates.
+    The generated schema owns the exact policies; D310 owns live-grant evidence.
+    Historical context before this candidate:
     Read follows the parent run's project reachability. No write policy and no
     user-facing write path: rows arrive only through `analysis_complete_run`.
     APPEND-ONLY AS A PROPERTY OF THE SCHEMA — `analysis_results_are_immutable`
