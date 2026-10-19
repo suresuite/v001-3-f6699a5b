@@ -3,7 +3,16 @@
 -- app.* value authenticates a browser. Service requests are a separate, signed role.
 CREATE OR REPLACE FUNCTION public.security_is_service()
 RETURNS boolean LANGUAGE sql STABLE SET search_path = public AS $$
-  SELECT COALESCE((NULLIF(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role') = 'service_role', false);
+  SELECT
+    (COALESCE(NULLIF(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role', '') = 'service_role'
+      AND current_setting('role', true) IN ('none', 'service_role'))
+    OR (
+      -- Management migrations/jobs authenticate as an actual database superuser,
+      -- not as PostgREST's authenticator. This is never an HTTP/GUC identity path.
+      COALESCE(NULLIF(current_setting('request.jwt.claims', true), '')::jsonb, '{}'::jsonb) = '{}'::jsonb
+      AND current_setting('role', true) = 'none'
+      AND EXISTS (SELECT 1 FROM pg_roles WHERE rolname = session_user AND rolsuper)
+    );
 $$;
 
 CREATE OR REPLACE FUNCTION public.get_current_user_id()

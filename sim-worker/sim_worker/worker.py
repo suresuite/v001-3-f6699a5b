@@ -932,7 +932,7 @@ class SimWorker:
                     "topic": f"sim:{project_id}",
                     "event": event,
                     "payload": payload,
-                    "private": False,
+                    "private": True,
                 }]},
             )
             if r.status_code >= 300:

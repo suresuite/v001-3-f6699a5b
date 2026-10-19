@@ -305,7 +305,7 @@ function emitRls(artifact) {
     }
 
     for (const p of rls.policies || []) {
-      const to = p.roles && p.roles.length ? ` TO ${p.roles.map(q).join(", ")}` : "";
+      const to = p.roles && p.roles.length ? ` TO ${p.roles.map(r => r.toLowerCase() === "public" ? "PUBLIC" : q(r)).join(", ")}` : "";
       const bits = [
         `CREATE POLICY ${q(p.name)} ON ${q(t.schema)}.${q(t.name)}${p.permissive === false ? " AS RESTRICTIVE" : ""}`,
         `  FOR ${p.command || "ALL"}${to}`,

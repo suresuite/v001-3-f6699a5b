@@ -95,6 +95,14 @@ BEGIN
   PERFORM pg_temp.security_session(super_id);
   PERFORM public._assert_super_admin(super_id,'security-super@example.invalid');
 
+  -- Direct database maintenance is a separate authenticated superuser path.
+  -- Dropping SQL role to authenticated must not inherit that privilege.
+  PERFORM set_config('request.jwt.claims','{}',true);
+  IF NOT public.security_is_service() THEN RAISE EXCEPTION 'Direct database maintenance lost authority'; END IF;
+  SET LOCAL ROLE authenticated;
+  IF public.security_is_service() THEN RAISE EXCEPTION 'SQL authenticated role inherited maintenance authority'; END IF;
+  RESET ROLE;
+
   -- Anonymous callers cannot use asserted actors, even with a populated GUC.
   PERFORM set_config('request.jwt.claims','{"role":"anon"}',true);
   PERFORM set_config('app.current_user_id',owner_id::text,true);
