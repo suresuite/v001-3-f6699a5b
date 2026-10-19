@@ -1,3 +1,5 @@
+import { authorizeCommand } from "../_shared/authorizeCommand.ts";
+import { AccessDenied } from "../_shared/verifiedSession.ts";
 // sim-command: low-latency entry point for scenario simulation + experiment commands.
 // - Validates the incoming command (RLS-aware via the caller's JWT)
 // - Publishes it to an Upstash Redis Stream for the Fly.io sim-worker
@@ -85,7 +87,7 @@ async function broadcast(channel: string, event: string, payload: unknown) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      messages: [{ topic: channel, event, payload, private: false }],
+      messages: [{ topic: channel, event, payload, private: true }],
     }),
   });
   if (!res.ok) {
@@ -108,16 +110,6 @@ Deno.serve(async (req) => {
     const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
     });
-    // This app authenticates through the approved_users RPC flow and always
-    // invokes functions with the platform-verified anon JWT — there is no
-    // Supabase Auth session (see migration 20260610000002). Use the auth
-    // user when one exists (future Supabase Auth migration keeps working),
-    // otherwise proceed with the anon identity, matching the RLS posture of
-    // the rest of the data layer. created_by stays an auth.users id (FK),
-    // so it is null for app users.
-    const { data: userData } = await sb.auth.getUser();
-    const authUserId: string | null = userData?.user?.id ?? null;
-
     const parsed = CommandSchema.safeParse(await req.json());
     if (!parsed.success) {
       return new Response(JSON.stringify({ error: parsed.error.flatten() }), {
@@ -127,26 +119,15 @@ Deno.serve(async (req) => {
     }
     const cmd = parsed.data;
 
-    // Existence check via service role: projects RLS is scoped to the
-    // custom approved_users context, which a pooled PostgREST connection
-    // never carries — an anon-context select returns zero rows even for
-    // valid projects (the frontend reads projects through the
-    // list_projects SECURITY DEFINER RPC for the same reason). In this
-    // app access control lives in that RPC layer, not here. The public
-    // /v1 gateway adds the per-caller tenancy check the browser path
-    // gets from the RPC layer (API design doc §6.2).
     const svc = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const { data: project, error: projErr } = await svc
-      .from("projects")
-      .select("id")
-      .eq("id", cmd.project_id)
-      .maybeSingle();
-    if (projErr || !project) {
-      return new Response(JSON.stringify({ error: "project not found" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const who = await authorizeCommand(req, cmd, svc, {
+      secret: cleanEnv("APP_SESSION_JWT_SECRET") ?? "", url: SUPABASE_URL,
+    }, async (table, id) => {
+      const { data, error } = await svc.from(table).select("project_id").eq("id", id).maybeSingle();
+      return error ? null : data?.project_id ?? null;
+    });
+    const authUserId = who.id;
+    cmd.payload.actor_user_id = who.id;
 
     if (cmd.kind === "run.series_url") {
       const runId = String((cmd.payload as Record<string, unknown>).run_id ?? "");
@@ -280,7 +261,7 @@ Deno.serve(async (req) => {
   } catch (err) {
     console.error("sim-command error", err);
     return new Response(JSON.stringify({ error: String(err) }), {
-      status: 500,
+      status: err instanceof AccessDenied ? err.status : 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

@@ -1,6 +1,6 @@
 {
   "inspected_commit": "32aa35b8f4f525ce9c75c49685d0866803840af3",
-  "scope": "Source review and isolated local execution; not a deployment audit.",
+  "scope": "Source review and isolated local execution; D309\u2013D312 candidate, not a deployment audit. Roles/capabilities claims reviewed against the authorization boundary; release blockers remain in PLAN.md \u00a716.",
   "sources": [
     {
       "path": "src/components/UploadWizard.tsx",
@@ -72,13 +72,13 @@
       "path": "supabase/functions/sim-command/index.ts",
       "symbols": "Deno.serve authorization and project check",
       "manual_page": "roles-and-capabilities",
-      "sha256": "9eeaf77106f6c34814de0346b76af532ef883b56ccd4331a991ed157117ae4be"
+      "sha256": "bf6dbf2e7f5e8317081328b385e7c22ff4e30bfd86c39db7fc7e2de8b141b380"
     },
     {
       "path": "supabase/functions/_shared/dispatch.ts",
       "symbols": "dispatchExperimentRun",
       "manual_page": "roles-and-capabilities",
-      "sha256": "ab355628adac0125571a5cccdccbd4cb5291412ebefe735a5d7d5cffe6d2537a"
+      "sha256": "af80cb14c362c91c5e2dd68f7d0cb3c7b7f91b173c975e184d6df3eb142f83a2"
     },
     {
       "path": "supabase/migrations/20261002000007_project_role_decides.sql",

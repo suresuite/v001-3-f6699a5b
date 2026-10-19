@@ -1,3 +1,4 @@
+import { browserIdentity } from "../_shared/requestIdentity.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.55.0';
@@ -46,6 +47,9 @@ serve(async (req) => {
       }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
     const projectId = projectIds[0] as string;
+    const who = await browserIdentity(req, supabase, { id: userId, email: userEmail }, projectId, "data_edit_inputs");
+    if (who instanceof Response) return who;
+
 
     // Basic validation + normalize payload to only allowed columns
     const sanitized = rows.map((r: any) => ({

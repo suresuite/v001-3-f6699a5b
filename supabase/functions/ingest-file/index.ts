@@ -1,3 +1,4 @@
+import { browserIdentity, requireProject } from "../_shared/requestIdentity.ts";
 // Phase 3 / WP 3.2 / §8.1–8.4 — `ingest-file`: THE SERVER-SIDE PARSE.
 //
 // Upload → tier 0 + a run → parse → contract-driven validation → tier 1 → the
@@ -75,7 +76,10 @@ serve(async (req) => {
     const file = form.get("file");
     const dataset = String(form.get("dataset") ?? "");
     const projectId = String(form.get("project_id") ?? "");
-    const userId = String(form.get("user_id") ?? "");
+    const identityClient = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "");
+    const who = await browserIdentity(req, identityClient, { id: form.get("user_id") ?? undefined });
+    if (who instanceof Response) return who;
+    const userId = who.id;
     // THREE MODES, AND WP 3.4 CHANGED WHAT THE MIDDLE ONE DOES.
     //
     //   `parse`  — returns the parsed rows and lands nothing. It exists for the
@@ -95,6 +99,14 @@ serve(async (req) => {
     //              no file.
     const mode = String(form.get("mode") ?? "land");
 
+    let authorizedProject = projectId;
+    if (mode === "apply" || mode === "diff") {
+      const { data, error } = await identityClient.from("ingest_runs").select("project_id").eq("id", String(form.get("run_id") ?? "")).maybeSingle();
+      if (error || !data || (projectId && data.project_id !== projectId)) return json({ error: "Access denied" }, 403);
+      authorizedProject = data.project_id;
+    }
+    if (!authorizedProject) return json({ error: "Missing project" }, 400);
+    await requireProject(identityClient, who, authorizedProject, "data_edit_inputs");
     if (mode === "apply") {
       const runId = String(form.get("run_id") ?? "");
       if (!runId) return json({ success: false, error: "Missing run_id." }, 400);

@@ -1338,6 +1338,14 @@ registry, the golden traces (A15) and the Phase 12 wheel distribution; it replac
 
 ### Cross-cutting workstream — API & Access Control (G15)
 
+The owner authorized the D28 session and tenant-isolation implementation on 2026-10-19.
+Browser calls carry server-verifiable signed approved-user sessions; API keys and internal
+service callers remain distinct credential paths. Authorization precedes privileged service
+operations. The implementation must retain role capabilities, audit authorship, frozen run
+bindings and the existing computation path. Deployment is staged after the repository gates
+and isolated Supabase acceptance checks; code on a branch is not deployed protection.
+
+
 Not a phase of its own: the public `/v1` API rides the phases above. Its **security
 foundation (API Phases 0–1: key-authenticated gateway, scopes + tenancy, rate limits,
 request audit, key-management UI) begins alongside Phase B** — it depends only on

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { currentSessionSubject } from "@/lib/auth/sessionState";
 import { supabase } from "@/integrations/supabase/client";
 import type { RecoveryConfig } from "@/lib/sim/recoveryScore";
 
@@ -10,6 +11,7 @@ export interface RecoveryPlaybook {
   is_system: boolean;
   config: Partial<RecoveryConfig> & Record<string, unknown>;
   created_by: string | null;
+  author_user_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -53,8 +55,7 @@ export function useRecoveryPlaybooks(projectId: string | null | undefined) {
   const create = useCallback(
     async (input: { name: string; description?: string; config: Record<string, unknown> }) => {
       if (!projectId) throw new Error("No project selected");
-      const { data: userData } = await supabase.auth.getUser();
-      const uid = userData.user?.id;
+      const uid = currentSessionSubject();
       if (!uid) throw new Error("Not signed in");
       const { data, error } = await sb
         .from("recovery_playbooks")
@@ -64,7 +65,8 @@ export function useRecoveryPlaybooks(projectId: string | null | undefined) {
           description: input.description ?? "",
           is_system: false,
           config: input.config,
-          created_by: uid,
+          created_by: null,
+          author_user_id: uid,
         })
         .select()
         .single();

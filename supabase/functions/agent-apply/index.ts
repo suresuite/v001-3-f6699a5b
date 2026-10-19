@@ -1,3 +1,4 @@
+import { browserIdentity, requireProject } from "../_shared/requestIdentity.ts";
 // agent-apply — the ONLY writer of proposal apply outcomes (Stage 1;
 // ai-agents.md §4.4, §13.2 checkpoint 5, §8 T9).
 //
@@ -215,6 +216,8 @@ serve(async (req) => {
   );
 
   try {
+    const who = await browserIdentity(req, svc, { id: userId, email: userEmail });
+    if (who instanceof Response) return who;
     const { data: proposal, error: loadErr } = await svc
       .from("proposals")
       .select("*")
@@ -223,6 +226,8 @@ serve(async (req) => {
     if (loadErr) return jsonResponse({ error: `Proposal load failed: ${loadErr.message}`, type: "APPLY_ERROR" });
     if (!proposal) return jsonResponse({ error: "Proposal not found.", type: "NOT_FOUND" });
 
+    // Authorize before even the terminal-status path can disclose results or refresh them.
+    await requireProject(svc, who, String(proposal.project_id));
     // Idempotent re-POST (§4.4): applied is terminal — return the stored result.
     if (proposal.status === "applied") {
       // §18.3 hard gate 8: an applied risk_alert whose linked run has since

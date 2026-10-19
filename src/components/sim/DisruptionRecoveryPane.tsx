@@ -17,7 +17,7 @@ import {
 import type { Scenario } from "@/hooks/useScenarios";
 import { useRecoveryPlaybooks, type RecoveryPlaybook } from "@/hooks/useRecoveryPlaybooks";
 import { useGlobalProject } from "@/hooks/useGlobalProject";
-import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { ShieldCheck } from "lucide-react";
 
 type ScenarioWithPlaybook = Scenario & { recovery_playbook_id?: string | null };
@@ -296,15 +296,8 @@ export function DisruptionRecoveryPane({
     }
   };
 
-  const [uid, setUid] = useState<string | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    void supabase.auth.getUser().then(({ data }) => {
-      if (!cancelled) setUid(data.user?.id ?? null);
-    });
-    return () => { cancelled = true; };
-  }, []);
-  const canEditSelected = !!selectedPlaybook && !selectedPlaybook.is_system && selectedPlaybook.created_by === uid;
+  const { user } = useAuth();
+  const canEditSelected = !!selectedPlaybook && !selectedPlaybook.is_system && selectedPlaybook.author_user_id === user?.id;
 
   // Ordered list: paper strategies first, then reroute
   const strategyOrder: RecoveryResponseKey[] = [

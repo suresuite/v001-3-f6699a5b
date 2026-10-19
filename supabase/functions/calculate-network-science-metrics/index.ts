@@ -1,3 +1,4 @@
+import { browserIdentity } from "../_shared/requestIdentity.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.0';
 import {
@@ -39,6 +40,9 @@ serve(async (req) => {
     );
 
     const { project_id, uploaded_by } = await req.json();
+    const who = await browserIdentity(req, supabase, { id: uploaded_by }, project_id, "data_edit_inputs");
+    if (who instanceof Response) return who;
+
 
     if (!project_id) {
       return new Response(

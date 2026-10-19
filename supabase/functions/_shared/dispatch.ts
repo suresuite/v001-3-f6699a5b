@@ -512,7 +512,8 @@ export async function dispatchExperimentRun(
   // user, is usually null), and the bytes its series are expected to keep.
   const isUuid = (v: unknown): v is string =>
     typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
-  const actorUserId = isUuid(payload.actor_user_id) ? payload.actor_user_id : userId;
+  if (userId && payload.actor_user_id != null && payload.actor_user_id !== userId) throw new Error("actor mismatch");
+  const actorUserId = userId ?? (isUuid(payload.actor_user_id) ? payload.actor_user_id : null);
   const bytesEstimate =
     typeof payload.bytes_estimate === "number" && Number.isFinite(payload.bytes_estimate) && payload.bytes_estimate > 0
       ? Math.round(payload.bytes_estimate)
@@ -538,7 +539,9 @@ export async function dispatchExperimentRun(
     dataset_version_id: datasetVersionId,
     graph_hash: graphHash,
     hash_simulation: simulationHash,
-    created_by: userId,
+    // Custom sessions identify approved_users; this legacy FK references auth.users.
+    // actor_user_id below is the verified audit principal.
+    created_by: null,
     scenario_hash: scenarioHash,
     model_validation_id: modelValidationId,
     gate_skipped: gateSkipped,
@@ -613,7 +616,9 @@ export async function dispatchExperimentRun(
         policy_hash: policyHash,
         dataset_version_id: datasetVersionId,
         graph_hash: graphHash,
-        created_by: userId,
+        // Custom sessions identify approved_users; this legacy FK references auth.users.
+    // actor_user_id below is the verified audit principal.
+    created_by: null,
         // Spread-guarded so a database without the B0 migration still inserts.
         ...(scenarioHash ? { scenario_hash: scenarioHash } : {}),
         ...(modelValidationId ? { model_validation_id: modelValidationId } : {}),
@@ -714,6 +719,7 @@ export async function dispatchExperimentCancel(
     .from("simulation_runs")
     .update({ status: "cancelled", ended_at: new Date().toISOString() })
     .eq("id", runId)
+    .eq("project_id", cmd.project_id)
     .in("status", ["queued", "running"]);
   await upstash([
     "XADD",

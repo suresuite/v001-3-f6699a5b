@@ -1,3 +1,4 @@
+import { browserIdentity } from "../_shared/requestIdentity.ts";
 // @ts-nocheck
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -65,6 +66,13 @@ serve(async (req) => {
     );
 
     const { project_id, uploaded_by, config = defaultConfig } = await req.json();
+    const serviceCredential = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const isInternal = Boolean(serviceCredential) && req.headers.get('authorization') === `Bearer ${serviceCredential}`;
+    if (!isInternal) {
+    const who = await browserIdentity(req, supabaseClient, { id: uploaded_by }, project_id, "data_edit_inputs");
+    if (who instanceof Response) return who;
+    }
+
 
     if (!project_id) {
       return new Response(JSON.stringify({ error: 'Project ID is required' }), {

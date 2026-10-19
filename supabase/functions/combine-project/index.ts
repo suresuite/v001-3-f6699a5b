@@ -1,3 +1,4 @@
+import { browserIdentity } from "../_shared/requestIdentity.ts";
 // @ts-nocheck
 import { completeRun, failRun, getOrStart } from "../_shared/analysisStore.ts";
 import type { RunHandle, StoreClient } from "../_shared/analysisStore.ts";
@@ -255,6 +256,9 @@ Deno.serve(async (req) => {
     }
 
     const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+    const who = await browserIdentity(req, supabase, { id: user_id, email: user_email }, project_id, "data_edit_inputs");
+    if (who instanceof Response) return who;
+
 
     // ── WP 4.3 · `combine_etl` — an analysis in everything but name (§11) ──
     //

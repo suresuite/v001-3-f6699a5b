@@ -1,3 +1,4 @@
+import { browserIdentity } from "../_shared/requestIdentity.ts";
 // `delete-project` — the Project Manager's "Delete project" (§4 D170).
 //
 // THIS FUNCTION USED TO DO THE DELETION ITSELF, AND THAT WAS THE DEFECT. It answered
@@ -60,6 +61,8 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     );
 
+    const who = await browserIdentity(req, admin, { id: userId, email: userEmail }, projectId);
+    if (who instanceof Response) return who;
     console.log('[delete-project] start', { projectId, userId });
     const { error } = await admin.rpc('delete_project', {
       p_project_id: projectId,
