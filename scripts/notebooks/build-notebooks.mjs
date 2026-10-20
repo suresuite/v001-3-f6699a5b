@@ -22,7 +22,7 @@
  * Cell markers in a source:
  *   # %%                          a code cell
  *   # %% [markdown]               a markdown cell (each line starts with "# ")
- *   # %% include: config|setup|library|local
+ *   # %% include: config|setup|library|local|study
  *   # %% include: demo_data <label> <label> …   the recordings the notebook replays
  *
  * ── WHAT --check REFUSES ───────────────────────────────────────────────────
@@ -122,6 +122,13 @@ const INCLUDES = {
   local: {
     title: "Local simulation (the suresuite package's local.py)",
     text: () => read(join(PKG, "local.py")),
+    form: true,
+  },
+  // Notebooks 04 and 05 read a project the same way — data, policies, scenario,
+  // engine, one replication's per-item weeks — so that reading is written once.
+  study: {
+    title: "Study helpers (shared by notebooks 04 and 05)",
+    text: () => read(join(SRC, "common", "study.py")),
     form: true,
   },
 };

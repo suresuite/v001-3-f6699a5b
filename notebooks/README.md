@@ -1,15 +1,16 @@
 # SuReSuite notebooks — authoring guide
 
-The five notebooks a customer downloads from `/developer` →
+The six notebooks a customer downloads from `/developer` →
 `public/notebooks/suresuite_0N_*.ipynb` — are **generated**. Do not edit an
 `.ipynb`; edit its source here and rebuild.
 
 ```
 notebooks/
   src/
-    00_quickstart.py … 04_component_inventory.py   one source per notebook (percent format)
+    00_quickstart.py … 05_available_to_promise.py   one source per notebook (percent format)
     common/config.py      the CONFIG cell — /developer patches it; its variables must match nbConfigCell
     common/setup.py       packages + API key (Colab Secrets → SURESUITE_API_KEY → prompt in "live")
+    common/study.py       how 04 and 05 read a project: data, policies, scenario, engine, per-item weeks
   demo/example_project.json   recorded engine output the demo mode replays
   tools/record_demo.py        re-records it through the worker's own path
   tools/run_notebooks.py      executes every built notebook in demo mode
@@ -25,6 +26,7 @@ notebooks/
 # %% include: config        # the shared CONFIG cell
 # %% include: setup         # packages + key (collapsed in Colab)
 # %% include: library       # client.py + kpi_display.py (collapsed in Colab)
+# %% include: study         # common/study.py (collapsed in Colab)
 # %% include: demo_data baseline s2_outage   # only the recordings this notebook replays
 
 # %%
