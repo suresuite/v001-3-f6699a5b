@@ -24,6 +24,8 @@
 
 # %% include: local
 
+# %% include: study
+
 # %% include: demo_data baseline
 
 # %% [markdown]
@@ -56,16 +58,7 @@ EXPORT_XLSX = "component_inventory_study.xlsx"   # "" = no export
 # **Expect:** your project, then a table of what the key allows and what the notebook does without it.
 
 # %%
-import json
-import os
-import warnings
-from pathlib import Path
-
-import numpy as np
 import matplotlib.colors as mcolors
-from IPython.display import Markdown
-
-warnings.filterwarnings("ignore", category=FutureWarning)
 
 api = connect(BASE_URL, API_KEY, DEMO_DATA, needs=["read:data", "read:policies"], mode=MODE)
 LIVE = api.live
@@ -75,41 +68,9 @@ PID = project["id"]
 # its own is made (make-to-stock or make-to-order). A local run must be told the same.
 PROJECT_MODEL = project.get("supply_chain_model")
 print(f"supply chain model: {PROJECT_MODEL or 'not set (make-to-order)'}")
-
-_key = api.key() or {}
-SCOPES = set(_key.get("scopes") or ["read:data", "read:policies"])
+SCOPES = key_scopes(api)
 can = SCOPES.__contains__
-display(pd.DataFrame([
-    {"needs": s, "this key": "yes" if can(s) else "no", "used for": use, "without it": alt}
-    for s, use, alt in [
-        ("read:data", "your data and the engine", "—"),
-        ("read:policies", "your policies", "—"),
-        ("read:runs", "your saved baseline and stress-test scenarios", "the Simulation Lab's defaults"),
-        ("write:data", "freezing the data as it is now", "the newest frozen copy (its age is shown)"),
-        ("write:policies", "saving /policies as a version", "/policies read live and rebuilt here"),
-        ("write:runs", "VERIFY_ON_PLATFORM", "skipped"),
-    ]]).set_index("needs"))
-
-
-def styled(df, fmt=None, shade=(), cmap="Reds", caption=None):
-    """A formatted table with value shading, or the plain table where the notebook cannot style."""
-    try:
-        s = df.style.format(fmt or {}, na_rep="—")
-        for col in shade:
-            if col in df and pd.api.types.is_numeric_dtype(df[col]) and df[col].notna().any():
-                s = s.background_gradient(cmap=cmap, subset=[col])
-        return s.set_caption(caption) if caption else s
-    except (ImportError, AttributeError):  # pandas styling needs jinja2; without it `.style` raises AttributeError
-        if caption:
-            print(caption)
-        return df
-
-
-def capped(df, what="rows"):
-    if len(df) > MAX_ROWS:
-        print(f"showing {MAX_ROWS} of {len(df)} {what} — the export (step 7) has all of them")
-        return df.head(MAX_ROWS)
-    return df
+display(key_table(SCOPES))
 
 # %% [markdown]
 # ## 2 · Load the project's data
@@ -120,43 +81,9 @@ def capped(df, what="rows"):
 # **Expect:** the version used, the size of every table, and a data check.
 
 # %%
-versions = sorted(api.dataset_versions(PID), key=lambda v: v.get("created_at") or "", reverse=True)
-if DATA_SOURCE == "current" and can("write:data"):
-    frozen = api.freeze_dataset(PID, "notebook 04")
-    DATA_ID = frozen["id"]
-    print("froze the data as it is now:", "no change since the last freeze, so that version is used"
-          if DATA_ID in {v["id"] for v in versions} else "a new version")
-elif DATA_SOURCE in ("current", "latest"):
-    if not versions:
-        raise Stop("this project has no frozen data yet — run anything in the Simulation Lab (every run "
-                   "freezes the data it reads) or use a key with write:data, then run again")
-    DATA_ID = versions[0]["id"]
-    if DATA_SOURCE == "current":
-        age = (pd.Timestamp.now(tz="UTC") - pd.Timestamp(versions[0]["created_at"])).days
-        print(f"note: this key cannot freeze data (no write:data), so the newest frozen version is used — "
-              f"it is {age} day(s) old. Anything uploaded since is NOT in it. Every platform run freezes "
-              f"the data it reads: run anything in the Simulation Lab to refresh it.")
-else:
-    DATA_ID = DATA_SOURCE
-
-CACHE = Path("suresuite_cache") / PID
-path = CACHE / f"{DATA_ID}.json"
-started = time.time()
-if path.exists():
-    dv = json.loads(path.read_text())
-    print(f"dataset version {DATA_ID}: from the local cache")
-else:
-    dv = api.dataset_version(PID, DATA_ID)
-    if LIVE:  # a version never changes, so a copy on disk is always current
-        CACHE.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(dv))
-    print(f"dataset version {DATA_ID}: downloaded {len(json.dumps(dv)) / 1e6:.1f} MB in {time.time() - started:.1f}s")
-data = Dataset(id=dv["id"], graph_hash=dv.get("graph_hash"), snapshot=dv["snapshot"], label=dv.get("label"),
-               version_no=dv.get("version_no"), meta={k: v for k, v in dv.items() if k != "snapshot"})
+data = load_dataset(api, PID, DATA_SOURCE, SCOPES, LIVE, "notebook 04")
 print(data)
-
-T = {name: data.tables.get(name, pd.DataFrame()) for name in
-     ("suppliers", "materials", "products", "customers", "inbound", "outbound", "bom", "bom_multi_level", "demand_forecasts")}
+T = input_tables(data)
 display(pd.DataFrame({"rows": {k: len(v) for k, v in T.items()}}).T)
 
 # %% [markdown]
@@ -164,52 +91,12 @@ display(pd.DataFrame({"rows": {k: len(v) for k, v in T.items()}}).T)
 # through any sub-assemblies (the multi-level BOM wins when it has rows, as in the engine).
 
 # %%
-def col(df, name, default=None):
-    return df[name] if name in df else pd.Series(default, index=df.index)
-
-
-def flat_bom():
-    ml = T["bom_multi_level"]
-    if len(ml):
-        children = {}
-        for parent, child, rate in zip(col(ml, "higher_level_component_id"), ml["material_id"], col(ml, "consumption_rate", 1)):
-            if parent:
-                children.setdefault(str(parent), []).append((str(child), float(rate or 0)))
-        out = {}
-
-        def walk(product, node, mult, depth=0):
-            for child, rate in children.get(node, []):
-                if child in children and depth < 25:
-                    walk(product, child, mult * rate, depth + 1)
-                else:
-                    out[(product, child)] = out.get((product, child), 0.0) + mult * rate
-        for p in col(T["products"], "product_id").astype(str):
-            walk(p, p, 1.0)
-        return pd.DataFrame([{"product_id": p, "material_id": m, "rate": r} for (p, m), r in out.items()],
-                            columns=["product_id", "material_id", "rate"])
-    b = T["bom"]
-    return pd.DataFrame({"product_id": col(b, "product_id").astype(str), "material_id": col(b, "material_id").astype(str),
-                         "rate": col(b, "consumption_rate", 1).astype(float)})
-
-
-BOM = flat_bom()
-PER_WEEK = {"day": 7, "week": 1, "month": 12 / 52, "quarter": 4 / 52, "year": 1 / 52}
-lanes = T["inbound"].assign(
-    supplier_id=lambda d: col(d, "supplier_id").astype(str), material_id=lambda d: col(d, "material_id").astype(str),
-    per_week=lambda d: col(d, "volume", 0).astype(float).fillna(0)
-                       * col(d, "time_unit", "week").fillna("week").str.lower().map(PER_WEEK).fillna(1),
-    spend=lambda d: d["per_week"] * col(d, "unit_price", 0).astype(float).fillna(0))
+BOM = flat_bom(T)
+lanes = supply_lanes(T)
 mats = T["materials"].assign(material_id=lambda d: col(d, "material_id").astype(str)).set_index("material_id")
 prods = T["products"].assign(product_id=lambda d: col(d, "product_id").astype(str)).set_index("product_id")
 n_sources = lanes.groupby("material_id")["supplier_id"].nunique()
-
-check = pd.DataFrame([
-    ("materials in the BOM with no item master", sorted(set(BOM.material_id) - set(mats.index))),
-    ("materials with no supplier lane", sorted(set(BOM.material_id) - set(lanes.material_id))),
-    ("products with no BOM", sorted(set(prods.index) - set(BOM.product_id))),
-    ("materials with a single supplier", sorted(n_sources[n_sources == 1].index)),
-], columns=["check", "items"]).assign(count=lambda d: d["items"].map(len),
-                                      items=lambda d: d["items"].map(lambda xs: ", ".join(xs[:12]) + (" …" if len(xs) > 12 else "")))
+check = data_check(T, BOM, lanes)
 display(check.set_index("check")[["count", "items"]])
 
 # %% [markdown]
@@ -221,72 +108,15 @@ display(check.set_index("check")[["count", "items"]])
 # **Expect:** what differs between the saved version and /policies, and which one the runs use.
 
 # %%
-saved_versions = sorted(api.policy_versions(PID), key=lambda v: v.get("created_at") or "", reverse=True)
-pinned_id = POLICY_VERSION_ID or (saved_versions[0]["id"] if saved_versions else None)
-pinned = policy(api, PID, pinned_id) if pinned_id else None
-
-live = api.policies(PID)
-live_def = live.get("defaults") or {}
-now_fam = {f: dict(live_def.get(f) or {}) for f in FAMILIES}
-now_strategy = live_def.get("fulfillment_strategy")
-canon = lambda o: (o["scope"], o["target_key"], o["family"])
-now_over = {canon(o): o.get("patch") or {} for o in live.get("overrides") or []}
-
-drift = []
-if pinned:
-    saved_def = pinned.snapshot.get("defaults") or {}
-    for f in FAMILIES:
-        for k, v in now_fam[f].items():
-            if (saved_def.get(f) or {}).get(k) != v:
-                drift.append({"setting": f"{f}.{k}", "saved version": (saved_def.get(f) or {}).get(k), "/policies now": v})
-    if now_strategy and now_strategy != pinned.snapshot.get("fulfillment_strategy"):
-        drift.append({"setting": "fulfillment_strategy", "saved version": pinned.snapshot.get("fulfillment_strategy"),
-                      "/policies now": now_strategy})
-    saved_over = {canon(o): o.get("patch") or {} for o in pinned.snapshot.get("overrides") or []}
-    for key in sorted(set(saved_over) | set(now_over)):
-        if saved_over.get(key) != now_over.get(key):
-            drift.append({"setting": "override " + " · ".join(key), "saved version": saved_over.get(key), "/policies now": now_over.get(key)})
-    print(f"saved version: {pinned.label or 'unlabelled'} ({pinned.id})")
-
-if POLICY_SOURCE == "pinned" or (pinned and not drift):
-    if not pinned:
-        raise Stop("POLICY_SOURCE is \"pinned\" but this project has no saved policy version")
-    pol = pinned
-    print("using the saved version" + ("" if not drift else f" — {len(drift)} setting(s) differ from /policies now (below)"))
-elif can("write:policies"):
-    pol = policy(api, PID, api.snapshot_policies(PID, "notebook 04 · /policies as it is now")["id"])
-    print(f"saved /policies as it is now: {pol.label} ({pol.id})")
-else:
-    # The platform builds a version as the page's defaults with the stored values over them, family
-    # by family. The saved version already holds the page's defaults, so the stored values go over it.
-    base_snap = copy.deepcopy(pinned.snapshot) if pinned else {"schema_version": 2, "defaults": {}}
-    for f in FAMILIES:
-        base_snap.setdefault("defaults", {})[f] = {**(base_snap["defaults"].get(f) or {}), **now_fam[f]}
-    base_snap["fulfillment_strategy"] = now_strategy or base_snap.get("fulfillment_strategy") or "make_to_stock"
-    base_snap["overrides"] = [{"scope": s, "target_key": t, "family": f, "patch": p} for (s, t, f), p in sorted(now_over.items())]
-    pol = Policy(id="rebuilt from /policies (not a saved version)", policy_hash=None, snapshot=base_snap,
-                 label="/policies as it is now")
-    print("note: this key cannot save a policy version (no write:policies), so the current policies are rebuilt "
-          "here from /policies" + (" over the saved version." if pinned else
-          " alone — there is no saved version, so settings never touched on /policies take the ENGINE's defaults, "
-          "which can differ from the page's. Save a version on /policies for an exact run."))
-if drift:
-    display(styled(capped(pd.DataFrame(drift).set_index("setting"), "differences"),
-                   caption="Saved version vs /policies now"))
-elif pinned:
-    print("the saved version matches /policies on every stored setting")
-
-snap = pol.snapshot or {}
-rows = [{"family": f, "setting": k, "value": v if not isinstance(v, (dict, list)) else json.dumps(v)[:80],
-         "where": "set on /policies" if k in now_fam.get(f, {}) else "page default"}
-        for f in FAMILIES for k, v in (snap.get("defaults", {}).get(f) or {}).items()]
-if rows:
-    display(styled(capped(pd.DataFrame(rows).sort_values(["where", "family"], ascending=[False, True]), "settings"),
-                   caption=f"Project-wide settings the runs use — fulfillment strategy {snap.get('fulfillment_strategy')}"))
-over = pd.DataFrame(snap.get("overrides") or [], columns=["scope", "target_key", "family", "patch"])
-if len(over):
-    display(styled(over.groupby(["family", "scope"]).size().rename("per-item overrides").to_frame(),
-                   caption=f"{len(over)} per-item overrides (they win over the project-wide settings)"))
+pol, drift, now_fam = load_policies(api, PID, POLICY_SOURCE, POLICY_VERSION_ID, SCOPES, "notebook 04")
+if len(drift):
+    display(styled(capped(drift, "differences"), caption="Saved version vs /policies now"))
+settings, overrides = policy_tables(pol, now_fam)
+if len(settings):
+    display(styled(capped(settings, "settings"),
+                   caption=f"Project-wide settings the runs use — fulfillment strategy {pol.snapshot.get('fulfillment_strategy')}"))
+if len(overrides):
+    display(styled(overrides, caption=f"{int(overrides.iloc[:, 0].sum())} per-item overrides (they win over the project-wide settings)"))
 
 # %% [markdown]
 # ## 4 · Run the baseline on this machine
@@ -296,38 +126,8 @@ if len(over):
 # **Expect:** the scenario used, the engine's notes on how it read your data, the KPIs, and four charts.
 
 # %%
-scenarios = api.scenarios(PID) if can("read:runs") else []
-stress_saved = [s for s in scenarios if s.get("disruption_schedule")]
-scenario = next((s for s in scenarios if s["id"] == SCENARIO_ID), None) if SCENARIO_ID else \
-    next((s for s in scenarios if not s.get("disruption_schedule")), None)
-if scenario is None:
-    scenario = {"id": None, "name": "Simulation Lab defaults", **DEFAULT_FRAME}
-    print("no saved baseline scenario" + ("" if can("read:runs") else " (the key has no read:runs)")
-          + " — using the Simulation Lab's defaults")
-elif scenario.get("disruption_schedule"):
-    print(f"note: {scenario['name']} has disruptions — its frame is the baseline here, its events run in step 5")
-    stress_saved = [scenario] + [s for s in stress_saved if s["id"] != scenario["id"]]
-    scenario = {**scenario, "disruption_schedule": []}
-FRAME = {k: scenario[k] for k in ("horizon_days", "warmup_days", "replications", "seed", "crn", "recovery_overrides")
-         if scenario.get(k) is not None}
-if REPLICATIONS:
-    FRAME["replications"] = REPLICATIONS
-print(f"scenario: {scenario['name']} — {FRAME.get('horizon_days')} days, {FRAME.get('replications')} replications, "
-      f"seed {FRAME.get('seed')}")
-
-try:
-    platform_engine = api.engine()
-except SuReSuiteError:  # demo mode hands out no engine
-    platform_engine = None
-if platform_engine and LIVE:
-    import importlib.metadata as md
-    have = md.version("scsim") if engine_available() else None
-    if have != platform_engine["engine_version"]:
-        install_engine(api)
-RUN_LOCAL = engine_available()
-if not RUN_LOCAL:
-    print("the engine is not installed — demo mode cannot hand it out. Add SURESUITE_API_KEY (see the Setup notes) "
-          "and run all cells again; steps 5–7 need it.")
+scenario, FRAME, stress_saved = study_scenario(api, PID, SCENARIO_ID, SCOPES, REPLICATIONS)
+RUN_LOCAL = ensure_engine(api, LIVE)
 
 
 def simulate_here(disruptions=None, **over):
@@ -407,35 +207,12 @@ if RUN_LOCAL:
 
 # %%
 def inspect(seed, disruptions=None):
-    """One replication with every item's weekly record — {(kind, measure): weeks × items}. A one-replication
-    run with seed s is replication 0 of any run with root seed s, so it is one of that run's own worlds."""
-    from sim_worker.local import run_from_snapshots
-    out = run_from_snapshots(data.snapshot, pol.snapshot,
-                             {**scenario, **FRAME, "replications": 1, "seed": seed, "inspection": True,
-                              "disruption_schedule": list(disruptions or [])},
-                             project_model=PROJECT_MODEL)
-    frames = {}
-    for r in out["item_series"]:
-        for measure, values in r["series"].items():
-            frames.setdefault((r["kind"], measure), {})[str(r["item_id"])] = values
-    if not frames:
-        raise Stop("the engine returned no per-item weeks — this engine build predates them; install the platform's")
-    return out["run_update"], {k: pd.DataFrame(v) for k, v in frames.items()}
-
-
-def use_of(frames):
-    prod = frames.get(("product", "production"), pd.DataFrame())
-    oh = frames[("material", "on_hand")]
-    use = pd.DataFrame(0.0, index=oh.index, columns=oh.columns)
-    for p, m, rate in BOM.itertuples(index=False):
-        if p in prod and m in use:
-            use[m] += prod[p] * rate
-    return use
+    return inspect_run(data, pol, {**scenario, **FRAME}, PROJECT_MODEL, seed, disruptions)
 
 
 def material_table(frames, w0):
     post = lambda df: df[df.index >= w0]
-    oh, use = post(frames[("material", "on_hand")]), post(use_of(frames))
+    oh, use = post(frames[("material", "on_hand")]), post(use_of(frames, BOM))
     zero = oh <= 1e-6
     avg_use = use.mean().replace(0, np.nan)
     return pd.DataFrame({
@@ -465,7 +242,7 @@ if RUN_LOCAL:
 # %%
 def plot_material(m, frames, other=None, window=None, labels=("baseline", None)):
     oh, it, orders, use = (frames[("material", "on_hand")], frames[("material", "in_transit")],
-                           frames[("material", "orders")], use_of(frames))
+                           frames[("material", "orders")], use_of(frames, BOM))
     fig, (a1, a2) = plt.subplots(2, 1, figsize=(11, 4.4), sharex=True, gridspec_kw={"height_ratios": [3, 2]})
     a1.plot(oh.index, oh[m], color=COLORS["base"], linewidth=2, label=f"on hand · {labels[0]}")
     a1.plot(it.index, it[m], color=COLORS["transit"], linewidth=1.2, linestyle="--", label=f"in transit · {labels[0]}")
@@ -475,7 +252,7 @@ def plot_material(m, frames, other=None, window=None, labels=("baseline", None))
         a1.plot(show.index, show[m], color=COLORS["shock"], linewidth=2, label=f"on hand · {labels[1]}")
         a1.plot(other[("material", "in_transit")].index, other[("material", "in_transit")][m], color=COLORS["shock"],
                 linewidth=1.2, linestyle="--", alpha=0.7, label=f"in transit · {labels[1]}")
-        orders, use = other[("material", "orders")], use_of(other)
+        orders, use = other[("material", "orders")], use_of(other, BOM)
     out = show.index[(show[m] <= 1e-6) & (show.index >= W0)]
     if len(out):
         a1.scatter(out, [0] * len(out), color=COLORS["zero"], marker="v", s=26, zorder=5, label="stockout")

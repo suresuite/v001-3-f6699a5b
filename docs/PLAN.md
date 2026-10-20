@@ -24614,6 +24614,61 @@ from /policies since; the saved value is kept. (4) `paired_compare` in the libra
 notebook's `paired` agree by construction but are two authors of one rule; the package is the
 place to give `simulate` a per-item result and retire the notebook's own inspection helper.
 
+### Developer API · notebook 05, available to promise · 2026-10-20 · no migration
+
+**Owner-requested.** A notebook that answers a request the way a planner does: can we give this customer
+Q units of a product (make-to-order), or Q units of a material from stock, by this date — and if not,
+how much on time, when the rest, or which nearby date works (pull in, push back). Lead times considered.
+Offered on `/developer` as `05`; the series is six.
+
+**How it answers, from what the engine already has.**
+- **The request is a firm order the engine runs.** A Customer row's requested delivery schedule
+  (`row_demand_schedule`, P-C.4) is deterministic and zero past its end, so the request becomes a row
+  `ATP-REQUEST × product` on a COPY of the data, with that schedule in the ship week, backorder allowed and
+  priority 0 — served after every existing row, which is what available to promise means. A project whose
+  allocation rule reads no priority runs the check under the priority rule, and says so.
+- **The comparison world orders nothing.** Adding a row with a demand spec switches the project to per-row
+  demand draws, so the request world is compared with the same copy ordering zero, on the same seeds — the
+  only difference is the order. Lead times, capacities and opening stock are read from the engine's own
+  mapping (`engine_input_from_snapshots`), not re-derived.
+- **The engine reports no deliveries per row,** so the request's deliveries are the product's extra
+  deliveries plus what its existing customers lost to it; what all customers lost is reported beside it.
+- **A material request cannot be injected** — the engine has no material withdrawal — so it is read from
+  the projected stock: a week can take Q when stock stays above Q until a reorder can arrive (one lead time).
+
+**Found by writing it.**
+1. **A zero-volume customer row never reaches the engine.** `_customer_links` keeps a row with volume or a
+   demand spec; with a spec and no volume its share becomes the spec's mean, which would take demand from
+   the other rows. The request row carries a volume of 1e-6 so it exists without moving anyone's share.
+2. **"Extra deliveries that stay extra" said no date ever worked.** The first draft promised a week only
+   when nobody lost anything; a 150-unit order that took material existing customers needed three weeks
+   later never qualified, so the answer was "no date within the horizon" for an order delivered two weeks
+   late. Delivery and its cost to others are now two measures.
+3. **Replenishment policy decides the answer, and the notebook shows both.** On the Example project, 150 × P1
+   in week 19 with reorder-point materials: 72 on time, all by week 22, existing customers lose about 49.
+   With the request's materials planned from the order book (MRP on their lanes, both worlds): 144 on time,
+   the rest a week later, nobody loses. The gap is purchasing not seeing the order.
+4. **A make-to-order product cannot be built ahead,** so an order larger than one week's free capacity is
+   late in every candidate week and no pull-in helps. The notebook then offers a split delivery (equal parts
+   up to the wanted week) and runs it: on the synthetic project, 120 × P2 as 60 + 60 in weeks 14–15 is on
+   time in every future.
+5. **Notebooks 04 and 05 read a project the same way,** so that reading is one include
+   (`notebooks/src/common/study.py`, `include: study`) and 04 now calls it — same results before and after
+   (the S3 outage in 4 of 10 replications, a median 185 units, seed 47).
+
+**Gate results.** `notebooks:check`: six notebooks current, CONFIG in step with `/developer`.
+`run_notebooks.py`: all six run keyless with the engine installed. 05 also run with a read-only key on the
+synthetic project, both as a product and a material request. `notebooks/tests` 32 of 32. `docsAssets` +
+`notebookParity` 49 of 49. Typecheck held, `check:docs` holds. The three `DeveloperApi.tsx` surfaces
+citations moved one line with the new notebook and are re-pointed.
+
+**Gap check.** (1) Not run against a live project. (2) Customer transit is not modelled by the engine;
+the ship week is the wanted date less `DELIVERY_WEEKS` (default: the product's lanes' `expected_lead_time`).
+(3) The data holds no open purchase orders, so the first lead-time weeks can understate supply already
+ordered — said at the point of display. (4) A material request is answered from projected stock, not by the
+engine. (5) The split is equal parts sized by the capacity existing customers leave free; it is one
+suggestion, not an optimised schedule.
+
 
 ## 17. Sequencing
 

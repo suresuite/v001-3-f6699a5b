@@ -154,7 +154,7 @@ the Developer API page's Quickstart tab.
 
 ### Python notebooks (Google Colab or local Jupyter)
 
-Five notebooks, each the Python version of one workflow in the app. Get them from
+Six notebooks, each the Python version of one workflow in the app. Get them from
 the `/developer` page's **Notebook** tab, which lists your projects and, per
 project, every id the notebooks need, and downloads any of them with the CONFIG
 cell pre-filled. **Open in Colab** downloads the same pre-filled copy and opens
@@ -168,6 +168,7 @@ repository, which is private.
 | `suresuite_02_disruption_resilience.ipynb` | Lab stress tests: plant shutdown, sole- and dual-source supplier outages, a partial capacity cut; time to survive / recover |
 | `suresuite_03_local_simulation.ipynb` | Simulate on your own machine: pull a dataset and policy version, reproduce a platform run exactly, sweep 20 scenarios locally, a what-if on your copy of the data |
 | `suresuite_04_component_inventory.ipynb` | /policies → Run & validate → Single (Inspection mode), for every material: the data as it is now (frozen, or the newest version and its age), /policies as it is now (saved, or rebuilt from /policies for a read-only key), the baseline on your own machine, every material's stock week by week, an outage of each exposed supplier and the plant (plus your saved stress tests), and the worst one followed down to the materials and products it hits |
+| `suresuite_05_available_to_promise.ipynb` | Answer a request the way a planner does: a make-to-order request for a product (or material taken from stock) by a date — the stock position and available to promise of each material it needs, then the request played through the chain as a firm order served after every existing customer, in N futures: yes, or how much on time and when the rest, a pull-in, a push-back or a split delivery, what it costs existing customers, and the same answer with the request's materials planned from the order book (MRP) |
 
 **Two modes.** With no key the notebooks run in **demo mode**: they replay engine
 output recorded for the Example project (`scripts/example_project/dataset.json`,
