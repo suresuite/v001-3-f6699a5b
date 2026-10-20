@@ -276,6 +276,6 @@ When the row was staged. Server-stamped, never the client's clock.
 
 ---
 
-*Generated from data contract `0b1a0b895ebf`, engine `0.8.0`,
+*Generated from data contract `69972a5e6d5f`, engine `0.8.0`,
 sidecar `supabase/contract/ingest_staged_rows.contract.yaml`, table created by `20260916000014_ingest_staged_rows.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

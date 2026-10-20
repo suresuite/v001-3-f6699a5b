@@ -127,7 +127,7 @@ export function buildInventoryWorkbook(input: InventoryWorkbookInput): XLSX.Work
     sheets.push(["record", recordRows(record)]);
   } else {
     sheets.push(["record", [
-      ["SuReSuite — REPRODUCIBILITY RECORD (A5)"],
+      ["SuReSuite \u2014 REPRODUCIBILITY RECORD (A5)"],
       ["NOT SUPPLIED", input.recordAbsentBecause ?? "The record could not be assembled for this export."],
       ["", "These numbers are NOT evidence that the run is reproducible."],
       [],

@@ -21138,13 +21138,13 @@ export const REFERENCE_TABLES: RefTable[] = [
     "surfaces": [
       {
         "page": "ProjectPolicies.tsx",
-        "via": "component ItemSeriesExplorer (mounted by RunValidateStage) → select kind,item_id from run_item_series",
-        "evidence": "src/components/sim/ItemSeriesExplorer.tsx:97"
+        "via": "component ItemSeriesExplorer (mounted by RunValidateStage) → select kind,item_id,series from run_item_series (every item, paged)",
+        "evidence": "src/components/sim/ItemSeriesExplorer.tsx:119"
       },
       {
         "page": "SimulationLab.tsx",
-        "via": "component ItemSeriesExplorer (mounted by ResultsDashboard) → select kind,item_id from run_item_series",
-        "evidence": "src/components/sim/ItemSeriesExplorer.tsx:97"
+        "via": "component ItemSeriesExplorer (mounted by ResultsDashboard) → select kind,item_id,series from run_item_series (every item, paged)",
+        "evidence": "src/components/sim/ItemSeriesExplorer.tsx:119"
       }
     ],
     "governance": {

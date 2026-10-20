@@ -258,6 +258,42 @@ export function productTable(
   );
 }
 
+/** What the explorer reads besides the item series: the run's frozen dataset
+ *  snapshot, or — for a dataset version frozen before the deep BOM was in it —
+ *  the project's live BOM and lanes, and the items' display names. */
+export interface ExplorerInputs {
+  snapshot: unknown;
+  source: "snapshot" | "live" | "none";
+  names: Map<string, string>;
+  liveBom?: Row[];
+  liveInbound?: Row[];
+}
+
+/** The tables and their inputs, from the run's rows and its frozen inputs. */
+export function deriveInventory(rows: ItemSeriesRow[], ctx: ExplorerInputs | null, w0: number) {
+  const inputs = snapshotInputs(ctx?.snapshot);
+  const live = ctx?.source === "live";
+  const liveBom = ctx?.liveBom ?? [];
+  const bom = live
+    ? flatBom(liveBom.filter((b) => b.product_id != null), liveBom.filter((b) => b.product_id == null))
+    : flatBom(inputs.bom ?? [], inputs.bom_multi_level ?? []);
+  const use = materialUse(rows, bom);
+  const suppliers = suppliersByMaterial(live ? ctx?.liveInbound ?? [] : inputs.inbound ?? []);
+  const users = usersByMaterial(bom);
+  const names = ctx?.names ?? new Map<string, string>();
+  return {
+    use,
+    suppliers,
+    users,
+    names,
+    materials: materialTable(rows, use, w0, { suppliers, users, names }),
+    products: productTable(rows, w0, { names }),
+    fgRecorded: hasFgStock(rows),
+  };
+}
+
+export type DerivedInventory = ReturnType<typeof deriveInventory>;
+
 /** What a make-to-order product's stock cells say instead of a number. */
 export const NOT_STOCKED = "not stocked (make-to-order)";
 

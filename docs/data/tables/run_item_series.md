@@ -69,8 +69,8 @@ partially or get corrected — the write fails.
 
 | Page | Via | Evidence | Confirmed |
 |---|---|---|---|
-| `ProjectPolicies.tsx` | component ItemSeriesExplorer (mounted by RunValidateStage) → select kind,item_id from run_item_series | `src/components/sim/ItemSeriesExplorer.tsx:97` | yes |
-| `SimulationLab.tsx` | component ItemSeriesExplorer (mounted by ResultsDashboard) → select kind,item_id from run_item_series | `src/components/sim/ItemSeriesExplorer.tsx:97` | yes |
+| `ProjectPolicies.tsx` | component ItemSeriesExplorer (mounted by RunValidateStage) → select kind,item_id,series from run_item_series (every item, paged) | `src/components/sim/ItemSeriesExplorer.tsx:119` | yes |
+| `SimulationLab.tsx` | component ItemSeriesExplorer (mounted by ResultsDashboard) → select kind,item_id,series from run_item_series (every item, paged) | `src/components/sim/ItemSeriesExplorer.tsx:119` | yes |
 
 Each row says the page READS the table by that path, at that line. It does
 not say every column below is displayed there — a column carries its own
@@ -154,7 +154,7 @@ Whether `item_id` names a material or a product — 'material' or 'product' (CHE
 | Validated at ingest | — |
 | Rendered at | `[object Object]`, `[object Object]` |
 
-**Rendered on** `ProjectPolicies.tsx` (`src/components/sim/ItemSeriesExplorer.tsx:97`), `SimulationLab.tsx` (`src/components/sim/ItemSeriesExplorer.tsx:97`) —
+**Rendered on** `ProjectPolicies.tsx` (`src/components/sim/ItemSeriesExplorer.tsx:119`), `SimulationLab.tsx` (`src/components/sim/ItemSeriesExplorer.tsx:119`) —
 each of these names this column in an explicit `select` list, so the claim
 is about the column and not only about the table.
 
@@ -173,7 +173,7 @@ The material or product id, exactly as the engine's compiled model carries it �
 | Validated at ingest | — |
 | Rendered at | `[object Object]`, `[object Object]` |
 
-**Rendered on** `ProjectPolicies.tsx` (`src/components/sim/ItemSeriesExplorer.tsx:97`), `SimulationLab.tsx` (`src/components/sim/ItemSeriesExplorer.tsx:97`) —
+**Rendered on** `ProjectPolicies.tsx` (`src/components/sim/ItemSeriesExplorer.tsx:119`), `SimulationLab.tsx` (`src/components/sim/ItemSeriesExplorer.tsx:119`) —
 each of these names this column in an explicit `select` list, so the claim
 is about the column and not only about the table.
 
@@ -192,7 +192,7 @@ The item's weekly series, one array per measure, each as long as the run's horiz
 | Validated at ingest | — |
 | Rendered at | `[object Object]`, `[object Object]` |
 
-**Rendered on** `ProjectPolicies.tsx` (`src/components/sim/ItemSeriesExplorer.tsx:127`), `SimulationLab.tsx` (`src/components/sim/ItemSeriesExplorer.tsx:127`) —
+**Rendered on** `ProjectPolicies.tsx` (`src/components/sim/ItemSeriesExplorer.tsx:119`), `SimulationLab.tsx` (`src/components/sim/ItemSeriesExplorer.tsx:119`) —
 each of these names this column in an explicit `select` list, so the claim
 is about the column and not only about the table.
 
@@ -221,6 +221,6 @@ When the row was first inserted. An upsert of the same key does not re-stamp it.
 
 ---
 
-*Generated from data contract `0b1a0b895ebf`, engine `0.8.0`,
+*Generated from data contract `69972a5e6d5f`, engine `0.8.0`,
 sidecar `supabase/contract/run_item_series.contract.yaml`, table created by `20260720000001_run_item_series.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*
