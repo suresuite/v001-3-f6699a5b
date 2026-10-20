@@ -26,6 +26,9 @@ api = connect(BASE_URL, API_KEY, DEMO_DATA, needs=["read:data", "read:policies",
 LIVE = api.live
 project = pick_project(api, PROJECT_ID)
 PID = project["id"]
+# The platform reads the project's model to decide how a product with no fulfillment mode of its
+# own is made (make-to-stock or make-to-order); a local run must be told the same.
+PROJECT_MODEL = project.get("supply_chain_model")
 
 # %% [markdown]
 # ## Try changing
@@ -76,7 +79,7 @@ platform = api.run_and_wait(PID, scenario["id"], pol.id, acknowledge_warnings=AC
 
 if RUN_LOCAL:
     run_data = dataset(api, PID, platform["dataset_version_id"]) if platform.get("dataset_version_id") else data
-    local = simulate(run_data, pol, scenario=scenario)
+    local = simulate(run_data, pol, scenario=scenario, project_model=PROJECT_MODEL)
     keys = [k for k, v in platform["aggregate_kpis"].items() if not k.startswith("_") and isinstance(v, (int, float))]
     same = all(platform["aggregate_kpis"][k] == local["run"]["aggregate_kpis"].get(k) for k in keys)
     print("identical on every KPI:", same)
@@ -112,7 +115,7 @@ if RUN_LOCAL and SUPPLIER:
     for days in SAFETY_DAYS:
         snap = with_policy(pol.snapshot, "inventory", safety_stock_method="fixed_days", safety_stock_days=days)
         for weeks in OUTAGE_WEEKS:
-            r = simulate(data, snap, scenario=scenario,
+            r = simulate(data, snap, scenario=scenario, project_model=PROJECT_MODEL,
                          disruptions=[outage(SUPPLIER, start_day=140, duration_days=7 * weeks)])
             grid.loc[days, weeks] = r["run"]["aggregate_kpis"]["fill_rate"]
     print(f"{grid.size} runs in {time.time() - started:.1f}s on this machine")
@@ -154,12 +157,12 @@ if RUN_LOCAL and SUPPLIER:
         two_lanes = with_tables(data, inbound=pd.concat([inbound, backup], ignore_index=True))
         shock = [outage(SUPPLIER, start_day=140, duration_days=42)]
         cases = {
-            "as is": simulate(data, pol, scenario=scenario, disruptions=shock),
-            "+ backup lane": simulate(two_lanes, pol, scenario=scenario, disruptions=shock),
+            "as is": simulate(data, pol, scenario=scenario, project_model=PROJECT_MODEL, disruptions=shock),
+            "+ backup lane": simulate(two_lanes, pol, scenario=scenario, project_model=PROJECT_MODEL, disruptions=shock),
             "+ reactive switch": simulate(two_lanes, with_policy(pol.snapshot, "recovery", response=["dual_source_activate"]),
-                                          scenario=scenario, disruptions=shock),
+                                          scenario=scenario, project_model=PROJECT_MODEL, disruptions=shock),
             "+ split orders": simulate(two_lanes, with_policy(pol.snapshot, "sourcing", strategy="multi"),
-                                       scenario=scenario, disruptions=shock),
+                                       scenario=scenario, project_model=PROJECT_MODEL, disruptions=shock),
         }
         print(f"backup lane for {', '.join(sole.material_id)} from {others.iloc[0]['supplier_id']}")
 

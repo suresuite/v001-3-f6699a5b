@@ -268,6 +268,6 @@ When the bytes were received. Server-stamped, never the client's clock.
 
 ---
 
-*Generated from data contract `dcc3d4d8a285`, engine `0.8.0`,
+*Generated from data contract `83b7b60d3b47`, engine `0.8.0`,
 sidecar `supabase/contract/ingest_files.contract.yaml`, table created by `20260916000013_ingest_files_tier0.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

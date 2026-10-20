@@ -499,6 +499,7 @@ else cites the D-number or the §4.1 row. `npm run check:docs` enforces it.
 | **D306** | **The Product-level graph's edge weights were not the Process-level graph's, the Product-level graph never showed them, and the Process-level graph showed one arbitrary share of its own.** Both lane tables carry `weighted` from ONE demand walk (`rebuild_supply_chain_lanes`), and the product lane is already written collapsed (purchased material → finished product, `weighted` = the propagated demand). The Product page re-derived the number in the browser and drifted from it three ways: (a) `buildProductLevelGraph` keyed neither demand nor the BOM by PLANT while the page reads every plant, so a product made in two plants got (d₁ + d₂) × (r₁ + r₂) instead of d₁r₁ + d₂r₂; (b) an inbound edge fell back to `sourcing_ratio` when `weighted` was 0, drawing a 0–1 share as a weekly volume (T1, `declared-fallback`); (c) a blank consumption rate became 1, a recipe the BOM does not state. The page then put no number on any edge — no label and no Labels toggle — and hid every node with zero flow, so a supplier whose material no demand reaches disappeared. **The Process page** kept the FIRST row per `from → to` pair and dropped the rest; the deep lane writes a BOM edge once per root product (and every lane once per plant), and the read breaks `created_at` ties on a random uuid, so a component shared by two products showed one product's share, picked arbitrarily. Owner-reported: "in the product level graph, can we also calculate the weight as the process level graph and show it correct just as the process level graph" | `src/lib/graph/productGraph.ts` (`buildProductLevelGraph`: the unkeyed `demandOf` / `childrenOf`, `weighted \|\| sourcing_ratio`, `rate \|\| 1`); `src/pages/ProductLevelNetwork.tsx` (`fetchData`'s edge loop and zero-flow node filter; `GraphCard` handed `lens.edges` with no label); `src/pages/ProcessLevelNetwork.tsx` (`fetchData`'s `edgeSet` first-row-wins loop); `supabase/migrations/20260924000001_bom_root_rows_are_not_edges.sql` (`rebuild_supply_chain_lanes`: the flat lane's collapsed bom rows and the deep lane's one row per edge per root) | **✅ CLOSED (UI, no migration).** `src/lib/graph/laneEdges.ts` is the one rule for both pages: `sumLaneEdges` draws one edge per pair with `weighted` SUMMED over every row it stands for (its consumption rate counted once per plant), and `flowLabel` formats the label. `buildProductLevelGraph` walks the BOM per plant, sums inbound and outbound through `sumLaneEdges`, has no `sourcing_ratio` fallback and reads a blank rate as 0, the SQL walk's rule; on the rows the ETL writes today its BOM edge equals Σ `weighted`. The Product page carries `flowVolume` + `originalLabel` like the Process page, has the same Labels toggle (default on), and hides only nodes no edge touches. `laneEdges.test.ts` (7) and `productGraph.test.ts` (+5: two plants, collapsed rows, no ratio fallback, blank rate, no cross-plant walk). NOT changed, stated: `InteractiveNetworkSpace.tsx` still keeps the first row per pair |
 | **D307** | **"Nexus node prediction" measured how CONNECTED a node is, not what losing it costs, and said nothing of how it was computed.** The default path scored every lane row by its source node's blend of 60 % capped degree, 10 % a second capped degree labelled "betweenness", 10 % undirected eigenvector, 10 % per-component closeness, 5 % in/out balance and 5 % a revenue weight that was a literal 0 — so roughly 70 % of the score was neighbour count, no node could exceed 0.95, and a node in a small isolated component scored near the top on closeness. A node was "nexus" when it reached the 90th percentile of that blend: ties at the cut flagged more than 10 %, a one-node network was always flagged, and a low absolute score could still be "nexus". A supplier with ONE lane that is the only source of the material the largest product needs scored below a hub with ten interchangeable partners. The configured-ML path posted lane rows carrying `location_name`, `capacity`, `risk_factor` and four more fields `supply_chain_data` does not have, and fell back on failure with a log line only; neither the method nor the fallback reached the run's key or the card (§5 T2). The card's "Total Nodes / Nexus" were LANE-ROW counts from `get_prediction_stats`, filtered by plant name across every project, and the guide the card links said the result came from "historical simulations", which nothing reads. Owner-requested ("what are your suggestions to improve the logic … please implement it") | `supabase/functions/predict-critical-nodes/index.ts` before D307 (`predictCriticalNodes`: the weight blend, the p90 cut, the `ML_API_URL` branch); `get_prediction_stats` (`20250822031816`); `public/docs/nexus-node.md`; D196 for where the result was written | **✅ CLOSED in the repository (migration `20261009000003`).** The score is DEMAND AT RISK — the share of finished-goods demand (by weekly volume) lost if the node alone fails, with no rerouting and no stock — computed by `supabase/functions/_shared/criticalNodes.ts` from the lane graph with the EDGE KIND as the propagation rule (inbound = share of the material, bom = a product loses its worst material, outbound = demand weight); nexus = at least the threshold, an absolute test — default 50 % since 2026-10-12 (owner decision; it shipped at 10 %), compared on the stored 4 dp score. Every fallback (no outbound volume, no inbound volume, unknown edge kind, a cycle) is a stated run warning. Directed betweenness is exact (Brandes) and only breaks ties. The ML branch is removed. `analysis_apply_critical_nodes` mirrors one score per node onto `node_list` from a RUNNING `critical_nodes` run (attributed, browser roles revoked); `get_critical_node_stats` reads node counts, method, threshold, staleness and the ten highest nodes with their drivers for ONE project and refuses a reader without access. Method and threshold are in the run's `params`, so in its key. The card shows all of it; the guide is rewritten. `criticalNodes.test.ts` (15, hand-worked, including the example project's stated ground truth) and `rehearsal/890` (7 sections, mutation-tested on the actor). The deprecated `analysis_mark_critical_nodes` lost its `anon`/`authenticated` EXECUTE, which `rehearsal/890` §7 found. NOT done, stated: no comparison against a simulated outage battery (blueprint §11.2), and no recovery-time or stock term |
 | **D308** | **The pre-run check demanded a primary supplier for every sub-assembly — a blocker no action on /policies could clear.** D175 gave each BOM intermediate a "(made in-house)" line on the Supplier stage and said it raises no needs-supplier alarm; the grid kept that promise and the verifier did not. It graded every Supplier-stage row for a primary source, a "(made in-house)" row carries none, and so each intermediate was blocked with "has no primary supplier — select one" while the grid offered no supplier to select. On `Project AA - ver3` that was 65 of the 97 blockers on Run & Validate — exactly D175's 65 intermediates — reported by the project's owner 2026-10-12 ("in the UI we defined the source already"). The engine flattens the BOM through intermediates (`_flatten_multi_level_bom`), so only their leaves need a supplier, and those are graded as their own lines | `src/lib/policies/verification.ts` (Supplier topology: every `supplierRows` entry graded for `primary_source`, including `__in_house`) | **✅ CLOSED.** The topology check grades BOUGHT lines only — a "(made in-house)" row is skipped for both the primary count and the no-primary sweep; an "(unassigned supplier)" leaf still blocks. `primaryFromGrid.test.ts` (D308 block: an intermediate is not asked for a primary; its unsourced leaf still is), mutation-red with the filter removed. NOT changed, stated: the 16 unsourced leaves on AA-ver3 are real — no `inbound_logistics` row names them, so the engine would refuse the network — and each is reported twice (the grid's "has no supplier" and the engine gate's `materials.supplier_link`), one defect counted as two, D183's shape on the client |
+| **D309** | **A local run did not read the project's model, so a make-to-stock project ran make-to-order on the user's machine.** The worker passes `projects.supply_chain_model` to the mapper, which uses it for every product whose master names no fulfillment mode; `suresuite.simulate` takes it as `project_model` and defaults to none, which the mapper reads as make-to-order. Notebook 03, whose step 3 prints "identical on every KPI", and the library guide's quick start passed nothing, so on a make-to-stock project a local run held no finished-goods stock where the platform's did. CI could not see it: the demo project is Make-To-Order. Found writing notebook 04 (§16 · 2026-10-20) | `sim-worker/sim_worker/worker.py` (`_fetch_project_model`); `scsim/scsim/io/project_map.py` (`_resolve_mode`: override → master → project model → MTO); `notebooks/src/03_local_simulation.py` (every `simulate` call); `docs/api/python-library.md` (quick start) | **✅ CLOSED** for what this repository teaches: notebooks 03 and 04 pass `project_model=project["supply_chain_model"]`, and the guide's quick start and `simulate` row say why. NOT changed, stated: `simulate`'s default stays none, so a user's own script that omits it still runs make-to-order — reading the model inside the package needs the project passed in, an API change no package owns yet |
 
 ### 4.1 Code map — the data layer
 
@@ -24554,6 +24555,64 @@ are `manualExample.test.ts`'s review hashes, red identically on the base branch.
 **Gap check.** (1) Nothing re-scores existing runs: production cards show the 10 % answer until a
 user re-runs the panel. (2) The default is a code constant, not a project setting; a project that
 wants another threshold can only send one in the request, and no surface does.
+
+### Developer API · notebook 04, component inventory and disruptions · 2026-10-20 · no migration
+
+**Owner-requested.** A notebook that loads a project's real data and its current policies, runs
+them, traces inventory to each material, tests supplier outages and follows the worst one down to
+the materials — offered on `/developer` like the others. The owner chose to add it as `04` rather
+than fold it into `02`, so the series is five again; the 2026-10-02 trim to four (§16) stands for
+the two notebooks it removed.
+
+**What the `/developer` workflow required, and the notebook does.**
+- **The CONFIG contract.** A download replaces the `# ── CONFIG` cell wholesale, so the study's own
+  settings live in a separate "Try changing" cell; `SUPPLIER_ID` names the outage to follow.
+- **The key most users hold.** Since WP 12.7 a personal key without a role is read-only. The
+  notebook reads `GET /key` and prints what it will do without each scope: no `write:data` → the
+  newest frozen dataset version, with its age and how to refresh it (every platform run freezes
+  its data); no `write:policies` → /policies read live (`GET …/policies`) and laid over the newest
+  saved version, the same per-family merge `_build_policy_snapshot` makes, with the differences
+  listed; no `read:runs` → the Simulation Lab's frame. With the write scopes it freezes and saves,
+  both content-addressed, so nothing is duplicated.
+- **The platform's inputs.** The frame is the saved baseline scenario's (a pre-filled
+  `SCENARIO_ID` with disruptions is used as a frame and its events run as a stress test), the
+  project's saved stress tests run too, the engine is reinstalled when its version is not the
+  platform's, and `project_model` is passed — which is how D309 was found.
+- **A large project.** Dataset versions are cached on disk by id (immutable), suppliers are
+  ranked by exposure (spend on materials no one else supplies) and capped, every long table shows
+  `MAX_ROWS` with the count hidden, and the full per-item weeks go to CSV rather than Excel.
+
+**Found by writing it.**
+1. **D309** — above.
+2. **A fixed inspection seed shows the wrong world.** On the synthetic project an S3 outage cost
+   sales in 4 of 10 replications, about 186 units each time, and nothing in the other six (where
+   the outage falls in the reorder cycle decides it). The average, +75, is no world's outcome, and
+   the seed the first draft used was one of the six. Step 7 now says how often the outage hurt,
+   tries `SEED_CANDIDATES` seeds, and follows the hurting world nearest the median loss among the
+   replications that lost. A one-replication run with seed *s* is replication 0 of a run with root
+   seed *s* (checked: 126.15 lost units both ways), so the world shown is one a platform run has.
+3. **A "back to baseline" week never arrived**, because an outage shifts the reorder cycle's
+   phase for the rest of the horizon. Replaced by "back in normal range": the week from which stock
+   stays inside the material's own baseline min..max.
+4. **Four `surfaces` citations into `DeveloperApi.tsx` were already stale on the base branch** (293,
+   295, 350 against calls at 316, 318, 373); the one line this adds moved them again, R12 named
+   them, and they now point at the calls.
+
+**Gate results.** `notebooks:check`: five notebooks current, CONFIG in step with `/developer`.
+`run_notebooks.py`: all five run keyless with the engine installed; 03 still prints "identical on
+every KPI: True". `notebooks/tests` 32 of 32. `docsAssets` + `notebookParity` 48 of 48. Typecheck
+15 of 15 held, `check:docs`, `audit:ui` clean; eslint on `DeveloperApi.tsx` 4 errors, the same 4 on
+the base branch. `contract:check`: one failure, R12 on `supply_chain_data`'s citation into
+`StagePolicyTable.tsx:406`, a file this does not touch — red identically on the base branch.
+Notebook 04 was also run with a read-only key and policy drift injected (both rebuild paths).
+
+**Gap check.** (1) Not run against a live project: this session has no key and no route to the
+API. (2) The API's scenario read (`listScenarios`) returns no `warmup_mode`, `demand_model` or
+`stopping_rule`, so a scenario that sets them runs with defaults locally — true of 03 as well.
+(3) The rebuilt policies cannot see a setting that was stored in the saved version and removed
+from /policies since; the saved value is kept. (4) `paired_compare` in the library and this
+notebook's `paired` agree by construction but are two authors of one rule; the package is the
+place to give `simulate` a per-item result and retire the notebook's own inspection helper.
 
 
 ## 17. Sequencing
