@@ -99,7 +99,7 @@ def styled(df, fmt=None, shade=(), cmap="Reds", caption=None):
             if col in df and pd.api.types.is_numeric_dtype(df[col]) and df[col].notna().any():
                 s = s.background_gradient(cmap=cmap, subset=[col])
         return s.set_caption(caption) if caption else s
-    except ImportError:  # pandas styling needs jinja2
+    except (ImportError, AttributeError):  # pandas styling needs jinja2; without it `.style` raises AttributeError
         if caption:
             print(caption)
         return df
