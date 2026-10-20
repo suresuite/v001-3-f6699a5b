@@ -35,6 +35,11 @@ const SERIES_LABEL: Record<string, string> = {
   fulfillment: "Fulfillment",
   backlog: "Backlog",
   lost_units: "Lost units",
+  // Inventory explorer (G17/§9.5.1) — finished-goods stock per product, its
+  // target S, and the mode the engine resolved (an attribute, never a line).
+  fg_on_hand: "FG on hand",
+  fg_target: "FG target",
+  make_to_stock: "Make-to-stock (1) or make-to-order (0)",
   // PLAN.md §24 WP 14.4 — the plan's own record per product.
   projected_demand: "Projected demand (plan)",
   requirement: "Requirement (plan)",
@@ -45,6 +50,10 @@ const SERIES_LABEL: Record<string, string> = {
   mrp_on_the_way: "MRP on the way",
   mrp_net: "MRP net",
 };
+
+/** Per-item series that are attributes of the item, constant every week, and
+ *  so never drawn as a line. */
+const ATTRIBUTE_KEYS = new Set(["make_to_stock"]);
 
 const SERIES_COLORS = [
   "hsl(215 80% 50%)",
@@ -152,7 +161,7 @@ export function ItemSeriesExplorer({ runId, warmupWeeks = null, emptyHint }: Pro
 
   const chartData = useMemo(() => {
     if (!series) return [];
-    const keys = Object.keys(series).filter((k) => Array.isArray(series[k]));
+    const keys = Object.keys(series).filter((k) => Array.isArray(series[k]) && !ATTRIBUTE_KEYS.has(k));
     if (keys.length === 0) return [];
     const n = Math.min(...keys.map((k) => series[k].length));
     return Array.from({ length: n }, (_, week) => {
@@ -176,7 +185,7 @@ export function ItemSeriesExplorer({ runId, warmupWeeks = null, emptyHint }: Pro
     );
   }
 
-  const seriesKeys = series ? Object.keys(series).filter((k) => Array.isArray(series[k])) : [];
+  const seriesKeys = series ? Object.keys(series).filter((k) => Array.isArray(series[k]) && !ATTRIBUTE_KEYS.has(k)) : [];
 
   return (
     <div className="rounded-md border bg-card">

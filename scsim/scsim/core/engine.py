@@ -538,6 +538,11 @@ def _mech_accounting(model: CompiledModel, ctx: SimContext, policies: list[Polic
             model.link_to_mat @ ctx.pipeline.sum(axis=1)
         ).ravel()
         tr.O_mat[:, t] = np.asarray(model.link_to_mat @ ctx.purchase_orders).ravel()
+        # Per-product FG stock at the same point as `tr.fg_units` (end of week,
+        # after PH-50's completions), and the target PH-70 set this week for
+        # next week's PH-40. Σ over products of FG is `fg_units`.
+        tr.FG[:, t] = ctx.fg_on_hand
+        tr.FG_TARGET[:, t] = ctx.fg_target
 
 
 _MECHANIC_HOOKS: list[tuple[str, Hook, Callable]] = [
@@ -839,8 +844,13 @@ class ScenarioResult:
     # trace_verbosity=full_debug and the run has exactly one replication
     # (per-item evidence at multi-rep scale is deliberately not exposed).
     # Keys: "material.on_hand" / "material.in_transit" / "material.orders"
-    # ([n_mats, horizon]) and "product.demand" / "product.production" /
-    # "product.fulfillment" / "product.backlog" / "product.lost_units"
+    # (+ "material.mrp_need" / "mrp_on_hand" / "mrp_on_the_way" / "mrp_net"
+    # when the run has MRP materials) ([n_mats, horizon]) and
+    # "product.demand" / "product.projected_demand" / "product.requirement" /
+    # "product.planned" / "product.production" / "product.fulfillment" /
+    # "product.backlog" / "product.lost_units" / "product.fg_on_hand" /
+    # "product.fg_target" / "product.make_to_stock" (1 = MTS, 0 = MTO, the
+    # same every week) (+ "product.wip" with a production lead time)
     # ([n_prods, horizon]).
     item_series: Optional[dict[str, np.ndarray]] = None
     # Row labels for item_series: {"material": [...ids], "product": [...ids]}.
@@ -1165,6 +1175,14 @@ def run_scenario(
             "product.fulfillment": tr.F,
             "product.backlog": tr.B,
             "product.lost_units": tr.L,
+            # Finished-goods stock per product and its target S^FG — the
+            # per-item halves of `fg_units`; both 0 for a make-to-order product.
+            "product.fg_on_hand": tr.FG,
+            "product.fg_target": tr.FG_TARGET,
+            # The fulfillment mode the engine RESOLVED (row → master → project
+            # → MTO), so no reader has to re-derive it: 1 = make-to-stock.
+            "product.make_to_stock": np.repeat(
+                compiled.model.mts_mask.astype(float)[:, None], tr.horizon, axis=1),
         }
         if tr.WIP is not None:
             # P-P.13 — units started and not yet completed, per product.

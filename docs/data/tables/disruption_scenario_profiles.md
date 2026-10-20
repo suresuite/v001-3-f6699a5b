@@ -265,6 +265,6 @@ Last day the disruption applies, inclusive. See `disruption_start` — the pair 
 
 ---
 
-*Generated from data contract `83b7b60d3b47`, engine `0.8.0`,
+*Generated from data contract `75dc21550c95`, engine `0.8.0`,
 sidecar `supabase/contract/disruption_scenario_profiles.contract.yaml`, table created by `20250827171106_00d577a4-5496-4e8d-8775-bbe357746c20.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

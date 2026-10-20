@@ -1614,7 +1614,7 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
       },
       {
         "id": "the-measures",
-        "title": "The 15 measures, and what each one is a count of"
+        "title": "The 18 measures, and what each one is a count of"
       },
       {
         "id": "the-explorer",
