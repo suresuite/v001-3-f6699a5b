@@ -5176,7 +5176,7 @@
               "page": "ProjectPolicies.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/hooks/useVerifiableExports.tsx:146",
+              "evidence": "src/hooks/useVerifiableExports.tsx:127",
               "confirmed": true
             }
           ],
@@ -5255,7 +5255,7 @@
               "page": "ProjectPolicies.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/hooks/useVerifiableExports.tsx:146",
+              "evidence": "src/hooks/useVerifiableExports.tsx:127",
               "confirmed": true
             }
           ],
@@ -5295,7 +5295,7 @@
               "page": "ProjectPolicies.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/hooks/useVerifiableExports.tsx:146",
+              "evidence": "src/hooks/useVerifiableExports.tsx:127",
               "confirmed": true
             }
           ],
@@ -5335,7 +5335,7 @@
               "page": "ProjectPolicies.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/hooks/useVerifiableExports.tsx:146",
+              "evidence": "src/hooks/useVerifiableExports.tsx:127",
               "confirmed": true
             }
           ],
@@ -5439,7 +5439,7 @@
               "page": "ProjectPolicies.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/hooks/useVerifiableExports.tsx:146",
+              "evidence": "src/hooks/useVerifiableExports.tsx:127",
               "confirmed": true
             }
           ],
@@ -5479,7 +5479,7 @@
               "page": "ProjectPolicies.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/hooks/useVerifiableExports.tsx:146",
+              "evidence": "src/hooks/useVerifiableExports.tsx:127",
               "confirmed": true
             }
           ],
@@ -5519,7 +5519,7 @@
               "page": "ProjectPolicies.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/hooks/useVerifiableExports.tsx:146",
+              "evidence": "src/hooks/useVerifiableExports.tsx:127",
               "confirmed": true
             }
           ],
@@ -26627,7 +26627,7 @@
           "page": "SimulationLab.tsx",
           "via": "table read",
           "grain": "column",
-          "evidence": "src/hooks/useVerifiableExports.tsx:243",
+          "evidence": "src/hooks/useVerifiableExports.tsx:235",
           "confirmed": true
         }
       ],
@@ -32881,7 +32881,7 @@
           "page": "ProjectPolicies.tsx",
           "via": "useVerifiableExports → select * from run_replications",
           "grain": "table",
-          "evidence": "src/hooks/useVerifiableExports.tsx:246",
+          "evidence": "src/hooks/useVerifiableExports.tsx:227",
           "confirmed": true,
           "note": "The run-results workbook. This is the path by which a replication row leaves the system, so it is the one A5's Reproducibility Record has to bind (`result-binding`, still owed — WP 10.4, which absorbed WP 9.2)."
         }
@@ -34612,7 +34612,7 @@
           "page": "SimulationLab.tsx",
           "via": "table read",
           "grain": "column",
-          "evidence": "src/hooks/useVerifiableExports.tsx:241",
+          "evidence": "src/hooks/useVerifiableExports.tsx:222",
           "confirmed": true
         }
       ],
@@ -39561,7 +39561,7 @@
           "page": "ProjectPolicies.tsx",
           "via": "useVerifiableExports → select * from simulation_runs",
           "grain": "table",
-          "evidence": "src/hooks/useVerifiableExports.tsx:235",
+          "evidence": "src/hooks/useVerifiableExports.tsx:216",
           "confirmed": true,
           "note": "The run-results workbook, whose reproducibility sheet binds the run from this row (WP 10.4)."
         }
@@ -45109,5 +45109,5 @@
   },
   "orphans": [],
   "phantom_tables": [],
-  "contract_version": "75dc21550c95"
+  "contract_version": "0b1a0b895ebf"
 }

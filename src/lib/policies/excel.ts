@@ -71,6 +71,16 @@ export function downloadWorkbook(wb: XLSX.WorkBook, filename: string) {
   XLSX.writeFile(wb, filename);
 }
 
+/** Excel's sheet-name rules: ≤ 31 chars, none of []:*?/\ . */
+export function sheetName(s: string): string {
+  return s.replace(/[[\]:*?/\\]/g, " ").slice(0, 31);
+}
+
+/** A file-name-safe slug of a display name (≤ 48 chars). */
+export function safeName(s: string): string {
+  return s.replace(/[^a-z0-9._-]+/gi, "-").slice(0, 48);
+}
+
 function normalize(v: unknown): string | number | boolean | null {
   if (v == null) return "";
   if (typeof v === "object") return JSON.stringify(v);
