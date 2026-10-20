@@ -147,6 +147,7 @@ const NOTEBOOKS = [
   { path: '/notebooks/suresuite_01_policy_experiment.ipynb', title: '01 · Policy experiment', mirrors: '/policies edit → Save version → Lab Compare, paired by replication', minutes: 15 },
   { path: '/notebooks/suresuite_02_disruption_resilience.ipynb', title: '02 · Disruption and resilience', mirrors: 'Lab stress tests: plant shutdown, supplier outage, recovery times', minutes: 15 },
   { path: '/notebooks/suresuite_03_local_simulation.ipynb', title: '03 · Simulate on your own machine', mirrors: 'Pull a dataset and policy version, run the engine locally, sweep for free', minutes: 15 },
+  { path: '/notebooks/suresuite_04_component_inventory.ipynb', title: '04 · Component inventory and disruptions', mirrors: 'Policies → Run & validate → Single (Inspection mode): every material week by week, then under each supplier outage', minutes: 20 },
 ] as const;
 type NotebookPath = (typeof NOTEBOOKS)[number]['path'];
 const COLAB_START_URL = 'https://colab.research.google.com/';

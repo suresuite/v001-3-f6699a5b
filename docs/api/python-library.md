@@ -66,13 +66,15 @@ import suresuite as ss
 api = ss.connect()                         # reads SURESUITE_API_KEY
 ss.install_engine(api)                     # once per environment
 
-pid  = ss.pick_project(api)["id"]          # or pick_project(api, "<project id>")
+project = ss.pick_project(api)            # or pick_project(api, "<project id>")
+pid  = project["id"]
+model = project["supply_chain_model"]      # the platform reads it; pass it to every local run
 data = ss.dataset(api, pid)                # newest dataset version, with its rows
 pol  = ss.policy(api, pid)                 # newest policy version
 print(data)                                # table sizes and graph_hash
 
-base  = ss.simulate(data, pol, replications=30)
-shock = ss.simulate(data, pol, replications=30,
+base  = ss.simulate(data, pol, replications=30, project_model=model)
+shock = ss.simulate(data, pol, replications=30, project_model=model,
                     disruptions=[ss.outage("S2", start_day=140, duration_days=42)])
 
 ss.kpi_table(base["run"])
@@ -84,7 +86,7 @@ A what-if on your own copy of the data:
 ```python
 sup = data.tables["suppliers"].copy()
 sup.loc[sup.supplier_id == "S2", "capacity_per_week"] *= 2
-ss.simulate(ss.with_tables(data, suppliers=sup), pol)
+ss.simulate(ss.with_tables(data, suppliers=sup), pol, project_model=model)
 ```
 
 ## Function reference
@@ -103,7 +105,7 @@ ss.simulate(ss.with_tables(data, suppliers=sup), pol)
 
 | Function | What it does |
 |---|---|
-| `ss.simulate(data, policy, scenario=None, disruptions=None, **frame)` | Runs the engine here. `frame` overrides the scenario: `replications`, `horizon_days`, `seed`, … Returns `{"run", "replications", "series", "inputs"}` |
+| `ss.simulate(data, policy, scenario=None, disruptions=None, project_model=None, **frame)` | Runs the engine here. `frame` overrides the scenario: `replications`, `horizon_days`, `seed`, … Pass `project_model=project["supply_chain_model"]`: the platform uses it for every product whose master sets no fulfillment mode, so without it a make-to-stock project runs make-to-order here. Returns `{"run", "replications", "series", "inputs"}` |
 | `ss.with_tables(data, **tables)` | A local copy of `data` with some tables replaced |
 | `ss.outage(target, start_day=140, duration_days=42, magnitude_pct=100)` | A disruption event. `target` is a **supplier id** of your project or `"plant"`; below 100 % it is a capacity cut |
 
@@ -167,7 +169,7 @@ stays installable; the list, and what each version changed, is on the
 
 ## The notebooks
 
-Four notebooks show the library in use. Download them from **/developer → Notebook**
+Five notebooks show the library in use. Download them from **/developer → Notebook**
 with your project's ids filled in, or run them with no key in demo mode.
 
 | Notebook | You will | Key needed |
@@ -176,3 +178,4 @@ with your project's ids filled in, or run them with no key in demo mode.
 | **01 · Policy experiment** | Change safety stock, compare A and B in a normal and an outage year, sweep four levels | No (demo) |
 | **02 · Disruption and resilience** | Plant shutdown, supplier outages and a capacity cut; damage, recovery and the weekly dip | No (demo) |
 | **03 · Simulate on your own machine** | Reproduce a platform run locally, a 20-run sweep, a second-supplier what-if | Yes |
+| **04 · Component inventory and disruptions** | Every material's stock week by week, an outage of each supplier, and the worst one followed down to the materials and products it hits | No (demo, with the engine installed); a read-only personal key for your project |
