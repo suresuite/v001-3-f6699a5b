@@ -28,7 +28,8 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # PLAN.md §25 · WP 15.3 — `contents: write` for the engine-v<version> tags only.
+    # PLAN.md §25 · WP 15.3 — `contents: write` for the engine-v<version> tags only
+    # (pushed AFTER the publish: the archive never waits on a tag).
     permissions:
       contents: write
     env:
@@ -46,29 +47,6 @@ jobs:
 
       - name: The index the wheels produce
         run: node scripts/publish_engine_wheels.mjs --dry-run
-
-      # PLAN.md §25 · WP 15.3 · §4 D295 — every version gets a tag at the commit that
-      # set it, read from scsim/CHANGELOG.yaml. A tag that already exists is NEVER
-      # moved: if it points elsewhere, say so and leave it (a moved tag would make
-      # "engine 0.4.0" mean two things).
-      - name: The change record's reader (PyYAML) for the tag step
-        run: python3 -m pip install --quiet pyyaml
-
-      - name: Tag every engine version (engine-v<version>, never moved)
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          new=0
-          while read -r tag sha; do
-            if have=$(git rev-parse -q --verify "refs/tags/$tag^{commit}"); then
-              [ "$have" = "$sha" ] || echo "::warning::$tag points at ${have:0:12}, the change record says ${sha:0:12} — not moved"
-              continue
-            fi
-            git tag -a "$tag" "$sha" -m "scsim engine ${tag#engine-v} (scsim/CHANGELOG.yaml)"
-            new=$((new + 1))
-          done < <(python3 scsim/scripts/engine_changelog.py tags)
-          if [ "$new" -gt 0 ]; then git push origin --tags; fi
-          echo "$new new engine tag(s)"
 
       - name: Resolve the service-role key (masked)
         env:
@@ -88,3 +66,43 @@ jobs:
         # (content-addressed, a file already there is skipped), so versions.json
         # lists every build ever shipped — WP 15.3.
         run: node scripts/publish_engine_wheels.mjs --backfill
+
+      # PLAN.md §25 · WP 15.3 · §4 D295 — every version gets a tag at the commit that
+      # set it, read from scsim/CHANGELOG.yaml. A tag that already exists is NEVER
+      # moved: if it points elsewhere, say so and leave it (a moved tag would make
+      # "engine 0.4.0" mean two things).
+      #
+      # AFTER the publish, and one tag per push. Until 2026-10-21 this step ran
+      # first and pushed every tag at once, and GitHub refuses a tag whose commit
+      # changed a workflow file unless the pusher holds the `workflows` permission,
+      # which this token cannot — so the whole push failed and the publish below
+      # was skipped on every engine merge from #376 (2026-10-04) on: no build was
+      # archived. Now the archive never waits on a tag, a refused tag does not
+      # block the others, and the step still FAILS while any version is untagged,
+      # naming the command a maintainer runs once to push it.
+      - name: The change record's reader (PyYAML) for the tag step
+        run: python3 -m pip install --quiet pyyaml
+
+      - name: Tag every engine version (engine-v<version>, never moved)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          pushed=0; refused=()
+          while read -r tag sha; do
+            if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
+              have=$(git rev-parse -q --verify "refs/tags/$tag^{commit}" || true)
+              [ -z "$have" ] || [ "$have" = "$sha" ] || echo "::warning::$tag points at ${have:0:12}, the change record says ${sha:0:12} — not moved"
+              continue
+            fi
+            git tag -f -a "$tag" "$sha" -m "scsim engine ${tag#engine-v} (scsim/CHANGELOG.yaml)"
+            if git push origin "refs/tags/$tag"; then pushed=$((pushed + 1)); else refused+=("$tag"); fi
+          done < <(python3 scsim/scripts/engine_changelog.py tags)
+          echo "$pushed new engine tag(s) pushed"
+          if [ "${#refused[@]}" -gt 0 ]; then
+            echo "::error::not tagged (this token lacks the workflows permission): ${refused[*]}"
+            echo "A maintainer pushes them once, from a clone with push rights:"
+            echo "  git fetch origin && python3 scsim/scripts/engine_changelog.py tags |"
+            echo "    while read -r t s; do git tag -a \"\$t\" \"\$s\" -m \"scsim engine \${t#engine-v} (scsim/CHANGELOG.yaml)\" 2>/dev/null; done"
+            echo "  git push origin ${refused[*]}"
+            exit 1
+          fi
