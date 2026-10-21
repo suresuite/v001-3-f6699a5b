@@ -17,6 +17,10 @@ A single material can now be disrupted: every supplier's deliveries of that mate
 - frozen reference runs moved: none
 - refs D311, WP 17.1
 
+**Changed under this version without a bump:**
+
+- 2026-10-21 · Tier 2 — The nexus battery (`scsim.stress.nexus`, PLAN.md §27 WP 17.2): every supplier and every supplied material disrupted alone under one shared scenario — a full outage from week 26, or the first week after warm-up if later, for each of 2–9 weeks — with the lost sales in € paired against the undisrupted run, ranked by the average over the eight durations. The scenario is exported to the registry as `nexus_scenario`. A new library entry point only: no existing run, KPI or frozen reference run moved.
+
 ## 0.8.0 · 2026-10-04 · Tier 3
 
 **Changed for some projects.** Results change only for projects whose products carry a production lead time (L > 0) or its shape; L = 0, the default, runs byte-identically (every frozen reference run kept its digest).

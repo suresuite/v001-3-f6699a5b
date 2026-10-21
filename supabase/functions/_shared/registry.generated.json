@@ -1450,6 +1450,36 @@
       "unit": "0\u2013100"
     }
   ],
+  "nexus_scenario": {
+    "baseline": "the same scenario with no event, paired per model replication",
+    "durations_weeks": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "effect": "lead_time_extension",
+    "hash": "91e593f964e43d4ae291a655b3616d7e8d507459f76f813f8489c1c941b3fb33",
+    "measure": "lost_sales_value",
+    "measure_unit": "EUR",
+    "rank_by": "average",
+    "start_rule": "max(start_week, warmup_end + 1)",
+    "start_week": 26,
+    "target_kinds": [
+      "supplier",
+      "material"
+    ],
+    "tie_break": [
+      "duration_9",
+      "target_kind",
+      "target_id"
+    ],
+    "version": 1
+  },
   "pipeline": {
     "persistent_state": {
       "state.backlog": [

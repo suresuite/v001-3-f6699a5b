@@ -5,9 +5,9 @@
   "sources": {
     "introspected": {
       "generator": "scripts/data-contract/introspect.mjs",
-      "migrations_found": 408,
-      "migrations_applied": 400,
-      "last_migration": "20261009000003_nexus_demand_at_risk.sql"
+      "migrations_found": 409,
+      "migrations_applied": 401,
+      "last_migration": "20261021000001_nexus_stress_store.sql"
     },
     "sidecars": 77,
     "registry": {
@@ -45109,5 +45109,5 @@
   },
   "orphans": [],
   "phantom_tables": [],
-  "contract_version": "8ae31472310f"
+  "contract_version": "fed80c132892"
 }

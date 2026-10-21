@@ -40,6 +40,7 @@ from scsim.io.project_map import POLICY_BUNDLE_KEYS, base_data_requirements
 from scsim.kpi.definitions import KPI_DICTIONARY
 from scsim.policies.registry import catalog
 from scsim.stress import battery as stress_battery
+from scsim.stress.nexus import NEXUS_SCENARIO, nexus_scenario_hash
 
 # The engine author's implemented/planned shorthand in ST_DEFINITIONS, with the
 # whitespace in front of it so a strip cannot leave "(manuscript )" behind.
@@ -238,6 +239,9 @@ def build_registry() -> dict[str, Any]:
         "run_window": run_window_rule(),
         "backorder": backorder_rule(),
         "disruption": disruption_rule(),
+        # PLAN.md §27 WP 17.2 — the nexus battery's ONE shared scenario (§27.2
+        # rule 1): the card, the store's key and the manual read it from here.
+        "nexus_scenario": {**NEXUS_SCENARIO, "hash": nexus_scenario_hash()},
         "pipeline": pipeline_schema(),
         "kpis": [
             {"name": k.name, "symbol": k.symbol, "definition": k.definition, "unit": k.unit}

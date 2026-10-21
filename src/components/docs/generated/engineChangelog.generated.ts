@@ -57,7 +57,14 @@ export const ENGINE_CHANGES: EngineChange[] = [
       "D311",
       "WP 17.1"
     ],
-    "amendments": [],
+    "amendments": [
+      {
+        "date": "2026-10-21",
+        "commit": null,
+        "tier": 2,
+        "summary": "The nexus battery (`scsim.stress.nexus`, PLAN.md §27 WP 17.2): every supplier and every supplied material disrupted alone under one shared scenario — a full outage from week 26, or the first week after warm-up if later, for each of 2–9 weeks — with the lost sales in € paired against the undisrupted run, ranked by the average over the eight durations. The scenario is exported to the registry as `nexus_scenario`. A new library entry point only: no existing run, KPI or frozen reference run moved."
+      }
+    ],
     "backfilled": false,
     "unrecordedChanges": null
   },

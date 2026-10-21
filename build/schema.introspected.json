@@ -1,15 +1,15 @@
 {
   "$generator": "scripts/data-contract/introspect.mjs",
   "$doc": "EFFECTIVE schema replayed from supabase/migrations/*.sql in filename order. Generated — do not edit; `npm run contract:introspect -- --check` fails on drift.",
-  "migrations_found": 408,
-  "migrations_applied": 400,
+  "migrations_found": 409,
+  "migrations_applied": 401,
   "first_migration": "20250815000000_approved_users_base.sql",
-  "last_migration": "20261009000003_nexus_demand_at_risk.sql",
+  "last_migration": "20261021000001_nexus_stress_store.sql",
   "counts": {
     "tables": 94,
     "views": 8,
     "enums": 4,
-    "functions": 426,
+    "functions": 429,
     "shadowed_definitions": 4,
     "phantom_tables": 0,
     "unparsed_statements": 0,
@@ -26518,6 +26518,21 @@
       "defined_by": "20260917000007_analyzer_provenance.sql"
     },
     {
+      "name": "analysis_publish_nexus_stress",
+      "signature": "analysis_publish_nexus_stress(uuid, jsonb, jsonb, uuid)",
+      "args": [
+        "_run_id uuid",
+        "_results jsonb",
+        "_summary jsonb",
+        "_actor_user_id uuid"
+      ],
+      "returns": "jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path",
+      "security_definer": true,
+      "volatility": null,
+      "comment": "PLAN.md §27 WP 17.3 — publishes a RUNNING nexus battery whole: every row a supplier or material with a ",
+      "defined_by": "20261021000001_nexus_stress_store.sql"
+    },
+    {
       "name": "analysis_results_are_immutable",
       "signature": "analysis_results_are_immutable()",
       "args": [],
@@ -26571,6 +26586,23 @@
       "volatility": "STABLE",
       "comment": null,
       "defined_by": "20261001000007_graph_levels_compute_once.sql"
+    },
+    {
+      "name": "analysis_start_nexus_stress",
+      "signature": "analysis_start_nexus_stress(uuid, uuid, uuid, text, jsonb, uuid)",
+      "args": [
+        "_project_id uuid",
+        "_model_validation_id uuid",
+        "_dataset_version_id uuid",
+        "_code_version text",
+        "_params jsonb",
+        "_actor_user_id uuid"
+      ],
+      "returns": "jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path",
+      "security_definer": true,
+      "volatility": null,
+      "comment": "PLAN.md §27 WP 17.3 — opens a nexus battery bound to an ACTIVE Validated Model (its policy version) and ",
+      "defined_by": "20261021000001_nexus_stress_store.sql"
     },
     {
       "name": "api_can_access_project",
@@ -28360,6 +28392,19 @@
       "volatility": null,
       "comment": null,
       "defined_by": "20250904124537_d3482583-9bcd-4aba-a926-655d073e1b37.sql"
+    },
+    {
+      "name": "get_nexus_stress_results",
+      "signature": "get_nexus_stress_results(uuid, uuid)",
+      "args": [
+        "p_project_id uuid",
+        "p_user_id uuid"
+      ],
+      "returns": "jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path",
+      "security_definer": true,
+      "volatility": "VOLATILE",
+      "comment": "PLAN.md §27 WP 17.3 — the Nexus card's read: the project's newest published nexus battery with its ",
+      "defined_by": "20261021000001_nexus_stress_store.sql"
     },
     {
       "name": "get_node_list",
