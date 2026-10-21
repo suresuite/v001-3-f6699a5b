@@ -808,6 +808,6 @@ A triangular or uniform product's longest production lead time — a duration in
 
 ---
 
-*Generated from data contract `4d84dbbd2288`, engine `0.8.0`,
+*Generated from data contract `8ae31472310f`, engine `0.8.1`,
 sidecar `supabase/contract/products.contract.yaml`, table created by `20260614000001_item_master.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

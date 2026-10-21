@@ -119,7 +119,16 @@ def _mech_week_start(model: CompiledModel, ctx: SimContext) -> None:
     ctx.cap_factor[:] = 1.0
     ctx.plant_lt_block_end = 0
     ctx.plant_cap_factor = 1.0
+    if ctx.link_lt_block_end.any():
+        ctx.link_lt_block_end[:] = 0
     for e in ctx.events:
+        if e.is_material:
+            # node:material → every supply link of that material, and only those
+            # (lead_time_extension only — validated on the event).
+            if e.lt_active_at(t):
+                links = model.links_of_mat[e.material_idx]
+                ctx.link_lt_block_end[links] = np.maximum(ctx.link_lt_block_end[links], e.end)
+            continue
         if e.is_plant:
             # node:plant → throttle/halt the plant's own production.
             if e.lt_active_at(t):
@@ -357,6 +366,15 @@ def _mech_defer_arrivals(model: CompiledModel, ctx: SimContext) -> None:
             dst = end % W
             ctx.pipeline[links[moving], dst] += qty[moving]
             ctx.pipeline[links[moving], src] = 0.0
+    # node:material — the same deferral, per link. Runs after the supplier pass;
+    # a unit the supplier pass moved to an earlier window end is deferred again
+    # in the week it would land, so the two compose to the later end.
+    for link in np.flatnonzero(ctx.link_lt_block_end > t + 1):
+        src = (t + 1) % W
+        qty = ctx.pipeline[link, src]
+        if qty > 0:
+            ctx.pipeline[link, int(ctx.link_lt_block_end[link]) % W] += qty
+            ctx.pipeline[link, src] = 0.0
 
 
 def _mech_ship_queue(model: CompiledModel, ctx: SimContext) -> None:
@@ -456,7 +474,7 @@ def _mech_ship_queue(model: CompiledModel, ctx: SimContext) -> None:
             lt[i] = _lt_from_variate(dist, int(lt[i]), float(model.link_lt_cv[link]),
                                      float(ctx.lt_variates[link, t]))
     arrival = t + np.maximum(1, lt)
-    block = ctx.lt_block_end[model.link_sup[L]]
+    block = np.maximum(ctx.lt_block_end[model.link_sup[L]], ctx.link_lt_block_end[L])
     arrival = np.where(block > 0, np.maximum(arrival, block), arrival)
     # The ring holds W slots; a delay of W or more writes a slot that is read
     # EARLIER than the arrival week — the shipment lands early and nothing

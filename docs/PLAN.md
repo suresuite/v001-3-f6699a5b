@@ -47,6 +47,7 @@ duplicated facts stated here, which is the defect this plan exists to end.)*
 | 24 | Phase 14 — Demand-driven planning: customer demand → planned production → MRP → per-row fulfillment |
 | 25 | Phase 15 — The engine ledger: every build archived, every change recorded, published on /docs |
 | 26 | Phase 16 — Stochastic lead times, production lead time, FG inventory |
+| 27 | Phase 17 — Nexus by stress test: lost sales of a shared disruption, prepared in advance |
 
 ---
 
@@ -500,6 +501,8 @@ else cites the D-number or the §4.1 row. `npm run check:docs` enforces it.
 | **D307** | **"Nexus node prediction" measured how CONNECTED a node is, not what losing it costs, and said nothing of how it was computed.** The default path scored every lane row by its source node's blend of 60 % capped degree, 10 % a second capped degree labelled "betweenness", 10 % undirected eigenvector, 10 % per-component closeness, 5 % in/out balance and 5 % a revenue weight that was a literal 0 — so roughly 70 % of the score was neighbour count, no node could exceed 0.95, and a node in a small isolated component scored near the top on closeness. A node was "nexus" when it reached the 90th percentile of that blend: ties at the cut flagged more than 10 %, a one-node network was always flagged, and a low absolute score could still be "nexus". A supplier with ONE lane that is the only source of the material the largest product needs scored below a hub with ten interchangeable partners. The configured-ML path posted lane rows carrying `location_name`, `capacity`, `risk_factor` and four more fields `supply_chain_data` does not have, and fell back on failure with a log line only; neither the method nor the fallback reached the run's key or the card (§5 T2). The card's "Total Nodes / Nexus" were LANE-ROW counts from `get_prediction_stats`, filtered by plant name across every project, and the guide the card links said the result came from "historical simulations", which nothing reads. Owner-requested ("what are your suggestions to improve the logic … please implement it") | `supabase/functions/predict-critical-nodes/index.ts` before D307 (`predictCriticalNodes`: the weight blend, the p90 cut, the `ML_API_URL` branch); `get_prediction_stats` (`20250822031816`); `public/docs/nexus-node.md`; D196 for where the result was written | **✅ CLOSED in the repository (migration `20261009000003`).** The score is DEMAND AT RISK — the share of finished-goods demand (by weekly volume) lost if the node alone fails, with no rerouting and no stock — computed by `supabase/functions/_shared/criticalNodes.ts` from the lane graph with the EDGE KIND as the propagation rule (inbound = share of the material, bom = a product loses its worst material, outbound = demand weight); nexus = at least the threshold, an absolute test — default 50 % since 2026-10-12 (owner decision; it shipped at 10 %), compared on the stored 4 dp score. Every fallback (no outbound volume, no inbound volume, unknown edge kind, a cycle) is a stated run warning. Directed betweenness is exact (Brandes) and only breaks ties. The ML branch is removed. `analysis_apply_critical_nodes` mirrors one score per node onto `node_list` from a RUNNING `critical_nodes` run (attributed, browser roles revoked); `get_critical_node_stats` reads node counts, method, threshold, staleness and the ten highest nodes with their drivers for ONE project and refuses a reader without access. Method and threshold are in the run's `params`, so in its key. The card shows all of it; the guide is rewritten. `criticalNodes.test.ts` (15, hand-worked, including the example project's stated ground truth) and `rehearsal/890` (7 sections, mutation-tested on the actor). The deprecated `analysis_mark_critical_nodes` lost its `anon`/`authenticated` EXECUTE, which `rehearsal/890` §7 found. NOT done, stated: no comparison against a simulated outage battery (blueprint §11.2), and no recovery-time or stock term |
 | **D308** | **The pre-run check demanded a primary supplier for every sub-assembly — a blocker no action on /policies could clear.** D175 gave each BOM intermediate a "(made in-house)" line on the Supplier stage and said it raises no needs-supplier alarm; the grid kept that promise and the verifier did not. It graded every Supplier-stage row for a primary source, a "(made in-house)" row carries none, and so each intermediate was blocked with "has no primary supplier — select one" while the grid offered no supplier to select. On `Project AA - ver3` that was 65 of the 97 blockers on Run & Validate — exactly D175's 65 intermediates — reported by the project's owner 2026-10-12 ("in the UI we defined the source already"). The engine flattens the BOM through intermediates (`_flatten_multi_level_bom`), so only their leaves need a supplier, and those are graded as their own lines | `src/lib/policies/verification.ts` (Supplier topology: every `supplierRows` entry graded for `primary_source`, including `__in_house`) | **✅ CLOSED.** The topology check grades BOUGHT lines only — a "(made in-house)" row is skipped for both the primary count and the no-primary sweep; an "(unassigned supplier)" leaf still blocks. `primaryFromGrid.test.ts` (D308 block: an intermediate is not asked for a primary; its unsourced leaf still is), mutation-red with the filter removed. NOT changed, stated: the 16 unsourced leaves on AA-ver3 are real — no `inbound_logistics` row names them, so the engine would refuse the network — and each is reported twice (the grid's "has no supplier" and the engine gate's `materials.supplier_link`), one defect counted as two, D183's shape on the client |
 | **D309** | **A local run did not read the project's model, so a make-to-stock project ran make-to-order on the user's machine.** The worker passes `projects.supply_chain_model` to the mapper, which uses it for every product whose master names no fulfillment mode; `suresuite.simulate` takes it as `project_model` and defaults to none, which the mapper reads as make-to-order. Notebook 03, whose step 3 prints "identical on every KPI", and the library guide's quick start passed nothing, so on a make-to-stock project a local run held no finished-goods stock where the platform's did. CI could not see it: the demo project is Make-To-Order. Found writing notebook 04 (§16 · 2026-10-20) | `sim-worker/sim_worker/worker.py` (`_fetch_project_model`); `scsim/scsim/io/project_map.py` (`_resolve_mode`: override → master → project model → MTO); `notebooks/src/03_local_simulation.py` (every `simulate` call); `docs/api/python-library.md` (quick start) | **✅ CLOSED** for what this repository teaches: notebooks 03 and 04 pass `project_model=project["supply_chain_model"]`, and the guide's quick start and `simulate` row say why. NOT changed, stated: `simulate`'s default stays none, so a user's own script that omits it still runs make-to-order — reading the model inside the package needs the project passed in, an API change no package owns yet |
+| **D310** | **The nexus ranking is not what a disruption costs, is computed on a click, and states no baseline.** Since D307 a node is ranked by its static demand at risk — the share of finished-goods demand lost if it alone fails with no rerouting, no stock, no recovery and no policy. A supplier the project's own backup-supplier or safety-stock policy fully covers ranks the same as one nothing covers, and a two-week outage cannot be told from a nine-week one. The card computes on a **Run prediction** click, and names neither the data version, the policy version nor the engine build the figure came from (§5 T4). The engine has a supplier outage battery that would answer the question and no product path calls it (D111). Owner-requested, 2026-10-21: rank every material and supplier by the lost sales of a shared disruption (start week 26, 2–9 weeks), under the project's policies, prepared in advance, on `Project AA - ver3` | `supabase/functions/_shared/criticalNodes.ts` (the static score); `src/components/MLPrediction.tsx` (the Run button, no baseline); `scsim/scsim/stress/battery.py` (`_run_battery`, uncalled by any product path) | **OPEN — Phase 17 (§27), WP 17.2–17.5** |
+| **D311** | **The engine cannot disrupt a material.** `TargetType` has `node:supplier`, `node:plant` and a behaviour-neutral `edge:lane`; the disruption state is sized per SUPPLIER, so the only way to stop a material is to stop every supplier of it — which also stops every other material those suppliers ship. `project_map._map_events` skips a `material:*` target with a warning (D112's "land later in M7"). A per-material stress test is therefore not expressible | `scsim/scsim/entities/enums.py` `TargetType`; `scsim/scsim/core/context.py` (`lt_block_end`, `cap_factor` sized `n_sups`); `scsim/scsim/io/project_map.py` `UNSUPPORTED_EVENT_KINDS` | **CLOSED ✅ for the engine API (WP 17.1, engine 0.8.1)** — `node:material`, a per-link block, the per-link firm view read by P-S.1/P-S.2/P-T.2/P-P.9; `test_material_disruption.py` (8). The PLATFORM schedule path still skips `material:*` (mapper, dispatch gate, presets) — that half is D112's, WP 6.4 |
 
 ### 4.1 Code map — the data layer
 
@@ -24663,6 +24666,101 @@ ordered — said at the point of display. (4) A material request is answered fro
 engine. (5) The split is equal parts sized by the capacity existing customers leave free; it is one
 suggestion, not an optimised schedule.
 
+### WP 17.0 — Phase 17 planned: nexus by stress-tested lost sales · 2026-10-21 · docs only
+
+**Owner-requested**: improve nexus materials and suppliers — a shared scenario (disruption from week 26,
+2–9 weeks), the project's policies applied, a stated baseline (data, policy and engine versions), each
+material and supplier disrupted alone with its lost sales recorded, and the Nexus card reading the
+stored result with no Run click — on `Project AA - ver3`. Planned as §27, defects §4 D310–D311.
+
+**What the previous package promised versus what this one found.** D307 closed with "NOT done, stated:
+no comparison against a simulated outage battery (blueprint §11.2), and no recovery-time or stock term".
+This phase is that battery. Reading for it found what D307's note did not say: the battery cannot be
+run per MATERIAL at all (D311 — the disruption state is per supplier and the mapper skips material
+targets), so the first package is engine work, not a job around the existing battery. It also found
+that "week 26" is ambiguous on an engine whose warm-up is auto-detected per run, and that a project
+whose unmet demand is backordered can report zero lost sales for a real outage — both now rules
+(§27.2 rules 1 and 4) rather than surprises at WP 17.4.
+
+**Gap check.** Four owner decisions are written into WP 17.0 for review (the week-26 reference, the
+ranking measure, value vs units, CI vs worker); each has a recommended default the later packages
+assume. Nothing in an earlier package is re-scoped.
+
+### WP 17.0 follow-up — the owner's four decisions · 2026-10-21 · docs only
+
+**Owner decisions** on the four WP 17.0 left open:
+1. **Start week** — "if warm up is after week 26, we use warm up + 1; if warm up is before week 26, we
+   use week 26": `max(26, t_w + 1)` (§27.2 rule 1). It replaces the plan's `t_w + 26`. What it keeps:
+   the start lies 1–26 weeks into the 52-week window, so the 9-week cell still has ≥ 17 weeks of recovery.
+2. **The result is a table**, not a single ranking measure: one sortable column per duration (2…9
+   weeks), a final Average column, opened sorted by Average (rule 5). The plan's tie-break survives as
+   the table's tie order.
+3. **€** — lost sales are shown and sorted in value; units are stored, not ranked on (rule 4).
+4. **GitHub Actions**, "considering carefully the limitation of GitHub": WP 17.4 is rewritten as
+   prepare → sharded cells → publish, with a table of each documented limit (6 h per job, 256-job
+   matrix, plan concurrency, runner memory, billed minutes, lost runners, artifact retention,
+   default-branch dispatch, secrets, runner-image drift) and the design response to each.
+
+**Gap check.** One consequence the decisions create and the plan now states: the first real battery
+cannot run until WP 17.3's migration is merged, because the writer it publishes through deploys on
+merge. Shards must agree on one `t_w`, so `prepare` adopts it and every shard proves it reproduced
+the same clean reference. Nothing else moves.
+
+### WP 17.1 — Engine: a material can be disrupted · 2026-10-21 · no migration · engine 0.8.1
+
+**Owner direction, same day**: start WP 17.1; the nexus scope is suppliers and the materials they
+supply — not sub-assemblies, customers or products; and the future run-from-the-card flow needs a
+Validated Model, with the user choosing engine, baseline and data version. The last two are now
+§27.2 rule 2 and WP 17.7, kept short as asked.
+
+**What changed.** `TargetType.NODE_MATERIAL` (lead-time extension only — a material event with a
+capacity cut is refused, because capacity is shared by a supplier's links). The injector resolves it
+to a material index; `SimContext.link_lt_block_end` holds a per-link block, set in the week_start
+mechanic for every link of the material and composed with the supplier block by the later end in the
+arrival deferral and the quoted arrival. `visible_disrupted_links()` is the firm's per-link view, and
+the four policies that read disruptions (P-S.1, P-S.2, P-T.2, P-P.9) read it, so a material outage
+never makes a policy treat its supplier's other materials as disrupted. Tier 2 → **0.8.1**: change
+record, reference docs, registry, wheels, data contract, worker fixture and release report regenerated.
+
+**What the previous package promised versus what this one found.**
+1. **The scope rule holds by construction.** WP 17.0 planned to refuse a material "with no supply link".
+   There is no such material: `Network` refuses a material with no qualified supplier, and a
+   sub-assembly is a product in the engine. The check was removed rather than shipped unreachable;
+   naming a sub-assembly is an unknown-material error, which the tests pin.
+2. **An 8-week outage loses nothing on the test networks** — the default material cover absorbs it.
+   The scope tests use 14 weeks. That is the battery's question in miniature: a short outage is
+   absorbed by stock and policy, which is exactly why WP 17.2 records every duration 2–9 separately.
+3. **The platform path is not this package's.** The mapper, the dispatch gate (read from the
+   registry's `unsupported_target_kinds`, which did not move), the Lab presets and the API mock still
+   skip `material:*`, and their warning stays true of that path. WP 17.2's battery builds events on
+   the mapped scenario and needs none of them. Opening the platform path stays D112's (WP 6.4).
+
+**Gate results.** `scsim` suite green with the eight new tests (`test_material_disruption.py`: a
+material outage equals the coinciding supplier outage byte for byte; it stops only its material, and
+two materials' losses add up to their supplier's; it blocks every supplier of the material; P-S.1
+does not reroute a healthy material; overlapping events compose to the later end; validation; the
+supplier view ignores material events; an untouched run leaves the link state inert). Golden digests
+unmoved. `engine_changelog.py check --base auto`, `gen_docs.py --check`, `gen_frontend_registry.py
+--check`, `build_engine_wheels.sh --check`, `release_report.py --check`, `contract:check`,
+`check:docs`, typecheck (15 of 15 held), `audit:ui`, notebooks — all green; `scsim` 567 passed,
+`sim-worker` 184, `notebooks/tests` 32, vitest 1 839 of 1 839 (after regenerating the docs index, which
+carries the change record). Release report 0.8.1 against 0.8.0's archived build: 28 of 28 KPI rows
+*identical*. **Red, and red on `main` without this branch**: `contract:check` R12
+(`StagePolicyTable.tsx:406` lineage anchor) and R7's append-only half (§16 lost "D7 — blank `volume`
+and `unit_price` land on an inbound upload" after `4deac74`; it runs only on a full clone), and
+eslint's 289 pre-existing errors, none in a file this package touched.
+
+**Base merge, same day (`main` at `16b6f1d6`).** `main` had fixed both `contract:check` reds above
+(#404) and amended 0.8.0 with an output-only inspection-run change; the engine sources merged without
+conflict, and every conflict was a generated file, regenerated rather than picked: table pages,
+data contract, registry, wheels and manifest (build `scsim-0.8.1+84cc3f4faaa9`), worker fixture,
+docs index, change-record views, the 0.8.1 release report (28 of 28 rows still *identical*). **And
+the step this package had missed**: the notebook demo records each run's `code_version`, so it was
+re-recorded (`record_demo.py`) and the six notebooks rebuilt — only the engine version and build moved.
+After the merge: `contract:check` green; scsim 571, sim-worker 184, notebooks 32, vitest 1 869 of
+1 869; every generator `--check` current; eslint 289 errors, identical to `main`'s.
+
+**Gap check.** WP 17.2 inherits a working target; nothing in it moves.
 
 ### D7 — blank `volume` and `unit_price`, and a zero `unit_price`, land on an inbound upload · 2026-10-09 · no migration
 
@@ -24705,6 +24803,7 @@ that lands with a warning, and a negative price that does not.
 | **14** | **14.0 – 14.8** | **demand-driven planning: demand per customer × product row, planned production = min(requirement, capacity) with FG policies, MRP for materials, per-row fulfillment; multi-stage later** | — | **14.0 ✅** the planning baseline pinned, the shared allocation helper (`core/allocation.py`) with P-C.2 delegating, ADR 0002, and frozen golden digests (engine + worker) that make "byte-identical" checkable. Registered 2026-10-02 (§24, D284); prompts in `docs/design/demand-driven-planning-prompts.md`. **14.1 ✅** demand per customer × product row in the engine (engine 0.3.0): row specs and forecasts, a real `normal` clipped at 0 and counted, the plan's projected-demand view, projection-error KPIs. **14.2 ✅** demand per row from the data: per-row specs on `outbound_logistics`, a `demand_forecasts` table spread evenly at promotion, both in the snapshot's simulation scope, the Customer table's demand cells as row overrides, and a pre-run finding per missing parameter. **14.3 ✅** per-row fulfillment (engine 0.4.0): backorder, window, cost and fill rate per customer × product row, one allocation rule per project with per-row priority / price / service target, `revenue_max` real, the customers' contracted floor consumed and uploadable. **14.4 ✅** planned production over a horizon = min(requirement, capacity) with fulfillment's own row step for the carry-forward (engine 0.5.0), base-stock / min-max / days-of-cover FG policies and FG opening stock on `products` (RFC 4 closed), Plant cells as overrides. **14.5 ✅** MRP for materials (engine 0.6.0): `policy_type = "mrp"` orders BOM × planned production over the lead time, net of stock and the pipeline, ≥ MOQ; golden #7 exact; late-receipt and shortage KPIs; the MRP record in inspection runs; ≈ +12–16 % per replication at TRON scale. **14.6 ✅** the CRN-paired MRP-vs-reorder-point study, regenerated and byte-compared in CI (`docs/research/mrp-vs-reorder-point.md`), gate `plan-from-demand` in CLAUDE.md, G20 closed in the blueprint for planning, the manual's "How planning works" page. **PHASE COMPLETE (14.7 excluded by design — multi-stage waits for the owner)**. **14.8 ✅** /policies follow-up: each Plant row's own MTS / MTO is a cell the engine reads and the FG policy shows only behind it, the 13 Plant cells no run read are gone, the Customer card became one project line, P-P.4's buffer has no control (the row's S says how much); demand is authored on the Customer stage only (D286), and its parameters follow the row's distribution (D287) |
 | **15** | **15.0 – 15.7** | **the engine ledger: one build identity, an append-only build ledger, an archive installable by version, one change record with a CI gate, a release quality report, and an "Engine versions & changes" page on /docs** | — | **15.0 ✅** the plan (§25), §4 D292–D297 registered from a verified reading, blueprint gap G21, gate `engine-ledger` named in `CLAUDE.md`. Five owner decisions are open (§25.5). **15.4 ✅** the change record: `scsim/CHANGELOG.yaml` holds all 18 versions back to 0.1.0, with a gate in `scsim-tests.yml` (rules 1–4 as planned, plus 6 and 7, added because rules 1–4 could not catch the unbumped commit that motivated the phase) and two generated views. It found four unbumped engine changes, now amendments, and 44 engine commits no record describes, published as a count. **15.1 ✅** one engine identity: a build is named by a digest of its source (`scsim-0.6.1+<12 hex>`, over scsim and the worker's compute path), the same in the worker, the browser and the library. The plan's commit stamp was replaced because the browser wheels cannot name the commit that holds them. The package version is the engine version. The demo fixture, labelled 0.2.8 for eight versions, was re-recorded with identical numbers. **15.2 ✅** the build ledger (`20261004000001`): every build a boot report, a run (as anon) or history names, append-only, withdrawn and never deleted, with dispatch refusing a withdrawn current build. Four planned design points were not built because each would author a fact twice. **15.3 ✅** the archive: every build ever published is listed in `versions.json` and installable by version or exact build (API and `suresuite`), history is backfilled (46 builds under 17 versions), and every version is tagged from the change record. An archived build, installed from its wheels alone, reproduces its own frozen results byte for byte. **15.5 ✅** the release report: this build against the previous version's archived build on the worker's three frozen reference runs, same seeds, a 95 % interval per KPI; byte-compared in CI, with a gate refusing a change record that understates it. 0.6.1 against 0.6.0 is identical on the reference set. **15.6 ✅** the page: /docs "Engine versions & changes", generated from the record and the measured reports, with the ledger read live. Run badges, comparisons, stale Validated Models and the Reproducibility Record all say what an engine changed and link to it. **Owed: WP 15.7, the after-merge reading.** |
 | **16** | **16.0 – 16.6** | **stochastic lead times configured like demand (per supplier × material lane), a production lead time per product (P-P.13), and the FG inventory band laid out like the Supplier inventory band** | — | **16.0 ✅** the plan (§26), §4 D299–D302 registered from a verified reading (the brief's "`inbound_logistics` carries the spread" and "lead time is read-only" were both wrong by the time it ran — D290 had made the lead time an override), blueprint P-S.6 widened, P-P.13 added, §2.4's W^FG boundary made opt-in. **16.1 ✅** engine shapes (0.7.0): normal / triangular / uniform drawn per lane from a new world stream, CRN-safe under a changed primary, lognormal/gamma bit-identical · **16.2 ✅** per-lane data + mapper (`20261004000003`, rehearsal 840; D302 closed) · **16.3 ✅** Supplier cells: a shape per row and only its parameters, a bounded row's lead time is the bounds' mean (D299 closed) · **16.4 ✅** engine production lead time (0.8.0): starts complete at t + L through a per-product pipeline, the plan offset by E[L] net of WIP, WIP traced and uncharged, the honesty test extended · **16.5 ✅** product data + Plant cells (`20261004000004`, rehearsal 850; D300 closed) · **16.6 ✅** FG inventory laid out like the Supplier band (D301 closed). **PHASE COMPLETE** — §15 reading owed in the push after the merge |
+| **17** | **17.0 – 17.7** | **nexus by stress test: every material and supplier of a project disrupted alone under one shared scenario (full outage starting in week `max(26, t_w + 1)`, 2–9 weeks), the project's policies applied, shown as a table of lost sales in € per duration with an Average column it opens sorted by, stored with its baseline and read by the Nexus card with no Run click — first on `Project AA - ver3`** | — | **17.0 ✅** the plan (§27), §4 D310–D311 registered from a verified reading (a material cannot be disrupted; "week 26" needs a reference; backorder hides lost sales), four owner decisions settled 2026-10-21 (start week, the sortable table, €, GitHub Actions within its limits); targets are suppliers and the materials they supply, nothing else; the run-from-the-card flow written as WP 17.7 (Validated Model required; pick engine, baseline, data version). **17.1 ✅** engine 0.8.1: a material can be disrupted (D311 closed for the engine API; golden digests unmoved). WP 17.2 is next |
 
 **27 work packages** (26 + the five 5.2 sub-packages counted as one). WP 3.0 was added at the Phase 2→3 boundary review, for the reason boundary reviews exist: nine defects had an owner that had already finished, which reads exactly like having an owner.
 Commit convention: `Phase N / WP N.M / <blueprint ref>: <title>`.
@@ -27653,3 +27752,217 @@ conservation (started = completed + WIP) per product per week.
 **Order.** 16.0 → 16.1 → 16.2 → 16.3 → 16.4 → 16.5 → 16.6 (16.6 is independent and may move).
 **Out of scope:** empirical lead times (wait for the observations tier), lead-time correlation
 across lanes, sub-weekly production, WIP holding cost (rule 8), multi-stage production (WP 14.7).
+
+---
+
+## 27. Phase 17 — Nexus by stress test: rank every material and supplier by the sales a shared disruption costs, prepared in advance
+
+**The ask (product owner, 2026-10-21).** Improve nexus materials and suppliers so the ranking is the
+LOST SALES a disruption would cause, not a structural score:
+1. one **shared scenario** for every target — the disruption **starts in week 26** and lasts
+   **2 to 9 weeks**;
+2. the run **applies the project's supply-chain policies**;
+3. the **baseline is stated**: data version, policy version, engine (simulation) version;
+4. **each material and each supplier is disrupted alone**, and its lost sales are recorded;
+5. clicking **Nexus node prediction** reads the stored results from the database — the nexus list is
+   those targets **sorted by lost sales** under the common scenario. **No "Run prediction" click**: the
+   battery is run and prepared in advance;
+6. the case is **`Project AA - ver3`**.
+
+Defects §4 **D310** (the ranking is not what a disruption costs, and has no stated baseline) and
+**D311** (the engine cannot disrupt a material). Blueprint §11.5 — this battery is the simulated
+ground truth the surrogate job (Phase D, G12) was always going to be measured against; it is built
+here as a stored battery, without the surrogate.
+
+### 27.1 What was verified before planning
+
+Read against the code on 2026-10-21, base `72cc760`:
+- **Today's nexus is a static score, computed on click.** `predict-critical-nodes` scores each node's
+  *demand at risk* from the lane graph — no rerouting, no stock, no recovery, no policy (§4 D307) —
+  and the card (`MLPrediction.tsx`, on all three network pages) offers a **Run prediction** button.
+  The card itself says "a stress test simulates the same outage over time"; nothing does.
+- **A supplier outage battery exists in the engine and no product path calls it** (§4 D111).
+  `scsim.stress.battery._run_battery` already does most of what is asked: one clean reference per
+  battery, one shared warm-up, one warm snapshot per model seed reused by every cell (CRN, so every
+  comparison is paired), and `lost_sales_value` / `lost_units` / `fill_rate` / `ttr_weeks` per
+  cell. Its start is a random draw `U{t_w..t_w+2}` and its durations are fixed at 5/8/10 (ST-1) —
+  the ask needs a fixed start and 2–9.
+- **A material cannot be disrupted (D311).** `TargetType` is `node:supplier`, `node:plant`,
+  `edge:lane` (behaviour-neutral); the disruption state is per SUPPLIER (`lt_block_end`,
+  `cap_factor` sized `n_sups`), and `project_map._map_events` skips `material:*` with "land later in
+  M7" (§4 D112). Disrupting all suppliers of a material is not the same event — it would also stop
+  every other material those suppliers ship.
+- **Event weeks are absolute simulation weeks**; the KPI window is `analysis_window` (default 52)
+  weeks starting at the adopted warm-up end `t_w`, which is auto-detected per run. "Week 26" therefore
+  needs a declared reference (rule 1).
+- **`lost_sales_value` counts only demand that is lost.** Under P-C.1 `unmet_demand_handling =
+  backorder`, unmet demand waits rather than being lost, so a pure-backorder project can report zero
+  lost sales for a real outage. The battery records the backlog beside it (rule 4).
+- **`Project AA - ver3`'s shape**, from §15 and §16: one finished product (`DB366`), 65 sub-assemblies
+  (made in-house, no supply lane), 195 purchased materials, ≈321–386 inbound lines, and one supplier
+  (`AHG`) that supplies 27 materials. So ≈195 material targets plus every supplier, × 8 durations —
+  on the order of **2 000 cells**. That is a batch job, not a click.
+- The store exists: `analysis_runs` (input hash, `dataset_version_id`, `params` in the key) and
+  `analysis_results` (one row per entity, `metrics` jsonb, append-only) — the battery is a new
+  `analysis_kind`, not a new table (§0: extend, don't replace).
+- Engine **0.8.0**, latest migration `20261009000003`, latest rehearsal `890`, latest D-number D309.
+
+### 27.2 The rules each package is held to
+
+| # | Rule |
+|---|---|
+| 1 | **One scenario, authored once.** The shared scenario — start week 26, durations 2–9 inclusive, full outage, effect, measure, replication budget — is ONE declared spec (`scsim/scsim/stress/nexus.py` `NEXUS_SCENARIO`, exported to the registry and read by the runner, the store's `params`, the card and the manual). **The start week is `max(26, t_w + 1)` in absolute simulation weeks (owner decision, 2026-10-21)**: week 26 when the warm-up has ended by then, otherwise the first week after it — a disruption never starts inside the warm-up. `t_w` is adopted ONCE from the clean reference and shared by every cell, so all targets are hit in the same week. Because the start then lies 1–26 weeks into the 52-week KPI window, a 9-week outage always leaves at least 17 window weeks to measure recovery. The adopted `t_w` and the start week it produced are stored with the battery and shown in the baseline. |
+| 2 | **A disruption is a full outage of ONE target, and the only targets are SUPPLIERS and the MATERIALS they supply (owner, 2026-10-21).** Not sub-assemblies (made in-house, no supply link), not products, not customers, not the plant. Lead-time-extension semantics (§3.7: the target ships nothing in the window; in-transit units are deferred, never destroyed). A **supplier** target stops everything that supplier ships; a **material** target stops every supply link of that material and nothing else (D311). |
+| 3 | **The project's policies run, unchanged.** Every cell runs the policy version the battery binds through the same mapper as a platform run (`page-equals-run`): safety stock and reorder rules, backup supplier (P-S.1), multi-sourcing (P-S.2), detection lag and early warning (P-S.4), allocation (P-C.2), unmet-demand handling (P-C.1), the project's supply-chain model (D309). Lost sales are therefore what the chain loses *after* its own mitigations — which is the point. |
+| 4 | **Lost sales are incremental and paired.** Per cell and replication: `Δ lost sales = cell − clean reference`, on the same seeds (CRN), in **value (€, `lost_sales_value`) — the measure every table and ranking uses (owner decision, 2026-10-21)** — with a confidence interval; `lost_units` is stored beside it and not ranked on. Beside it: peak backlog, fill-rate drop over the window, time to recover. A target whose Δ is zero says WHY at display — absorbed by stock/policy, or unmet demand backordered rather than lost (P-C.1). |
+| 5 | **The result is a table, sortable by every duration (owner decision, 2026-10-21).** One row per target; one column per disruption duration — 2, 3, 4, 5, 6, 7, 8, 9 weeks — each the Δ lost sales in €; a final **Average** column, the equally weighted mean of the eight. **The table opens sorted by Average, highest first**, and every column header sorts it. Ties sort by the 9-week column, then by target id, so an order is never arbitrary. **Nexus = the table's order; there is no threshold.** The stored rank is the Average rank; the other orders are the reader's, computed in the browser from the stored cells, never re-simulated. |
+| 6 | **Bound to its baseline, stated at the point of display (T4).** Every battery binds: dataset version (id + `graph_hash`), policy version (id + `policy_hash`), the engine build (`code_version`, `scsim-<ENGINE_VERSION>+<12 hex>`), the scenario spec and its hash, root seed, replications, `t_w`, and when it ran. The card states all of it before it shows a number. If the project's current dataset or policy version differs from the battery's, the card says "prepared for … — current data differs" and still shows the prepared result; it never recomputes on view. |
+| 7 | **Prepared in advance; the page computes nothing.** The battery runs as a batch job off the request path; the card reads stored rows through one RPC. There is no Run button on the card. A refresh is a new battery run (a new `analysis_runs` row), never an edit of a published one (`analysis_results` is append-only). |
+| 8 | **Engine ledger.** Material targets are an engine behaviour change: `ENGINE_VERSION` bump, `CHANGELOG.yaml` entry, wheels rebuilt, release report regenerated (`engine-ledger`). Every existing golden digest stays byte-identical — a scenario with no material event runs exactly as before. |
+
+### WP 17.0 — The plan ✅ *(docs only — done)*
+
+This section, §4 D310–D311, the §16 entry, the §17 row, and the blueprint's §11.5 note.
+**Owner decisions, settled 2026-10-21**: (a) the start week is `max(26, t_w + 1)` (rule 1);
+(b) the result is a table with one sortable column per duration and an Average column, opened
+sorted by Average (rule 5); (c) lost sales in € (rule 4); (d) the battery runs in GitHub Actions, not
+on the worker, within the limits in WP 17.4.
+
+### WP 17.1 — Engine: a material can be disrupted ✅ *(D311 · rule 2, 8 · gates `engine-ledger`, `declared-fallback` — done, no migration; engine 0.8.1)*
+
+- `TargetType.NODE_MATERIAL = "node:material"`, `lead_time_extension` only (a capacity cut is per
+  supplier; a material event with one is refused at validation). The injector resolves the target
+  to one of the network's materials and refuses an unknown one; every engine material has a
+  qualified supplier by `Network`'s own validation, and a sub-assembly is a PRODUCT in the engine,
+  so naming one is an unknown material — the scope rule 2 states holds by construction.
+- A material event blocks every link of that material: `SimContext.link_lt_block_end` (per link),
+  composed with the per-supplier state by the later end, read by the deferral and the quoted arrival.
+  `visible_disrupted_links()` is the firm's per-link view; P-S.1, P-S.2, P-T.2 and P-P.9 read it, so
+  a material outage never makes a policy treat the same supplier's other materials as disrupted.
+- **The engine API only.** The battery (WP 17.2) builds its events on the mapped scenario, so it
+  needs nothing more. The PLATFORM schedule path — `project_map._map_events`, the dispatch gate
+  (`disruptionRules.ts`, from the registry's `unsupported_target_kinds`), the Lab presets, the API
+  mock — still skips `material:*` with its warning, which stays true of that path. Opening it is
+  D112's (WP 6.4), not this phase's.
+- Tests (`scsim/tests/test_material_disruption.py`): a material outage equals the supplier outage
+  it coincides with, byte for byte; it stops that material only, and two materials' losses add up
+  to their supplier's; it blocks every supplier of the material; P-S.1 does not reroute a healthy
+  material; overlapping events compose to the later end; validation. Golden digests unmoved.
+  Tier 2 → 0.8.1, changelog, wheels, release report.
+
+### WP 17.2 — Engine: the nexus battery *(D310 · rules 1–5 · gates `single-source`, `engine-ledger` — no migration)*
+
+- `scsim/scsim/stress/nexus.py`: `NEXUS_SCENARIO` (rule 1) and `run_nexus_battery(scenario,
+  targets=None, shard=None)` built on `_run_battery`'s machinery — one clean reference, one adopted
+  `t_w`, one snapshot per model seed — with a FIXED start `max(26, t_w + 1)` and durations 2…9, over every
+  supplier and every purchased material (or a shard of them, for parallel runs).
+- Output per target: Δ lost-sales value in € (mean, CI) per duration, the Average and its rank, Δ units, peak
+  backlog, fill-rate drop, TTR, the zero-reason (rule 4), wide-CI badge; per battery: the clean
+  reference's own lost sales and fill rate, `t_w`, replications, skipped targets with reasons.
+- **Budget, measured on `Project AA - ver3`**: time one clean run and one cell; choose the replication
+  count that keeps the top-10 order stable across two seeds (stated, not assumed); record the wall
+  time per shard in the §16 entry.
+- Tests: hand-worked two-supplier project where the sole-source material outranks a dual-sourced one;
+  a backup-supplier policy lowers its own target's loss; every cell starts at `max(26, t_w + 1)` (both
+  branches: an early and a late warm-up); sharded and unsharded batteries give identical rows when the
+  shards are handed the same adopted `t_w`.
+
+### WP 17.3 — Data: the stored battery and its read *(D310 · rules 6, 7 · gates `input-hash`, `result-binding`, `audit-actor`, `declared-capability` — migration)*
+
+- `analysis_kinds` gains `nexus_stress` (scope `all`: it reads the network and the policies).
+  A battery is ONE `analysis_runs` row: `input_hash`, `dataset_version_id`, and `params` = the
+  policy version id + hash, the engine build, the scenario spec + hash, root seed, replications,
+  `t_w`, the clean reference's KPIs — so all of it is in the key and the binding.
+- One `analysis_results` row per target: `entity_type` `material` | `supplier`, `entity_id`,
+  `metrics` = Average rank, Average €, per-duration Δ € (mean, CI) for 2…9, Δ units, backlog,
+  fill-rate drop, TTR, zero-reason.
+- Writer `analysis_publish_nexus_stress(_run_id, _rows, _actor_user_id)`: service role only, from a
+  RUNNING run of kind `nexus_stress`, attributed through `assert_writer_may_act`, completes the run.
+- Reader `get_nexus_stress_results(p_project_id, p_user_id)`: the latest COMPLETED battery for the
+  project — its baseline block, the two ranked lists, and whether the project's current dataset /
+  policy versions match the battery's (stale flag); refuses a reader without access.
+- Sidecars and `contract:generate`; `rehearsal/900` (writer refuses a finished run and a wrong kind,
+  reader refuses a stranger, the stale flag moves when the policy version does, mutation-tested on
+  the actor).
+
+### WP 17.4 — Prepare it: the battery job in GitHub Actions, and `Project AA - ver3` *(D310 · rule 7 — no migration)*
+
+**Shape.** `.github/workflows/nexus-stress.yml`, three jobs:
+1. **prepare** — resolves the project and its versions (request input, default the Validated Model's
+   dataset + policy versions, else the latest saved), reads the frozen snapshot through the
+   `sim_worker.local` path (`project_model` passed — D309), runs the clean reference, adopts `t_w`,
+   computes the start week (rule 1), opens the `analysis_runs` row, lists the targets, and uploads ONE
+   input bundle (snapshot + policies + `t_w` + start week + target shards) as a workflow artifact;
+2. **cells** — a matrix of shards; each downloads the bundle, re-runs the clean reference from the
+   same seeds (it must reproduce the prepare job's digest, or the shard fails), runs its targets × 8
+   durations, and uploads its rows as an artifact. A shard never talks to the database;
+3. **publish** — downloads every shard's rows, refuses unless every target is present exactly once,
+   and calls the WP 17.3 writer once, which completes the run. A battery is published whole or not at
+   all.
+
+**GitHub's limits, and what each one decides** (re-read GitHub's current documentation in WP 17.4;
+these are the documented figures as of planning):
+
+| Limit | What it means here | Design response |
+|---|---|---|
+| **A job runs at most 6 h** on a GitHub-hosted runner; `timeout-minutes` should be far tighter | No single job may hold the whole battery | Shard so the slowest shard finishes in ≤ 90 min, from WP 17.2's measured per-cell time × 1.5; `timeout-minutes: 120` per shard |
+| **A matrix holds at most 256 jobs**, and **concurrent jobs are capped by plan** (≈20 on Free, more on Team/Enterprise) — the rest queue | ≈2 000 cells at 8 cells per target means ≈250 targets; one target per job would reach the matrix ceiling and mostly queue | Shard by TARGET GROUP, 10–30 shards; the shard count is computed in `prepare` from the target count and the measured cell time, and capped below the plan's concurrency |
+| **Runner size**: a standard Linux runner on a private repository is 2 vCPU / 7 GB RAM / ~14 GB disk (4 vCPU / 16 GB on a public one) | Memory is the risk, not CPU: one warm snapshot per model seed is held for every cell | `kpi_only` traces, snapshots per shard only, no matrices kept; WP 17.2 records peak RSS on AA; a shard uses `n_cpu` worker processes, not more |
+| **Minutes are billed** on a private repository (Linux ×1) against the plan's monthly quota; a battery is shards × minutes | A re-run of a whole battery costs the whole budget again | The run's minutes are printed in the job summary and recorded in §16; no schedule — a battery runs only on request; **Re-run failed jobs** re-runs only the shards that failed, because shards are pure and the publish waits for all of them |
+| **Runners are ephemeral and can be lost** | A lost runner loses its shard, not the battery | Shards are idempotent and write nothing outside their artifact; nothing is published until all succeed |
+| **Artifacts** have size limits and expire (default 90 days, configurable) | The bundle and the shard rows are transport, not storage | Retention 7 days; the database row is the record; the bundle's hash is stored in `params` |
+| **Triggers**: `workflow_dispatch` works only from a workflow on the default branch; a push-path trigger (`.github/nexus-stress-request`, the `seed-project.yml` idiom) works from any branch | The writer RPC exists in production only after the WP 17.3 migration merges (migrations deploy on merge, D31) | Both triggers; the first real battery runs **after** WP 17.3 is merged; `concurrency: nexus-stress-<project>` so two batteries of one project never race |
+| **Secrets** are not given to workflows from forks and live in the repository's settings | The publish step needs a database credential | Only `publish` reads the secret (the same Management-API credential `seed-project.yml` uses); `prepare` reads read-only; `cells` gets no secret at all |
+| **Run-to-run reproducibility**: a runner image changes under the workflow | A different numpy could move a figure | Install the engine from the archived wheels of the bound build (`engine-ledger`), never from source; the build's `code_version` is what the battery binds |
+
+**Run it for `Project AA - ver3`** and record in §16: the baseline (versions, build, `t_w`, start
+week, replications), shard count, wall time and billed minutes, the top 10 materials and suppliers by
+Average, the clean reference's own lost sales, and the comparison with D307's demand-at-risk ranking
+(rank correlation, and the targets the two disagree on most — the first measurement blueprint §11.5
+owes). Re-run is a new request; nothing re-runs on page view.
+
+### WP 17.5 — On the page: the Nexus card reads the stored battery *(D310 · rules 5–7 · T1, T2, T4 — no migration)*
+
+- `MLPrediction.tsx` (all three network pages, desktop and mobile skin): **the Run prediction button
+  goes.** Opening the card reads `get_nexus_stress_results` and shows, in order:
+  1. **Baseline** — "Data v… · Policies v… · Engine scsim-… · prepared <date>", the scenario in one
+     line ("each material and supplier disrupted alone · full outage from week <start> (week 26, or warm-up + 1 if later) ·
+     2–9 weeks · <R> replications"), and the clean reference's own lost sales;
+  2. **Nexus materials** and **Nexus suppliers** — two tables (tabs on mobile), columns `Rank ·
+     Target · 2 wk · 3 wk · … · 9 wk · Average`, every value lost sales in €, **opened sorted by
+     Average, highest first**, every column header sortable (rule 5); a row expands to its backlog,
+     recovery time and zero-reason when the loss is zero. On a phone the duration columns scroll
+     inside the table with Target pinned, never the page;
+  3. a stale line when the current data or policy version differs from the battery's (rule 6);
+  4. an empty state when no battery exists: "Not prepared for this project yet" — no button.
+- The static demand-at-risk score (D307) is kept as a secondary column labelled "first-order
+  estimate", so the two answers are side by side rather than one replacing the other silently.
+- `public/docs/nexus-node.md` and the `/docs` stress-tests page rewritten from `NEXUS_SCENARIO`
+  (single-source); the copy names every limit (rule 4's backorder case, single-target only, no
+  compound events).
+
+### WP 17.7 — Later: run it from the card *(D310 · rules 6, 7 — open, after WP 17.5)*
+
+The future workflow when a user clicks **Nexus node detection** to run a new battery:
+- **Runnable only on a Validated Model.** No Validated Model on the project → the Run control is
+  shown disabled with "Validate a baseline first" (§4.5: disabled, not hidden).
+- **The user picks three things, nothing else**: the **engine** (a registered build), the
+  **baseline** (a Validated Model — it fixes the policy version), and the **data version** (the
+  model's own by default). The scenario is `NEXUS_SCENARIO`, not editable.
+- The click requests the WP 17.4 job with those three (an edge function calling the workflow's
+  dispatch); the card shows "running" until the battery is published, then the new table. A battery
+  already stored for the same three is shown, not re-run.
+
+### WP 17.6 — The after-merge reading *(§15 · open — owed in the push AFTER the merge, D153)*
+
+`get_nexus_stress_results` on `Project AA - ver3` returns the published battery; every project
+without one returns the empty state; no `analysis_results` row of kind `nexus_stress` lacks its run's
+binding.
+
+**Exit.** On `Project AA - ver3`, opening Nexus node prediction shows the stated baseline and the
+materials and suppliers ranked by stress-tested lost sales, with no click to compute; golden digests
+unmoved; `engine-ledger` green.
+
+**Order.** 17.0 → 17.1 → 17.2 → 17.3 → 17.4 → 17.5 → 17.6 → 17.7 (17.3 may run beside 17.1–17.2; the first published battery waits for 17.3's merge).
+**Out of scope:** compound or simultaneous disruptions, partial capacity cuts, demand-side events,
+the surrogate model itself (Phase D), automatic re-runs on a new dataset version (a later trigger).

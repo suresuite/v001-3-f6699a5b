@@ -171,12 +171,17 @@ class MaterialAllocation(PolicyPlugin):
         t = ctx.week
         Wr = m.ring_width
         defer_end: dict[int, int] = {}
+        defer_end_mat: dict[int, int] = {}  # node:material events (PLAN.md §27 WP 17.1)
         for e in ctx.events_visible():
             if e.lt_active_at(t):
-                defer_end[e.supplier_idx] = max(defer_end.get(e.supplier_idx, 0), e.end)
+                if e.is_material:
+                    defer_end_mat[e.material_idx] = max(defer_end_mat.get(e.material_idx, 0), e.end)
+                else:
+                    defer_end[e.supplier_idx] = max(defer_end.get(e.supplier_idx, 0), e.end)
         arr = np.zeros((m.n_mats, W))
         for link in range(m.n_links):
-            end = defer_end.get(int(m.link_sup[link]), 0)
+            end = max(defer_end.get(int(m.link_sup[link]), 0),
+                      defer_end_mat.get(int(m.link_mat[link]), 0))
             mat = int(m.link_mat[link])
             for tau in range(1, W):
                 w = t + tau

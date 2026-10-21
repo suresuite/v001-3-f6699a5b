@@ -86,6 +86,13 @@ class ResolvedEvent:
     # inbound. supplier_idx is -1 for these. The time/severity math below is
     # target-agnostic and shared with supplier events.
     is_plant: bool = False
+    # node:material target (PLAN.md §27 WP 17.1) — blocks every supply link of
+    # this material and no other link of its suppliers. supplier_idx is -1.
+    material_idx: int = -1
+
+    @property
+    def is_material(self) -> bool:
+        return self.material_idx >= 0
 
     def cap_factor_at(self, t: int) -> float:
         """Effective capacity multiplier at week t (1.0 = unaffected)."""
@@ -1005,6 +1012,10 @@ class SimContext:
         self.served_new_week = np.zeros(model.n_prods)  # FR numerator (β-service vs D_p[t])
         self.lt_block_end = np.zeros(model.n_sups, dtype=int)   # 0 = no active LT event
         self.cap_factor = np.ones(model.n_sups)
+        # node:material disruption state, per LINK (0 = no active event). Composed
+        # weekly in the week_start mechanic with the per-supplier state by max
+        # deferral end; all zeros on a scenario with no material event.
+        self.link_lt_block_end = np.zeros(model.n_links, dtype=int)
         # node:plant disruption state (one plant → scalars). Composed weekly in
         # the week_start mechanic; read by production planning/execute.
         self.plant_lt_block_end = 0   # > week ⇒ plant produces nothing this week
@@ -1060,10 +1071,22 @@ class SimContext:
     def visible_disrupted_suppliers(self) -> np.ndarray:
         mask = np.zeros(self.model.n_sups, dtype=bool)
         for e in self.events_visible():
-            if e.is_plant:
-                continue  # plant events do not disrupt a supplier
+            if e.is_plant or e.is_material:
+                continue  # plant and material events do not disrupt a whole supplier
             if e.lt_active_at(self.week) or e.cap_factor_at(self.week) < 1.0:
                 mask[e.supplier_idx] = True
+        return mask
+
+    def visible_disrupted_links(self) -> np.ndarray:
+        """Per supply link: disrupted as the firm sees it (post-detection). A link
+        is disrupted when its supplier is, or when a material event covers its
+        material — the view a failover policy needs, since a material outage
+        leaves the same supplier's other links healthy (PLAN.md §27 WP 17.1)."""
+        m = self.model
+        mask = self.visible_disrupted_suppliers()[m.link_sup]
+        for e in self.events_visible():
+            if e.is_material and e.lt_active_at(self.week):
+                mask[m.link_mat == e.material_idx] = True
         return mask
 
     def write_gross_requirements(self, gr: np.ndarray) -> None:

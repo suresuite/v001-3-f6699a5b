@@ -7,7 +7,9 @@
 
 Compile-time: validates targets/effects against the network (capacity_reduction
 on a supplier needs a finite supplier capacity; a node:plant target throttles
-or halts the plant's own production).
+or halts the plant's own production; a node:material target must be one of the
+network's materials — every one of which has a qualified supplier by `Network`'s
+own validation, and a made-in-house sub-assembly is a product, not a material).
 
 Replication-time: draws stochastic fields from the hazard streams keyed by
 (event_rep, event_index) and resolves targets to supplier indices.
@@ -39,6 +41,9 @@ def validate_events(model: CompiledModel) -> None:
             # production_capacity), so capacity_reduction is always meaningful —
             # no supplier resolution or finiteness check needed.
             continue
+        if ev.target_type == TargetType.NODE_MATERIAL:
+            _resolve_material(model, ev, i)
+            continue
         sup_idx = _resolve_supplier(model, ev, i)
         if ev.effect_type == EffectType.CAPACITY_REDUCTION and not np.isfinite(
             model.sup_capacity[sup_idx]
@@ -62,6 +67,12 @@ def _resolve_supplier(model: CompiledModel, ev: DisruptionEvent, i: int) -> int:
     raise DisruptionCompileError(f"event[{i}]: unsupported target_type {ev.target_type}")
 
 
+def _resolve_material(model: CompiledModel, ev: DisruptionEvent, i: int) -> int:
+    if ev.target_id not in model.mat_index:
+        raise DisruptionCompileError(f"event[{i}]: unknown material {ev.target_id!r}")
+    return model.mat_index[ev.target_id]
+
+
 def any_stochastic(events: list[DisruptionEvent]) -> bool:
     return any(e.is_stochastic for e in events)
 
@@ -77,7 +88,9 @@ def resolve_events(
     seed = model.settings.project_seed
     for i, ev in enumerate(model.scenario.events):
         is_plant = ev.target_type == TargetType.NODE_PLANT
-        sup_idx = -1 if is_plant else _resolve_supplier(model, ev, i)
+        is_material = ev.target_type == TargetType.NODE_MATERIAL
+        mat_idx = _resolve_material(model, ev, i) if is_material else -1
+        sup_idx = -1 if (is_plant or is_material) else _resolve_supplier(model, ev, i)
         if ev.start is not None:
             # `start` is an ABSOLUTE week (manuscript §3.7 — t* is absolute, and
             # the auto branch below draws an absolute week too). A fixed start
@@ -113,6 +126,7 @@ def resolve_events(
                 recovery_profile=ev.recovery_profile,
                 ramp_weeks=ev.ramp_weeks,
                 is_plant=is_plant,
+                material_idx=mat_idx,
             )
         )
     return resolved

@@ -1,5 +1,5 @@
 {
- "engine_version": "0.8.0",
+ "engine_version": "0.8.1",
  "engine_build": "scsim-0.0.0+000000000000",
  "scenario": {
   "name": "scenario",
@@ -784,7 +784,7 @@
    "target_type": {
     "label": "Target type",
     "unit": "enum",
-    "notes": "node:supplier ✅; node:plant ✅; edge:lane 🧩."
+    "notes": "node:supplier ✅; node:plant ✅; node:material ✅ (LT extension only); edge:lane 🧩."
    },
    "target_id": {
     "label": "Target ID",

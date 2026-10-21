@@ -168,7 +168,9 @@ class BackupSupplier(PolicyPlugin):
         m = ctx.model
         p: BackupSupplierParams = self.params
         state = ctx.policy_state[self.id]
-        disrupted = ctx.visible_disrupted_suppliers()
+        # Per LINK (PLAN.md §27 WP 17.1): a material event disrupts one material's
+        # links only, so the same supplier can still be the backup for another.
+        disrupted = ctx.visible_disrupted_links()
         if not disrupted.any() and (state["reroute_until"] < ctx.week).all():
             return
 
@@ -179,7 +181,7 @@ class BackupSupplier(PolicyPlugin):
         for mat in np.flatnonzero(state["enabled"]):
             primary = m.primary_link[mat]
             qty = orders[primary]
-            primary_disrupted = disrupted[m.link_sup[primary]]
+            primary_disrupted = disrupted[primary]
             in_cooldown = ctx.week <= state["reroute_until"][mat]
             if not (primary_disrupted or in_cooldown) or qty <= 0:
                 continue
@@ -208,7 +210,7 @@ class BackupSupplier(PolicyPlugin):
         p: BackupSupplierParams = self.params
         candidates = [
             int(l) for l in m.links_of_mat[mat][1:]  # everything but the primary
-            if not disrupted[m.link_sup[l]]
+            if not disrupted[l]
         ]
         if not candidates:
             return None
