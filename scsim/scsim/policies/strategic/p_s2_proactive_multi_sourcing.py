@@ -184,9 +184,9 @@ class ProactiveMultiSourcing(PolicyPlugin):
         m = ctx.model
         state = ctx.policy_state[self.id]
         orders = ctx.purchase_orders.copy()
-        disrupted = (
-            ctx.visible_disrupted_suppliers()
-            if p.rebalance_trigger == "disruption" else np.zeros(m.n_sups, dtype=bool)
+        disrupted = (  # per LINK — a material event leaves its suppliers' other links healthy
+            ctx.visible_disrupted_links()
+            if p.rebalance_trigger == "disruption" else np.zeros(m.n_links, dtype=bool)
         )
         premium_total = 0.0
         changed = False
@@ -198,7 +198,7 @@ class ProactiveMultiSourcing(PolicyPlugin):
                 continue
             shares = state["shares"][links].copy()
             if disrupted.any():
-                healthy = ~disrupted[m.link_sup[links]]
+                healthy = ~disrupted[links]
                 if healthy.any() and not healthy.all():
                     shares = np.where(healthy, shares, 0.0)
                     total = shares.sum()

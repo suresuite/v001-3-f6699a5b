@@ -92,8 +92,7 @@ class ExpeditedShipments(PolicyPlugin):
                 return
 
         if p.scope == "disrupted_materials":
-            disrupted_sup = ctx.visible_disrupted_suppliers()
-            mats = np.unique(m.link_mat[disrupted_sup[m.link_sup]])
+            mats = np.unique(m.link_mat[ctx.visible_disrupted_links()])
         else:
             mats = np.arange(m.n_mats)
         if mats.size == 0:

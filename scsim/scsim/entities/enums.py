@@ -103,6 +103,7 @@ class TargetType(str, Enum):
     NODE_SUPPLIER = "node:supplier"  # ✅
     NODE_PLANT = "node:plant"        # ✅ (throttles/halts the plant's production)
     EDGE_LANE = "edge:lane"          # 🧩 (behavior-neutral: resolves to its supplier)
+    NODE_MATERIAL = "node:material"  # ✅ (every supply link of ONE material; lead_time_extension only)
 
 
 class EffectType(str, Enum):

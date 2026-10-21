@@ -1,7 +1,7 @@
 {
   "$generator": "scripts/data-contract/generate.mjs",
   "$doc": "The data contract: the introspected schema merged with the authored sidecars and the engine registry snapshot. Generated — do not edit; `npm run contract:check` fails on drift.",
-  "engine_version": "0.8.0",
+  "engine_version": "0.8.1",
   "sources": {
     "introspected": {
       "generator": "scripts/data-contract/introspect.mjs",
@@ -11,7 +11,7 @@
     },
     "sidecars": 77,
     "registry": {
-      "engine_version": "0.8.0",
+      "engine_version": "0.8.1",
       "policies": 23
     }
   },
@@ -45109,5 +45109,5 @@
   },
   "orphans": [],
   "phantom_tables": [],
-  "contract_version": "c4d649ec46c3"
+  "contract_version": "fc7dfe31ef14"
 }

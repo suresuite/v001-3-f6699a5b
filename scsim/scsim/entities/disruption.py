@@ -14,6 +14,9 @@ Semantics (engine-binding, see docs/architecture.md#disruption-semantics):
   deferred to the first week after the window; orders placed during the
   window are quoted arrival = max(t + T_s, t_end). Units are delayed, never
   destroyed (conservation invariant).
+* ``node:material`` targets (PLAN.md §27 WP 17.1, §4 D311) apply the same
+  lead-time-extension semantics to every supply link of ONE material and to
+  nothing else: the material's suppliers keep shipping their other materials.
 * ``capacity_reduction``: the target's weekly outbound flow is throttled to
   φ × capacity. Overflow follows ``overflow_rule``: ``queue`` (supplier
   backlog, shipped FIFO when capacity allows) or ``reject`` (logged as
@@ -54,7 +57,8 @@ class DisruptionEvent(BaseModel):
 
     target_type: TargetType = Field(
         TargetType.NODE_SUPPLIER,
-        json_schema_extra=_meta("enum", notes="node:supplier ✅; node:plant ✅; edge:lane 🧩."),
+        json_schema_extra=_meta(
+            "enum", notes="node:supplier ✅; node:plant ✅; node:material ✅ (LT extension only); edge:lane 🧩."),
     )
     target_id: str = Field(..., min_length=1, json_schema_extra=_meta("id"))
     effect_type: EffectType = Field(
@@ -99,6 +103,14 @@ class DisruptionEvent(BaseModel):
     def _check(self) -> "DisruptionEvent":
         if isinstance(self.duration, int) and not (1 <= self.duration <= 52):
             raise ValueError("duration must be in [1, 52] weeks")
+        if (self.target_type == TargetType.NODE_MATERIAL
+                and self.effect_type != EffectType.LEAD_TIME_EXTENSION):
+            # A supplier's capacity is shared by all its links; a cut scoped to one
+            # material would need a per-link capacity split the model does not have.
+            raise ValueError(
+                "node:material supports lead_time_extension only (a full outage of the "
+                "material's supply); capacity_reduction is per supplier"
+            )
         if self.effect_type == EffectType.LEAD_TIME_EXTENSION:
             if self.onset_profile != RampProfile.STEP or self.recovery_profile != RampProfile.STEP:
                 raise ValueError(

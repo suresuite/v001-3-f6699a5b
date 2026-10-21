@@ -4,6 +4,19 @@
 
 Every engine version, what it changed, and whether results stay comparable across it. Authored once in `scsim/CHANGELOG.yaml` and gated in CI (PLAN.md §25, gate `engine-ledger`). *Comparable* answers the user's question; *Tier* is the engineering classification (Part IX §9.5) — a patch can still change results for some projects.
 
+## 0.8.1 · 2026-10-21 · Tier 2
+
+**Comparable — results unchanged.** No existing scenario can carry a material event, so every result is unchanged (every frozen reference run kept its digest); material outages are new.
+
+A single material can now be disrupted: every supplier's deliveries of that material stop for the outage, and nothing else those suppliers ship is affected. Backup-supplier, multi-sourcing, expediting and material-allocation policies see the outage per material, so a supplier's healthy materials are never treated as disrupted. Every existing scenario runs exactly as before.
+
+*Technical.* `TargetType.NODE_MATERIAL` (lead_time_extension only; a capacity cut stays per supplier). `ResolvedEvent.material_idx`; `SimContext.link_lt_block_end` (per link) composed with the per-supplier block by the later end in the week_start mechanic, the arrival deferral and the quoted arrival. `SimContext.visible_disrupted_links()` is read by P-S.1, P-S.2, P-T.2 and P-P.9 in place of the supplier mask indexed by link. The project mapper and the platform's dispatch gate are unchanged: a `material:*` schedule entry is still skipped there (§4 D112).
+
+- commit: not yet recorded
+- policies P-S.1, P-S.2, P-T.2, P-P.9
+- frozen reference runs moved: none
+- refs D311, WP 17.1
+
 ## 0.8.0 · 2026-10-04 · Tier 3
 
 **Changed for some projects.** Results change only for projects whose products carry a production lead time (L > 0) or its shape; L = 0, the default, runs byte-identically (every frozen reference run kept its digest).
