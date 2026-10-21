@@ -49,21 +49,6 @@ surfaces:
     grain: table
     evidence: "src/components/MapView.tsx:355"
     confirmed: true
-  - page: "FirmLevelNetwork.tsx"
-    via: "rpc get_critical_node_stats (MLPrediction, §4 D307)"
-    grain: table
-    evidence: "src/components/MLPrediction.tsx:93"
-    confirmed: true
-  - page: "ProcessLevelNetwork.tsx"
-    via: "rpc get_critical_node_stats (MLPrediction, §4 D307)"
-    grain: table
-    evidence: "src/components/MLPrediction.tsx:93"
-    confirmed: true
-  - page: "ProductLevelNetwork.tsx"
-    via: "rpc get_critical_node_stats (MLPrediction, §4 D307)"
-    grain: table
-    evidence: "src/components/MLPrediction.tsx:93"
-    confirmed: true
   - page: "ProductLevelNetwork.tsx"
     via: "rpc project_freshness (GraphVersionChip → FreshnessBadge, WP 10.1)"
     grain: table

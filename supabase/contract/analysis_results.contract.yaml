@@ -25,6 +25,22 @@ natural_key_unique:
     name: "analysis_results_entity_uniq"
 
 natural_key_intended: [run_id, entity_type, entity_id]
+surfaces:
+  - page: "FirmLevelNetwork.tsx"
+    via: "rpc get_nexus_stress_results (MLPrediction, PLAN.md §27 WP 17.5)"
+    grain: table
+    evidence: "src/components/MLPrediction.tsx:77"
+    confirmed: true
+  - page: "ProcessLevelNetwork.tsx"
+    via: "rpc get_nexus_stress_results (MLPrediction, PLAN.md §27 WP 17.5)"
+    grain: table
+    evidence: "src/components/MLPrediction.tsx:77"
+    confirmed: true
+  - page: "ProductLevelNetwork.tsx"
+    via: "rpc get_nexus_stress_results (MLPrediction, PLAN.md §27 WP 17.5)"
+    grain: table
+    evidence: "src/components/MLPrediction.tsx:77"
+    confirmed: true
 
 governance:
   read: null

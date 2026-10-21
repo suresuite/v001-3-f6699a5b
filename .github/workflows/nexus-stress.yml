@@ -1,0 +1,175 @@
+name: Nexus stress battery
+
+# PLAN.md §27 WP 17.4 · §4 D310 — prepare the Nexus card's results in advance.
+#
+# Every supplier and every supplied material of ONE project is disrupted alone
+# under the shared scenario (`scsim.stress.nexus.NEXUS_SCENARIO`), on the
+# project's ACTIVE Validated Model, and the lost sales are published to the
+# database (`analysis_publish_nexus_stress`), where the Nexus card reads them.
+# Nothing runs on page view.
+#
+#   prepare  reads the baseline, runs the clean reference, opens the battery,
+#            sizes the shards, uploads ONE bundle (the only job besides publish
+#            that holds the database secret)
+#   cells    one job per shard; no secret, no database; proves its clean
+#            reference is the bundle's, runs its targets, uploads its rows
+#   publish  merges every shard (each target exactly once) and publishes the
+#            battery whole — or marks the run failed, so its key is free again
+#
+# GitHub's limits, and what each decided (§27 WP 17.4's table): a job may run 6 h
+# and a shard is sized for ~45 min (timeout 120); a matrix holds 256 jobs and the
+# plan caps concurrency, so there are at most 20 shards; a standard runner has
+# 7 GB and a shard keeps KPI traces only; minutes are billed, so nothing runs on
+# a schedule, and a failed shard marks the run failed (its key freed) so a retry
+# is a new request rather than a stuck run;
+# artifacts are transport (7 days), the database is the record; the engine is the
+# committed wheels, so a runner image change cannot move a figure.
+#
+# TRIGGER: push `.github/nexus-stress-request` (key=value lines: project_name=,
+# optional model_validation_id=, dataset_version_id=, replications=,
+# actor_email=) — works from any branch — or run it by hand (default branch).
+# The writer exists in production only after migration `20261021000001` deploys.
+
+on:
+  push:
+    paths:
+      - ".github/nexus-stress-request"
+  workflow_dispatch:
+    inputs:
+      project_name:
+        description: "The project's exact name, e.g. Project AA - ver3"
+        required: true
+      model_validation_id:
+        description: "Validated Model id (blank = the project's active model)"
+        default: ""
+      dataset_version_id:
+        description: "Data version id (blank = the model's own)"
+        default: ""
+      replications:
+        description: "Replications per cell"
+        default: "10"
+      actor_email:
+        description: "Approved user the battery is attributed to (blank = the project's modeler)"
+        default: ""
+
+concurrency:
+  group: nexus-stress
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      shards: ${{ steps.prepare.outputs.shards }}
+      skip: ${{ steps.prepare.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the committed engine build
+        run: pip install public/engine/*.whl
+      - name: Resolve parameters
+        id: params
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            get() { grep -oP "^$1=\K.+" .github/nexus-stress-request | tail -1 || true; }
+            echo "project_name=$(get project_name)" >> "$GITHUB_OUTPUT"
+            echo "model_validation_id=$(get model_validation_id)" >> "$GITHUB_OUTPUT"
+            echo "dataset_version_id=$(get dataset_version_id)" >> "$GITHUB_OUTPUT"
+            echo "replications=$(get replications)" >> "$GITHUB_OUTPUT"
+            echo "actor_email=$(get actor_email)" >> "$GITHUB_OUTPUT"
+          else
+            echo "project_name=${{ inputs.project_name }}" >> "$GITHUB_OUTPUT"
+            echo "model_validation_id=${{ inputs.model_validation_id }}" >> "$GITHUB_OUTPUT"
+            echo "dataset_version_id=${{ inputs.dataset_version_id }}" >> "$GITHUB_OUTPUT"
+            echo "replications=${{ inputs.replications }}" >> "$GITHUB_OUTPUT"
+            echo "actor_email=${{ inputs.actor_email }}" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Prepare the battery
+        id: prepare
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_NAME: ${{ steps.params.outputs.project_name }}
+          MODEL_ID: ${{ steps.params.outputs.model_validation_id }}
+          DATASET_ID: ${{ steps.params.outputs.dataset_version_id }}
+          REPS: ${{ steps.params.outputs.replications }}
+          ACTOR_EMAIL: ${{ steps.params.outputs.actor_email }}
+        run: |
+          if [ -z "$PROJECT_NAME" ]; then
+            echo "::error::no project_name — add 'project_name=<exact name>' to .github/nexus-stress-request"; exit 1
+          fi
+          ARGS=(--project-name "$PROJECT_NAME" --replications "${REPS:-10}" --out bundle.json)
+          [ -n "$MODEL_ID" ] && ARGS+=(--model-id "$MODEL_ID")
+          [ -n "$DATASET_ID" ] && ARGS+=(--dataset-version-id "$DATASET_ID")
+          [ -n "$ACTOR_EMAIL" ] && ARGS+=(--actor-email "$ACTOR_EMAIL")
+          python scripts/nexus/nexus_job.py prepare "${ARGS[@]}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexus-bundle
+          path: bundle.json
+          retention-days: 7
+
+  cells:
+    needs: prepare
+    if: needs.prepare.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: true
+      max-parallel: 20
+      matrix:
+        index: ${{ fromJson(needs.prepare.outputs.shards) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the committed engine build
+        run: pip install public/engine/*.whl
+      - uses: actions/download-artifact@v4
+        with:
+          name: nexus-bundle
+      - name: Run shard ${{ matrix.index }}
+        run: python scripts/nexus/nexus_job.py shard --bundle bundle.json --index ${{ matrix.index }} --out shard-${{ matrix.index }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexus-shard-${{ matrix.index }}
+          path: shard-${{ matrix.index }}.json
+          retention-days: 7
+
+  publish:
+    needs: [prepare, cells]
+    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the committed engine build
+        run: pip install public/engine/*.whl
+      - uses: actions/download-artifact@v4
+        with:
+          name: nexus-bundle
+      - uses: actions/download-artifact@v4
+        if: needs.cells.result == 'success'
+        with:
+          pattern: nexus-shard-*
+          path: rows
+      - name: Publish the battery
+        if: needs.cells.result == 'success'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: python scripts/nexus/nexus_job.py publish --bundle bundle.json --rows-dir rows --summary-md "$GITHUB_STEP_SUMMARY"
+      - name: Mark the run failed (its key is free for a retry)
+        if: needs.cells.result != 'success' || failure()
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          CELLS_RESULT: ${{ needs.cells.result }}
+        run: python scripts/nexus/nexus_job.py fail --bundle bundle.json --reason "shard jobs ended $CELLS_RESULT"

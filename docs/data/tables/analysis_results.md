@@ -52,6 +52,20 @@ Read follows the parent run's project reachability. No write policy and no user-
 
 </details>
 
+## Where this data is read
+
+| Page | Via | Evidence | Confirmed |
+|---|---|---|---|
+| `FirmLevelNetwork.tsx` | rpc get_nexus_stress_results (MLPrediction, PLAN.md §27 WP 17.5) | `src/components/MLPrediction.tsx:77` | yes |
+| `ProcessLevelNetwork.tsx` | rpc get_nexus_stress_results (MLPrediction, PLAN.md §27 WP 17.5) | `src/components/MLPrediction.tsx:77` | yes |
+| `ProductLevelNetwork.tsx` | rpc get_nexus_stress_results (MLPrediction, PLAN.md §27 WP 17.5) | `src/components/MLPrediction.tsx:77` | yes |
+
+Each row says the page READS the table by that path, at that line. It does
+not say every column below is displayed there — a column carries its own
+lineage only where an explicit `select` names it. `npm run contract:check`
+R12 re-opens every evidence line on each run, so an entry cannot go stale
+unnoticed.
+
 ## Columns
 
 `CSV header` is the name the **user types**, which is not always the column name —
@@ -161,6 +175,6 @@ Row insert time, maintained by the database.
 
 ---
 
-*Generated from data contract `63c5c24ff103`, engine `0.8.1`,
+*Generated from data contract `cc0268e99d85`, engine `0.8.1`,
 sidecar `supabase/contract/analysis_results.contract.yaml`, table created by `20260917000006_analysis_store.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

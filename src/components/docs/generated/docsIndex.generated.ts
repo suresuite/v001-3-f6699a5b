@@ -1332,7 +1332,7 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
     ]
   },
   "network-science-metrics": {
-    "minutes": 7,
+    "minutes": 8,
     "sections": [
       {
         "id": "what-they-are",
@@ -1719,7 +1719,7 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
     ]
   },
   "engine-versions": {
-    "minutes": 19,
+    "minutes": 20,
     "sections": [
       {
         "id": "how-to-read",

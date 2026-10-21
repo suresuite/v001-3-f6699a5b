@@ -18,7 +18,9 @@ function seededKinds(): Map<string, string> {
     const at = sql.indexOf("INSERT INTO public.analysis_kinds");
     if (at < 0) continue;
     const block = sql.slice(at, sql.indexOf(";", sql.indexOf("ON CONFLICT", at)));
-    for (const m of block.matchAll(/\(\s*'([a-z_][a-z0-9_]*)'\s*,\s*'(product|process|firm|all)'/g)) {
+    // `simulation` is the fifth scope (WP 11.2, `20261001000020`); the first kind to
+    // use it is `nexus_stress` (PLAN.md §27 WP 17.3), which this pattern missed.
+    for (const m of block.matchAll(/\(\s*'([a-z_][a-z0-9_]*)'\s*,\s*'(product|process|firm|simulation|all)'/g)) {
       out.set(m[1], m[2]);
     }
   }
