@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { parseLevelStates, type LevelStates } from "@/lib/trust/graphLevels";
 
@@ -105,17 +105,20 @@ export async function readGraphVersionState(projectId: string): Promise<StateRow
 
 export function useDatasetVersion(
   projectId: string | null | undefined,
+  refreshKey?: string | number,
 ): UseDatasetVersionResult {
   const [latest, setLatest] = useState<DatasetVersion | null>(null);
   const [current, setCurrent] = useState<GraphHashes | null>(null);
   const [currentVersion, setCurrentVersion] = useState<UseDatasetVersionResult["currentVersion"]>(null);
   const [levels, setLevels] = useState<LevelStates>({});
   const [loading, setLoading] = useState(false);
+  const requestId = useRef(0);
 
   const refresh = useCallback(async () => {
-    if (!projectId) return;
+    const request = ++requestId.current;
     setLoading(true);
-    const row = await readGraphVersionState(projectId);
+    const row = projectId ? await readGraphVersionState(projectId) : null;
+    if (request !== requestId.current) return;
     const c = row?.current ?? null;
     setCurrent(c ? {
       graph_hash: c.graph_hash ?? null,
@@ -134,7 +137,8 @@ export function useDatasetVersion(
 
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+    return () => { requestId.current += 1; };
+  }, [refresh, refreshKey]);
 
   const snapshot = useCallback(async (): Promise<string | null> => {
     if (!projectId) return null;

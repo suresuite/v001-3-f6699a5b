@@ -34,7 +34,7 @@ surfaces:
   - page: "FirmLevelNetwork.tsx"
     via: "rpc list_projects"
     grain: table
-    evidence: "src/pages/FirmLevelNetwork.tsx:271"
+    evidence: "src/pages/FirmLevelNetwork.tsx:273"
     confirmed: true
   - page: "InteractiveNetworkSpace.tsx"
     via: "rpc list_projects"
@@ -44,12 +44,12 @@ surfaces:
   - page: "ProcessLevelNetwork.tsx"
     via: "rpc list_projects"
     grain: table
-    evidence: "src/pages/ProcessLevelNetwork.tsx:285"
+    evidence: "src/pages/ProcessLevelNetwork.tsx:286"
     confirmed: true
   - page: "ProductLevelNetwork.tsx"
     via: "rpc list_projects"
     grain: table
-    evidence: "src/pages/ProductLevelNetwork.tsx:252"
+    evidence: "src/pages/ProductLevelNetwork.tsx:255"
     confirmed: true
   - page: "ProjectIntelligence.tsx"
     via: "rpc list_projects"

@@ -70,6 +70,7 @@ import {
 import { NetworkDisruptionDialog } from '@/components/network/NetworkDisruptionDialog';
 import MLPrediction from '@/components/MLPrediction';
 import { GraphVersionChip } from '@/components/trust/GraphVersionChip';
+import type { NetworkAnalysisState } from '@/components/trust/NetworkAnalysisBadge';
 import { BarChart } from 'lucide-react';
 
 interface MultiTierData {
@@ -714,14 +715,19 @@ export default function ProcessLevelNetwork({ isCollapsed, setIsCollapsed }: Net
   // Level-1 node it holds the nodes reachable downstream (following arcs) and
   // upstream (against them), transitively.
   const [structure, setStructure] = useState<{
+    projectId: string;
     reachable: Record<string, { downstream?: string[]; upstream?: string[] }>;
     cacheHit: boolean;
     computedAt: string | null;
+    inputHash: string | null;
+    inProgress: boolean;
   } | null>(null);
+  const [structureState, setStructureState] = useState<NetworkAnalysisState>('loading');
 
   useEffect(() => {
     let alive = true;
     setStructure(null);
+    setStructureState('loading');
     if (!user?.id || !globalSelectedProjectId) return;
     (async () => {
       const { data, error } = await supabase.rpc('process_structure', {
@@ -731,19 +737,24 @@ export default function ProcessLevelNetwork({ isCollapsed, setIsCollapsed }: Net
       if (!alive) return;
       if (error) {
         console.error('[ProcessLevelNetwork] process_structure failed:', error.message);
+        setStructureState('unavailable');
         return;
       }
-      const d = (data ?? {}) as { reachable?: Record<string, { downstream?: string[]; upstream?: string[] }>; cache_hit?: boolean; finished_at?: string | null; started_at?: string | null };
+      const d = (data ?? {}) as { reachable?: Record<string, { downstream?: string[]; upstream?: string[] }>; cache_hit?: boolean; finished_at?: string | null; started_at?: string | null; input_hash?: string | null; in_progress?: boolean };
+      setStructureState(d.in_progress ? 'in progress' : d.input_hash ? 'current' : 'unknown');
       setStructure({
+        projectId: globalSelectedProjectId,
         reachable: d.reachable ?? {},
         cacheHit: Boolean(d.cache_hit),
         computedAt: d.finished_at ?? d.started_at ?? null,
+        inputHash: d.input_hash ?? null,
+        inProgress: Boolean(d.in_progress),
       });
     })();
     return () => {
       alive = false;
     };
-  }, [user?.id, globalSelectedProjectId]);
+  }, [user?.id, globalSelectedProjectId, loadNonce]);
 
   // Handle Level 1 node selection
   const handleLevel1NodeSelect = useCallback((nodeId: string | null) => {
@@ -1082,7 +1093,10 @@ export default function ProcessLevelNetwork({ isCollapsed, setIsCollapsed }: Net
               level="process"
               projectId={globalSelectedProjectId}
               metricsComputedAt={structure?.computedAt ?? null}
-              outcome={structure ? (structure.cacheHit ? 'reused' : 'computed') : null}
+              outcome={structure ? (structure.inProgress ? 'in progress' : structure.cacheHit ? 'reused' : 'computed') : null}
+              analysisState={loading ? 'loading' : structure && structure.projectId !== globalSelectedProjectId ? 'loading' : structureState}
+              analysisHash={structure?.inputHash ?? null}
+              refreshKey={`${loadNonce}:${structure?.inputHash ?? ''}:${structureState}`}
             />
           </div>
         )}
