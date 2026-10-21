@@ -34,6 +34,7 @@
 import * as XLSX from "xlsx";
 import type { EngineInput } from "@/lib/sim/pyodideEngine";
 import { FIELD_LABELS } from "./schemas";
+import { sheetName } from "./excel";
 
 type Cell = string | number | boolean | null;
 
@@ -161,11 +162,6 @@ function tableSheet(header: string[], rows: Cell[][]): XLSX.WorkSheet {
     ws["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length, c: header.length - 1 } }) };
   }
   return ws;
-}
-
-/** Excel's sheet-name rules: ≤ 31 chars, none of []:*?/\ . */
-function sheetName(s: string): string {
-  return s.replace(/[[\]:*?/\\]/g, " ").slice(0, 31);
 }
 
 // ── The sheets ───────────────────────────────────────────────────────────────

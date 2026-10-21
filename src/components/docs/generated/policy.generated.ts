@@ -2939,6 +2939,21 @@ export const ITEM_SERIES: ItemSeries[] = [
     "label": "Lost units"
   },
   {
+    "kind": "product",
+    "key": "fg_on_hand",
+    "label": "FG on hand"
+  },
+  {
+    "kind": "product",
+    "key": "fg_target",
+    "label": "FG target"
+  },
+  {
+    "kind": "product",
+    "key": "make_to_stock",
+    "label": "Make-to-stock (1) or make-to-order (0)"
+  },
+  {
     "kind": "material",
     "key": "mrp_need",
     "label": "MRP need (next lead time)"

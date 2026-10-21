@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { resultsHeader, type ResultsHeader } from "@/lib/sim/runStatus";
 import { gateNotice } from "@/lib/sim/gateNotice";
@@ -36,6 +37,8 @@ interface Props {
    * the wide band goes two-column (v2 §5.5).
    */
   skin?: boolean;
+  /** The project's name, for the inventory explorer's workbook. */
+  projectName?: string | null;
 }
 
 interface RunMeta {
@@ -73,6 +76,7 @@ export function ResultsDashboard({
   scenario,
   credibility,
   skin = false,
+  projectName,
 }: Props) {
   if (!run) {
     return (
@@ -209,19 +213,32 @@ export function ResultsDashboard({
           points at. It is computed from always-on weekly series now, and
           `CapacityOverTime` above is the panel this comment judged not worth
           building — which it was not, until the series it needs existed. */}
-      {/* Per-item weekly series (W3 / G17): inspection runs only. This page
+      {/* Inventory explorer (W3 / G17): inspection runs only. This page
           dispatches no inspection run, so before WP 9.1 the panel was empty
           here on every run and said nothing about why — the dead end §4 D113
-          warns about. It now names where an inspection run is started. The
-          inventory chart above needs none of this: its series are plain weekly
-          scalars present on every run. */}
+          warns about. It names where an inspection run is started, and links
+          there: a Lab scenario carries its own replication count, and the
+          worker honours `inspection` only on a one-replication scenario, so a
+          "Run inspection" here would have to write a scenario of its own —
+          which is what Run & Validate's Single tab already does. The inventory
+          chart above needs none of this: its series are plain weekly scalars
+          present on every run. */}
       <ItemSeriesExplorer
         runId={run.id}
         warmupWeeks={run.warmup_detected_at}
+        projectName={projectName}
         emptyHint={
-          "this run has none. Per-item evidence comes from an inspection run " +
-          "(one replication, full trace), started from Run & Validate on the " +
-          "Policies page; it then appears here too."
+          <>
+            this run has none. Every material&apos;s and finished good&apos;s stock week by week
+            comes from an inspection run (one replication, full trace):{" "}
+            <Link
+              to="/policies?stage=run_validate"
+              className="-my-[11px] inline-flex min-h-11 items-center py-[11px] font-medium text-primary underline underline-offset-2 md:my-0 md:min-h-0 md:py-0"
+            >
+              Policies {"\u2192"} Run &amp; validate {"\u2192"} Single, with Inspection mode on
+            </Link>
+            . It then appears here too.
+          </>
         }
       />
     </div>

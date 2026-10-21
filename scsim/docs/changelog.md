@@ -19,6 +19,10 @@ A product can take time to make: a production lead time per product, fixed or dr
 - frozen reference runs moved: none
 - refs D300, D301, WP 16.4, WP 16.5, ADR 0003
 
+**Changed under this version without a bump:**
+
+- 2026-10-20 · Tier 2 — An inspection run (one replication, full trace) also records each product's finished-goods stock and its target week by week (`product.fg_on_hand`, `product.fg_target`, summing to `fg_units`) and the fulfillment mode the engine resolved (`product.make_to_stock`, 1 = make-to-stock). Output only: no KPI, series or frozen reference run moved.
+
 ## 0.7.0 · 2026-10-03 · Tier 3
 
 **Changed for some projects.** Results change only for projects whose lanes or materials select normal, triangular or uniform lead times; every frozen reference run kept its digest.

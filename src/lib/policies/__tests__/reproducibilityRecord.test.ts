@@ -313,13 +313,18 @@ describe("A5 · the rows a reader is handed", () => {
 describe("A5 · the record reaches a reader", () => {
   const ROOT = join(__dirname, "..", "..", "..", "..");
   const HOOK = readFileSync(join(ROOT, "src", "hooks", "useVerifiableExports.tsx"), "utf8");
+  // The record's assembly moved out of the hook into ONE module both workbooks
+  // call (the run-results export and the inventory explorer's) — so the wiring
+  // is "the hook calls it", and what the record is made of is read there.
+  const RECORD = readFileSync(join(ROOT, "src", "lib", "trust", "assembleRunRecord.ts"), "utf8");
   const EXPORTS = readFileSync(
     join(ROOT, "src", "lib", "policies", "verifiableExports.ts"),
     "utf8",
   );
 
   it("the export hook builds a record and passes it to the workbook", () => {
-    expect(HOOK).toMatch(/buildReproducibilityRecord\(/);
+    expect(HOOK).toMatch(/const record = await assembleRunRecord\(/);
+    expect(RECORD).toMatch(/return buildReproducibilityRecord\(/);
     expect(HOOK).toMatch(/buildRunResultsWorkbook\([\s\S]{0,400}record,/);
   });
 
@@ -337,18 +342,18 @@ describe("A5 · the record reaches a reader", () => {
     // were published on every project. The hook calls `knownLimits` rather than
     // re-authoring, and passes `graded: null` honestly — which `knownLimits` turns
     // into a declared limit of its own rather than an empty section.
-    expect(HOOK).toMatch(/knownLimits\(/);
+    expect(RECORD).toMatch(/knownLimits\(/);
     // Audit WP 8 (F-12): `graded: null` now lives in `exportTrustInput`, the same
     // input shape the report builds, and the hook passes the REAL freshness —
     // `tables: {}` is what suppressed the two counted limits.
-    expect(HOOK).toMatch(/knownLimits\(exportTrustInput\(/);
-    expect(HOOK).not.toMatch(/tables: \{\}/);
+    expect(RECORD).toMatch(/knownLimits\(exportTrustInput\(/);
+    expect(RECORD).not.toMatch(/tables: \{\}/);
   });
 
   it("`unknown` is never bound as a browser engine version", () => {
     // §4 D87: the build script wrote exactly that string when its version lookup
     // failed, and a record binding it would name an engine nobody can identify.
-    expect(HOOK).toMatch(/v !== "unknown"/);
+    expect(RECORD).toMatch(/v !== "unknown"/);
   });
 
   it("the analysis list is the LATEST per kind, not every run", () => {
@@ -357,7 +362,7 @@ describe("A5 · the record reaches a reader", () => {
     // Audit WP 8 (F-29): still one per kind, and now the latest finished BEFORE
     // the run was dispatched — `analysesAtRun`, whose behaviour
     // `exportTrustInputs.test.ts` pins.
-    expect(HOOK).toMatch(/analysesAtRun\(/);
+    expect(RECORD).toMatch(/analysesAtRun\(/);
   });
 
   it("a failed lookup becomes an absent binding, not a failed export", () => {
@@ -365,7 +370,7 @@ describe("A5 · the record reaches a reader", () => {
     // this: a reviewer holding six of nine bindings and three stated reasons is
     // better served than one holding an error toast.
     expect(HOOK).toMatch(/\.maybeSingle\(\)/);
-    expect(HOOK).toMatch(/browserEngineVersion = null;/);
+    expect(RECORD).toMatch(/browserEngineVersion = null;/);
   });
 });
 
