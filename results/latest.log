@@ -1,0 +1,9 @@
+run_id: 39650705767  outcome: success
+trigger: push  ref: main  sha: 473763676fc5bc6de0c07dfd0b40ee9bc2d31ad8
+──────────────────────────────────────
+Connecting to remote database...
+Do you want to push these migrations to the remote database?
+ • 20261021000001_nexus_stress_store.sql
+ [Y/n] 
+Applying migration 20261021000001_nexus_stress_store.sql...
+Finished supabase db push.
