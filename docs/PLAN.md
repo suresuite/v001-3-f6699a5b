@@ -24692,6 +24692,26 @@ whose unmet demand is backordered can report zero lost sales for a real outage �
 ranking measure, value vs units, CI vs worker); each has a recommended default the later packages
 assume. Nothing in an earlier package is re-scoped.
 
+### WP 17.0 follow-up — the owner's four decisions · 2026-10-21 · docs only
+
+**Owner decisions** on the four WP 17.0 left open:
+1. **Start week** — "if warm up is after week 26, we use warm up + 1; if warm up is before week 26, we
+   use week 26": `max(26, t_w + 1)` (§27.2 rule 1). It replaces the plan's `t_w + 26`. What it keeps:
+   the start lies 1–26 weeks into the 52-week window, so the 9-week cell still has ≥ 17 weeks of recovery.
+2. **The result is a table**, not a single ranking measure: one sortable column per duration (2…9
+   weeks), a final Average column, opened sorted by Average (rule 5). The plan's tie-break survives as
+   the table's tie order.
+3. **€** — lost sales are shown and sorted in value; units are stored, not ranked on (rule 4).
+4. **GitHub Actions**, "considering carefully the limitation of GitHub": WP 17.4 is rewritten as
+   prepare → sharded cells → publish, with a table of each documented limit (6 h per job, 256-job
+   matrix, plan concurrency, runner memory, billed minutes, lost runners, artifact retention,
+   default-branch dispatch, secrets, runner-image drift) and the design response to each.
+
+**Gap check.** One consequence the decisions create and the plan now states: the first real battery
+cannot run until WP 17.3's migration is merged, because the writer it publishes through deploys on
+merge. Shards must agree on one `t_w`, so `prepare` adopts it and every shard proves it reproduced
+the same clean reference. Nothing else moves.
+
 ## 17. Sequencing
 
 | Phase | WPs | Focus | Blocks | Status |
@@ -24713,7 +24733,7 @@ assume. Nothing in an earlier package is re-scoped.
 | **14** | **14.0 – 14.8** | **demand-driven planning: demand per customer × product row, planned production = min(requirement, capacity) with FG policies, MRP for materials, per-row fulfillment; multi-stage later** | — | **14.0 ✅** the planning baseline pinned, the shared allocation helper (`core/allocation.py`) with P-C.2 delegating, ADR 0002, and frozen golden digests (engine + worker) that make "byte-identical" checkable. Registered 2026-10-02 (§24, D284); prompts in `docs/design/demand-driven-planning-prompts.md`. **14.1 ✅** demand per customer × product row in the engine (engine 0.3.0): row specs and forecasts, a real `normal` clipped at 0 and counted, the plan's projected-demand view, projection-error KPIs. **14.2 ✅** demand per row from the data: per-row specs on `outbound_logistics`, a `demand_forecasts` table spread evenly at promotion, both in the snapshot's simulation scope, the Customer table's demand cells as row overrides, and a pre-run finding per missing parameter. **14.3 ✅** per-row fulfillment (engine 0.4.0): backorder, window, cost and fill rate per customer × product row, one allocation rule per project with per-row priority / price / service target, `revenue_max` real, the customers' contracted floor consumed and uploadable. **14.4 ✅** planned production over a horizon = min(requirement, capacity) with fulfillment's own row step for the carry-forward (engine 0.5.0), base-stock / min-max / days-of-cover FG policies and FG opening stock on `products` (RFC 4 closed), Plant cells as overrides. **14.5 ✅** MRP for materials (engine 0.6.0): `policy_type = "mrp"` orders BOM × planned production over the lead time, net of stock and the pipeline, ≥ MOQ; golden #7 exact; late-receipt and shortage KPIs; the MRP record in inspection runs; ≈ +12–16 % per replication at TRON scale. **14.6 ✅** the CRN-paired MRP-vs-reorder-point study, regenerated and byte-compared in CI (`docs/research/mrp-vs-reorder-point.md`), gate `plan-from-demand` in CLAUDE.md, G20 closed in the blueprint for planning, the manual's "How planning works" page. **PHASE COMPLETE (14.7 excluded by design — multi-stage waits for the owner)**. **14.8 ✅** /policies follow-up: each Plant row's own MTS / MTO is a cell the engine reads and the FG policy shows only behind it, the 13 Plant cells no run read are gone, the Customer card became one project line, P-P.4's buffer has no control (the row's S says how much); demand is authored on the Customer stage only (D286), and its parameters follow the row's distribution (D287) |
 | **15** | **15.0 – 15.7** | **the engine ledger: one build identity, an append-only build ledger, an archive installable by version, one change record with a CI gate, a release quality report, and an "Engine versions & changes" page on /docs** | — | **15.0 ✅** the plan (§25), §4 D292–D297 registered from a verified reading, blueprint gap G21, gate `engine-ledger` named in `CLAUDE.md`. Five owner decisions are open (§25.5). **15.4 ✅** the change record: `scsim/CHANGELOG.yaml` holds all 18 versions back to 0.1.0, with a gate in `scsim-tests.yml` (rules 1–4 as planned, plus 6 and 7, added because rules 1–4 could not catch the unbumped commit that motivated the phase) and two generated views. It found four unbumped engine changes, now amendments, and 44 engine commits no record describes, published as a count. **15.1 ✅** one engine identity: a build is named by a digest of its source (`scsim-0.6.1+<12 hex>`, over scsim and the worker's compute path), the same in the worker, the browser and the library. The plan's commit stamp was replaced because the browser wheels cannot name the commit that holds them. The package version is the engine version. The demo fixture, labelled 0.2.8 for eight versions, was re-recorded with identical numbers. **15.2 ✅** the build ledger (`20261004000001`): every build a boot report, a run (as anon) or history names, append-only, withdrawn and never deleted, with dispatch refusing a withdrawn current build. Four planned design points were not built because each would author a fact twice. **15.3 ✅** the archive: every build ever published is listed in `versions.json` and installable by version or exact build (API and `suresuite`), history is backfilled (46 builds under 17 versions), and every version is tagged from the change record. An archived build, installed from its wheels alone, reproduces its own frozen results byte for byte. **15.5 ✅** the release report: this build against the previous version's archived build on the worker's three frozen reference runs, same seeds, a 95 % interval per KPI; byte-compared in CI, with a gate refusing a change record that understates it. 0.6.1 against 0.6.0 is identical on the reference set. **15.6 ✅** the page: /docs "Engine versions & changes", generated from the record and the measured reports, with the ledger read live. Run badges, comparisons, stale Validated Models and the Reproducibility Record all say what an engine changed and link to it. **Owed: WP 15.7, the after-merge reading.** |
 | **16** | **16.0 – 16.6** | **stochastic lead times configured like demand (per supplier × material lane), a production lead time per product (P-P.13), and the FG inventory band laid out like the Supplier inventory band** | — | **16.0 ✅** the plan (§26), §4 D299–D302 registered from a verified reading (the brief's "`inbound_logistics` carries the spread" and "lead time is read-only" were both wrong by the time it ran — D290 had made the lead time an override), blueprint P-S.6 widened, P-P.13 added, §2.4's W^FG boundary made opt-in. **16.1 ✅** engine shapes (0.7.0): normal / triangular / uniform drawn per lane from a new world stream, CRN-safe under a changed primary, lognormal/gamma bit-identical · **16.2 ✅** per-lane data + mapper (`20261004000003`, rehearsal 840; D302 closed) · **16.3 ✅** Supplier cells: a shape per row and only its parameters, a bounded row's lead time is the bounds' mean (D299 closed) · **16.4 ✅** engine production lead time (0.8.0): starts complete at t + L through a per-product pipeline, the plan offset by E[L] net of WIP, WIP traced and uncharged, the honesty test extended · **16.5 ✅** product data + Plant cells (`20261004000004`, rehearsal 850; D300 closed) · **16.6 ✅** FG inventory laid out like the Supplier band (D301 closed). **PHASE COMPLETE** — §15 reading owed in the push after the merge |
-| **17** | **17.0 – 17.6** | **nexus by stress test: every material and supplier of a project disrupted alone under one shared scenario (week 26 of the KPI window, 2–9 weeks, full outage), the project's policies applied, ranked by lost sales, stored with its baseline and read by the Nexus card with no Run click — first on `Project AA - ver3`** | — | **17.0 ✅** the plan (§27), §4 D310–D311 registered from a verified reading (a material cannot be disrupted; "week 26" needs a reference; backorder hides lost sales), four owner decisions written for review. WP 17.1 is next |
+| **17** | **17.0 – 17.6** | **nexus by stress test: every material and supplier of a project disrupted alone under one shared scenario (full outage starting in week `max(26, t_w + 1)`, 2–9 weeks), the project's policies applied, shown as a table of lost sales in € per duration with an Average column it opens sorted by, stored with its baseline and read by the Nexus card with no Run click — first on `Project AA - ver3`** | — | **17.0 ✅** the plan (§27), §4 D310–D311 registered from a verified reading (a material cannot be disrupted; "week 26" needs a reference; backorder hides lost sales), four owner decisions settled 2026-10-21 (start week, the sortable table, €, GitHub Actions within its limits). WP 17.1 is next |
 
 **27 work packages** (26 + the five 5.2 sub-packages counted as one). WP 3.0 was added at the Phase 2→3 boundary review, for the reason boundary reviews exist: nine defects had an owner that had already finished, which reads exactly like having an owner.
 Commit convention: `Phase N / WP N.M / <blueprint ref>: <title>`.
@@ -27721,11 +27741,11 @@ Read against the code on 2026-10-21, base `72cc760`:
 
 | # | Rule |
 |---|---|
-| 1 | **One scenario, authored once.** The shared scenario — start week 26, durations 2–9 inclusive, full outage, effect, measure, replication budget — is ONE declared spec (`scsim/scsim/stress/nexus.py` `NEXUS_SCENARIO`, exported to the registry and read by the runner, the store's `params`, the card and the manual). **Week 26 means week 26 of the KPI window, absolute week `t_w + 26`**, with `t_w` adopted once from the clean reference and shared by every cell, so all targets are hit at the same moment of steady state and a 9-week outage still leaves 17 window weeks to measure recovery (`26 + 9 + 17 = 52`). Recommended; the alternative (absolute week 26) can fall inside an auto warm-up — owner decision at WP 17.0 review. |
+| 1 | **One scenario, authored once.** The shared scenario — start week 26, durations 2–9 inclusive, full outage, effect, measure, replication budget — is ONE declared spec (`scsim/scsim/stress/nexus.py` `NEXUS_SCENARIO`, exported to the registry and read by the runner, the store's `params`, the card and the manual). **The start week is `max(26, t_w + 1)` in absolute simulation weeks (owner decision, 2026-10-21)**: week 26 when the warm-up has ended by then, otherwise the first week after it — a disruption never starts inside the warm-up. `t_w` is adopted ONCE from the clean reference and shared by every cell, so all targets are hit in the same week. Because the start then lies 1–26 weeks into the 52-week KPI window, a 9-week outage always leaves at least 17 window weeks to measure recovery. The adopted `t_w` and the start week it produced are stored with the battery and shown in the baseline. |
 | 2 | **A disruption is a full outage of ONE target.** Lead-time-extension semantics (§3.7: the target ships nothing in the window; in-transit units are deferred, never destroyed). A **supplier** target stops everything that supplier ships; a **material** target stops every supply link of that material and nothing else (D311). Sub-assemblies and the finished product are not targets: they have no supply link, and the plant is a separate event. |
 | 3 | **The project's policies run, unchanged.** Every cell runs the policy version the battery binds through the same mapper as a platform run (`page-equals-run`): safety stock and reorder rules, backup supplier (P-S.1), multi-sourcing (P-S.2), detection lag and early warning (P-S.4), allocation (P-C.2), unmet-demand handling (P-C.1), the project's supply-chain model (D309). Lost sales are therefore what the chain loses *after* its own mitigations — which is the point. |
-| 4 | **Lost sales are incremental and paired.** Per cell and replication: `Δ lost sales = cell − clean reference`, on the same seeds (CRN), in value (€, `lost_sales_value`) AND units (`lost_units`), with a confidence interval. Beside it: peak backlog, fill-rate drop over the window, time to recover. A target whose Δ is zero says WHY at display — absorbed by stock/policy, or unmet demand backordered rather than lost (P-C.1). |
-| 5 | **The ranking is the expected loss over the shared scenario.** Rank = mean Δ lost-sales value over the eight durations, equally weighted — the expectation of a duration drawn `U{2..9}`. Ties broken by the 9-week cell, then by units. The per-duration curve (2…9) is stored and shown, so a target that is harmless at 2 weeks and fatal at 9 is visible. **Nexus = in the ranked list; there is no threshold** — the list IS the answer. Recommended; alternatives (rank by the 9-week worst case) — owner decision at WP 17.0 review. |
+| 4 | **Lost sales are incremental and paired.** Per cell and replication: `Δ lost sales = cell − clean reference`, on the same seeds (CRN), in **value (€, `lost_sales_value`) — the measure every table and ranking uses (owner decision, 2026-10-21)** — with a confidence interval; `lost_units` is stored beside it and not ranked on. Beside it: peak backlog, fill-rate drop over the window, time to recover. A target whose Δ is zero says WHY at display — absorbed by stock/policy, or unmet demand backordered rather than lost (P-C.1). |
+| 5 | **The result is a table, sortable by every duration (owner decision, 2026-10-21).** One row per target; one column per disruption duration — 2, 3, 4, 5, 6, 7, 8, 9 weeks — each the Δ lost sales in €; a final **Average** column, the equally weighted mean of the eight. **The table opens sorted by Average, highest first**, and every column header sorts it. Ties sort by the 9-week column, then by target id, so an order is never arbitrary. **Nexus = the table's order; there is no threshold.** The stored rank is the Average rank; the other orders are the reader's, computed in the browser from the stored cells, never re-simulated. |
 | 6 | **Bound to its baseline, stated at the point of display (T4).** Every battery binds: dataset version (id + `graph_hash`), policy version (id + `policy_hash`), the engine build (`code_version`, `scsim-<ENGINE_VERSION>+<12 hex>`), the scenario spec and its hash, root seed, replications, `t_w`, and when it ran. The card states all of it before it shows a number. If the project's current dataset or policy version differs from the battery's, the card says "prepared for … — current data differs" and still shows the prepared result; it never recomputes on view. |
 | 7 | **Prepared in advance; the page computes nothing.** The battery runs as a batch job off the request path; the card reads stored rows through one RPC. There is no Run button on the card. A refresh is a new battery run (a new `analysis_runs` row), never an edit of a published one (`analysis_results` is append-only). |
 | 8 | **Engine ledger.** Material targets are an engine behaviour change: `ENGINE_VERSION` bump, `CHANGELOG.yaml` entry, wheels rebuilt, release report regenerated (`engine-ledger`). Every existing golden digest stays byte-identical — a scenario with no material event runs exactly as before. |
@@ -27733,9 +27753,10 @@ Read against the code on 2026-10-21, base `72cc760`:
 ### WP 17.0 — The plan ✅ *(docs only — done)*
 
 This section, §4 D310–D311, the §16 entry, the §17 row, and the blueprint's §11.5 note.
-**Owner decisions to confirm at review**: (a) "week 26" = week 26 of the KPI window (rule 1);
-(b) the ranking measure = mean over 2–9 weeks (rule 5); (c) lost sales in value (€) first, units
-beside it (rule 4); (d) the battery runs in CI, not on the worker (WP 17.3).
+**Owner decisions, settled 2026-10-21**: (a) the start week is `max(26, t_w + 1)` (rule 1);
+(b) the result is a table with one sortable column per duration and an Average column, opened
+sorted by Average (rule 5); (c) lost sales in € (rule 4); (d) the battery runs in GitHub Actions, not
+on the worker, within the limits in WP 17.4.
 
 ### WP 17.1 — Engine: a material can be disrupted *(D311 · rule 2, 8 · gates `engine-ledger`, `declared-fallback` — no migration; engine 0.9.0)*
 
@@ -27754,17 +27775,18 @@ beside it (rule 4); (d) the battery runs in CI, not on the worker (WP 17.3).
 
 - `scsim/scsim/stress/nexus.py`: `NEXUS_SCENARIO` (rule 1) and `run_nexus_battery(scenario,
   targets=None, shard=None)` built on `_run_battery`'s machinery — one clean reference, one adopted
-  `t_w`, one snapshot per model seed — with a FIXED start `t_w + 26` and durations 2…9, over every
+  `t_w`, one snapshot per model seed — with a FIXED start `max(26, t_w + 1)` and durations 2…9, over every
   supplier and every purchased material (or a shard of them, for parallel runs).
-- Output per target: Δ lost-sales value and units (mean, CI) per duration, the rank measure, peak
+- Output per target: Δ lost-sales value in € (mean, CI) per duration, the Average and its rank, Δ units, peak
   backlog, fill-rate drop, TTR, the zero-reason (rule 4), wide-CI badge; per battery: the clean
   reference's own lost sales and fill rate, `t_w`, replications, skipped targets with reasons.
 - **Budget, measured on `Project AA - ver3`**: time one clean run and one cell; choose the replication
   count that keeps the top-10 order stable across two seeds (stated, not assumed); record the wall
   time per shard in the §16 entry.
 - Tests: hand-worked two-supplier project where the sole-source material outranks a dual-sourced one;
-  a backup-supplier policy lowers its own target's loss; every cell starts at `t_w + 26`; sharded and
-  unsharded batteries give identical rows.
+  a backup-supplier policy lowers its own target's loss; every cell starts at `max(26, t_w + 1)` (both
+  branches: an early and a late warm-up); sharded and unsharded batteries give identical rows when the
+  shards are handed the same adopted `t_w`.
 
 ### WP 17.3 — Data: the stored battery and its read *(D310 · rules 6, 7 · gates `input-hash`, `result-binding`, `audit-actor`, `declared-capability` — migration)*
 
@@ -27773,8 +27795,8 @@ beside it (rule 4); (d) the battery runs in CI, not on the worker (WP 17.3).
   policy version id + hash, the engine build, the scenario spec + hash, root seed, replications,
   `t_w`, the clean reference's KPIs — so all of it is in the key and the binding.
 - One `analysis_results` row per target: `entity_type` `material` | `supplier`, `entity_id`,
-  `metrics` = rank, rank measure, per-duration Δ (value, units, CI), backlog, fill-rate drop, TTR,
-  zero-reason.
+  `metrics` = Average rank, Average €, per-duration Δ € (mean, CI) for 2…9, Δ units, backlog,
+  fill-rate drop, TTR, zero-reason.
 - Writer `analysis_publish_nexus_stress(_run_id, _rows, _actor_user_id)`: service role only, from a
   RUNNING run of kind `nexus_stress`, attributed through `assert_writer_may_act`, completes the run.
 - Reader `get_nexus_stress_results(p_project_id, p_user_id)`: the latest COMPLETED battery for the
@@ -27784,19 +27806,41 @@ beside it (rule 4); (d) the battery runs in CI, not on the worker (WP 17.3).
   reader refuses a stranger, the stale flag moves when the policy version does, mutation-tested on
   the actor).
 
-### WP 17.4 — Prepare it: the battery job, and `Project AA - ver3` *(D310 · rule 7 — no migration)*
+### WP 17.4 — Prepare it: the battery job in GitHub Actions, and `Project AA - ver3` *(D310 · rule 7 — no migration)*
 
-- `.github/workflows/nexus-stress.yml`, triggered like `seed-project.yml` by a request file
-  (`.github/nexus-stress-request`: project name, optional dataset / policy version — default the
-  project's Validated Model's versions if it has one, else its latest saved versions). It freezes and
-  reads those versions (the `sim_worker.local` path, `project_model` passed — D309), runs the battery
-  in a matrix of shards, merges, and publishes through the WP 17.3 writer. **CI, not the Fly worker**:
-  ≈2 000 cells would occupy the one worker that serves interactive runs (owner decision (d)).
-- Run it for **`Project AA - ver3`** and record in §16: the baseline (versions, build, `t_w`,
-  replications), the top 10 materials and top 10 suppliers, the clean reference's own lost sales, and
-  the comparison with D307's demand-at-risk ranking (rank correlation, and the targets the two disagree
-  on most — the first measurement blueprint §11.5 owes).
-- Re-run is a new request; nothing re-runs on page view.
+**Shape.** `.github/workflows/nexus-stress.yml`, three jobs:
+1. **prepare** — resolves the project and its versions (request input, default the Validated Model's
+   dataset + policy versions, else the latest saved), reads the frozen snapshot through the
+   `sim_worker.local` path (`project_model` passed — D309), runs the clean reference, adopts `t_w`,
+   computes the start week (rule 1), opens the `analysis_runs` row, lists the targets, and uploads ONE
+   input bundle (snapshot + policies + `t_w` + start week + target shards) as a workflow artifact;
+2. **cells** — a matrix of shards; each downloads the bundle, re-runs the clean reference from the
+   same seeds (it must reproduce the prepare job's digest, or the shard fails), runs its targets × 8
+   durations, and uploads its rows as an artifact. A shard never talks to the database;
+3. **publish** — downloads every shard's rows, refuses unless every target is present exactly once,
+   and calls the WP 17.3 writer once, which completes the run. A battery is published whole or not at
+   all.
+
+**GitHub's limits, and what each one decides** (re-read GitHub's current documentation in WP 17.4;
+these are the documented figures as of planning):
+
+| Limit | What it means here | Design response |
+|---|---|---|
+| **A job runs at most 6 h** on a GitHub-hosted runner; `timeout-minutes` should be far tighter | No single job may hold the whole battery | Shard so the slowest shard finishes in ≤ 90 min, from WP 17.2's measured per-cell time × 1.5; `timeout-minutes: 120` per shard |
+| **A matrix holds at most 256 jobs**, and **concurrent jobs are capped by plan** (≈20 on Free, more on Team/Enterprise) — the rest queue | ≈2 000 cells at 8 cells per target means ≈250 targets; one target per job would reach the matrix ceiling and mostly queue | Shard by TARGET GROUP, 10–30 shards; the shard count is computed in `prepare` from the target count and the measured cell time, and capped below the plan's concurrency |
+| **Runner size**: a standard Linux runner on a private repository is 2 vCPU / 7 GB RAM / ~14 GB disk (4 vCPU / 16 GB on a public one) | Memory is the risk, not CPU: one warm snapshot per model seed is held for every cell | `kpi_only` traces, snapshots per shard only, no matrices kept; WP 17.2 records peak RSS on AA; a shard uses `n_cpu` worker processes, not more |
+| **Minutes are billed** on a private repository (Linux ×1) against the plan's monthly quota; a battery is shards × minutes | A re-run of a whole battery costs the whole budget again | The run's minutes are printed in the job summary and recorded in §16; no schedule — a battery runs only on request; **Re-run failed jobs** re-runs only the shards that failed, because shards are pure and the publish waits for all of them |
+| **Runners are ephemeral and can be lost** | A lost runner loses its shard, not the battery | Shards are idempotent and write nothing outside their artifact; nothing is published until all succeed |
+| **Artifacts** have size limits and expire (default 90 days, configurable) | The bundle and the shard rows are transport, not storage | Retention 7 days; the database row is the record; the bundle's hash is stored in `params` |
+| **Triggers**: `workflow_dispatch` works only from a workflow on the default branch; a push-path trigger (`.github/nexus-stress-request`, the `seed-project.yml` idiom) works from any branch | The writer RPC exists in production only after the WP 17.3 migration merges (migrations deploy on merge, D31) | Both triggers; the first real battery runs **after** WP 17.3 is merged; `concurrency: nexus-stress-<project>` so two batteries of one project never race |
+| **Secrets** are not given to workflows from forks and live in the repository's settings | The publish step needs a database credential | Only `publish` reads the secret (the same Management-API credential `seed-project.yml` uses); `prepare` reads read-only; `cells` gets no secret at all |
+| **Run-to-run reproducibility**: a runner image changes under the workflow | A different numpy could move a figure | Install the engine from the archived wheels of the bound build (`engine-ledger`), never from source; the build's `code_version` is what the battery binds |
+
+**Run it for `Project AA - ver3`** and record in §16: the baseline (versions, build, `t_w`, start
+week, replications), shard count, wall time and billed minutes, the top 10 materials and suppliers by
+Average, the clean reference's own lost sales, and the comparison with D307's demand-at-risk ranking
+(rank correlation, and the targets the two disagree on most — the first measurement blueprint §11.5
+owes). Re-run is a new request; nothing re-runs on page view.
 
 ### WP 17.5 — On the page: the Nexus card reads the stored battery *(D310 · rules 5–7 · T1, T2, T4 — no migration)*
 
@@ -27805,9 +27849,11 @@ beside it (rule 4); (d) the battery runs in CI, not on the worker (WP 17.3).
   1. **Baseline** — "Data v… · Policies v… · Engine scsim-… · prepared <date>", the scenario in one
      line ("each material and supplier disrupted alone · full outage from week 26 of the KPI window ·
      2–9 weeks · <R> replications"), and the clean reference's own lost sales;
-  2. **Nexus materials** and **Nexus suppliers** — two lists sorted by expected lost sales (€, units
-     beside it), each row expandable to its 2…9-week curve, backlog and recovery, and its zero-reason
-     when the loss is zero;
+  2. **Nexus materials** and **Nexus suppliers** — two tables (tabs on mobile), columns `Rank ·
+     Target · 2 wk · 3 wk · … · 9 wk · Average`, every value lost sales in €, **opened sorted by
+     Average, highest first**, every column header sortable (rule 5); a row expands to its backlog,
+     recovery time and zero-reason when the loss is zero. On a phone the duration columns scroll
+     inside the table with Target pinned, never the page;
   3. a stale line when the current data or policy version differs from the battery's (rule 6);
   4. an empty state when no battery exists: "Not prepared for this project yet" — no button.
 - The static demand-at-risk score (D307) is kept as a secondary column labelled "first-order
@@ -27826,6 +27872,6 @@ binding.
 materials and suppliers ranked by stress-tested lost sales, with no click to compute; golden digests
 unmoved; `engine-ledger` green.
 
-**Order.** 17.0 → 17.1 → 17.2 → 17.3 → 17.4 → 17.5 → 17.6 (17.3 may run beside 17.1–17.2).
+**Order.** 17.0 → 17.1 → 17.2 → 17.3 → 17.4 → 17.5 → 17.6 (17.3 may run beside 17.1–17.2; the first published battery waits for 17.3's merge).
 **Out of scope:** compound or simultaneous disruptions, partial capacity cuts, demand-side events,
 the surrogate model itself (Phase D), automatic re-runs on a new dataset version (a later trigger).
