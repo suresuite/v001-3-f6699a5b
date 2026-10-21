@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { LAYER } from "@/components/intelligence/piUi";
+import { findingSummary } from "@/lib/sim/findingSummary";
 
 /**
  * The run gate's findings table. The gate itself — reason, button, readout — is
@@ -82,15 +83,31 @@ export function FindingsPanel<F extends Finding>({
               style={{ borderLeftColor: SEV_COLOR[g.sev] }}
             >
               <div className="min-w-0 flex-1">
-                <div className="text-[13px] leading-[1.4] text-[#18181b]">{f.message}</div>
-                <div className="mt-[3px] text-[11.5px] text-[--zinc-quiet]">
-                  {[f.field, f.policy && f.policy !== "engine" ? `demanded by ${f.policy}` : f.policy]
-                    .filter(Boolean)
-                    .join(" · ")}
+                <div className="text-[13px] leading-[1.4] text-[#18181b]">
+                  {f.severity === "block" ? f.message : findingSummary(f.message)}
                 </div>
+                {f.severity !== "block" ? (
+                  <details className="mt-1 text-[11.5px] leading-[1.4] text-[--zinc-quiet]">
+                    <summary className="w-fit cursor-pointer py-1 underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">
+                      Details
+                    </summary>
+                    <div className="space-y-1 pb-1">
+                      {findingSummary(f.message) !== f.message ? <p>{f.message}</p> : null}
+                      <p>{[f.field, f.policy].filter(Boolean).join(" · ")}</p>
+                      {f.hint ? <p>{f.hint}</p> : null}
+                    </div>
+                  </details>
+                ) : null}
+                {f.severity === "block" ? (
+                  <div className="mt-[3px] text-[11.5px] text-[--zinc-quiet]">
+                    {[f.field, f.policy && f.policy !== "engine" ? `demanded by ${f.policy}` : f.policy]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </div>
+                ) : null}
                 {renderFix?.(f)}
               </div>
-              {f.hint ? (
+              {f.severity === "block" && f.hint ? (
                 <span className="min-w-0 text-[11.5px] leading-[1.4] text-[--zinc-quiet] [text-wrap:pretty]">{f.hint}</span>
               ) : null}
             </div>
