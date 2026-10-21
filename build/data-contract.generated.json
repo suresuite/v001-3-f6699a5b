@@ -3214,7 +3214,7 @@
           "page": "ProcessLevelNetwork.tsx",
           "via": "table read",
           "grain": "table",
-          "evidence": "src/pages/ProcessLevelNetwork.tsx:384",
+          "evidence": "src/pages/ProcessLevelNetwork.tsx:385",
           "confirmed": true
         },
         {
@@ -3535,7 +3535,7 @@
               "page": "ProcessLevelNetwork.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/pages/ProcessLevelNetwork.tsx:384",
+              "evidence": "src/pages/ProcessLevelNetwork.tsx:385",
               "confirmed": true
             }
           ],
@@ -19051,7 +19051,7 @@
           "page": "ProductLevelNetwork.tsx",
           "via": "rpc get_network_metrics_for_materials",
           "grain": "table",
-          "evidence": "src/pages/ProductLevelNetwork.tsx:277",
+          "evidence": "src/pages/ProductLevelNetwork.tsx:280",
           "confirmed": true
         }
       ],
@@ -30499,7 +30499,7 @@
           "page": "FirmLevelNetwork.tsx",
           "via": "rpc list_projects",
           "grain": "table",
-          "evidence": "src/pages/FirmLevelNetwork.tsx:271",
+          "evidence": "src/pages/FirmLevelNetwork.tsx:273",
           "confirmed": true
         },
         {
@@ -30513,14 +30513,14 @@
           "page": "ProcessLevelNetwork.tsx",
           "via": "rpc list_projects",
           "grain": "table",
-          "evidence": "src/pages/ProcessLevelNetwork.tsx:285",
+          "evidence": "src/pages/ProcessLevelNetwork.tsx:286",
           "confirmed": true
         },
         {
           "page": "ProductLevelNetwork.tsx",
           "via": "rpc list_projects",
           "grain": "table",
-          "evidence": "src/pages/ProductLevelNetwork.tsx:252",
+          "evidence": "src/pages/ProductLevelNetwork.tsx:255",
           "confirmed": true
         },
         {
@@ -31784,14 +31784,14 @@
           "page": "FirmLevelNetwork.tsx",
           "via": "table read",
           "grain": "table",
-          "evidence": "src/pages/FirmLevelNetwork.tsx:328",
+          "evidence": "src/pages/FirmLevelNetwork.tsx:330",
           "confirmed": true
         },
         {
           "page": "ProductLevelNetwork.tsx",
           "via": "table read",
           "grain": "table",
-          "evidence": "src/pages/ProductLevelNetwork.tsx:368",
+          "evidence": "src/pages/ProductLevelNetwork.tsx:375",
           "confirmed": true
         }
       ],
@@ -31934,14 +31934,14 @@
               "page": "FirmLevelNetwork.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/pages/FirmLevelNetwork.tsx:328",
+              "evidence": "src/pages/FirmLevelNetwork.tsx:330",
               "confirmed": true
             },
             {
               "page": "ProductLevelNetwork.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/pages/ProductLevelNetwork.tsx:368",
+              "evidence": "src/pages/ProductLevelNetwork.tsx:375",
               "confirmed": true
             }
           ],
@@ -31988,14 +31988,14 @@
               "page": "FirmLevelNetwork.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/pages/FirmLevelNetwork.tsx:328",
+              "evidence": "src/pages/FirmLevelNetwork.tsx:330",
               "confirmed": true
             },
             {
               "page": "ProductLevelNetwork.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/pages/ProductLevelNetwork.tsx:368",
+              "evidence": "src/pages/ProductLevelNetwork.tsx:375",
               "confirmed": true
             }
           ],
@@ -45164,5 +45164,5 @@
   },
   "orphans": [],
   "phantom_tables": [],
-  "contract_version": "471875903c82"
+  "contract_version": "cc0268e99d85"
 }

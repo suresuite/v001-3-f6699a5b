@@ -272,8 +272,11 @@ BEGIN
       'dataset_version_id',  v_ds.id,
       'dataset_version_no',  v_ds.version_no,
       'dataset_label',       v_ds.label),
-    -- The data the battery ran on is still the project's (simulation scope).
-    'data_is_current',  COALESCE(public.analysis_run_is_current(v_run.id), false),
+    -- The data the battery ran on is still the project's: the run's own hash
+    -- against the project's current hash for the run's OWN scope. Not
+    -- `analysis_run_is_current`, which re-derives the scope from the kinds catalog
+    -- and reads a simulation-scoped run as stale wherever that row is absent.
+    'data_is_current',  COALESCE(v_run.input_hash = public.current_level_hash(v_run.project_id, v_run.input_scope), false),
     'model_is_active',  COALESCE(v_model.status = 'active' AND v_model.revoked_at IS NULL, false),
     'materials', COALESCE((
       SELECT jsonb_agg(jsonb_build_object('id', ar.entity_id) || ar.metrics

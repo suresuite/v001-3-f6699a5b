@@ -214,6 +214,8 @@ export default function FirmLevelNetwork({ isCollapsed, setIsCollapsed }: FirmLe
   const [networkNodes, setNetworkNodes] = useState<NetworkNode[]>([]);
   const [networkEdges, setNetworkEdges] = useState<NetworkEdge[]>([]);
   const [storedDecision, setStoredDecision] = useState<StoredDecision | null>(null);
+  const [metricsProjectId, setMetricsProjectId] = useState<string | null>(null);
+  const [metricsReadError, setMetricsReadError] = useState(false);
   const [metricsOutcome, setMetricsOutcome] = useState<MetricsOutcome>(null);
   const [prominenceStats, setProminenceStats] = useState<{
     count: number;
@@ -374,6 +376,11 @@ export default function FirmLevelNetwork({ isCollapsed, setIsCollapsed }: FirmLe
             // page says it is an approximation (T1).
             const decision = storedMetricsDecision(fetchedNodes);
             setStoredDecision(decision);
+            if (decision.state === 'current') {
+              setMetricsOutcome((outcome) => outcome === 'in progress' ? 'reused' : outcome);
+            }
+            setMetricsProjectId(globalSelectedProjectId);
+            setMetricsReadError(false);
             const useApproximation = decision.state === 'missing';
 
       // ✅ calculateNodeImportance uses fetchedNodes and fetchedEdges directly
@@ -1044,6 +1051,7 @@ export default function FirmLevelNetwork({ isCollapsed, setIsCollapsed }: FirmLe
       toast.success(`Loaded firm network: ${nodeList.length} firms, ${Object.keys(edgeMap).length} connections`);
     } catch (error) {
       console.error('❌ fetchData error:', error);
+      setMetricsReadError(true);
       toast.error('Failed to load firm network data');
     } finally {
       setLoading(false);
@@ -1402,6 +1410,11 @@ export default function FirmLevelNetwork({ isCollapsed, setIsCollapsed }: FirmLe
                   metricsComputedAt={storedDecision?.computedAt ?? null}
                   outcome={metricsOutcome ?? (storedDecision?.state === 'current' ? 'reused' : null)}
                   approximation={storedDecision?.state === 'missing' && networkNodes.length > 0}
+                  analysisState={loading || recalculatingProminence
+                    ? 'loading' : metricsReadError ? 'unavailable' : metricsProjectId !== globalSelectedProjectId ? 'loading'
+                      : storedDecision?.state === 'current' ? 'current'
+                        : metricsOutcome === 'in progress' ? 'in progress' : storedDecision?.state ?? 'missing'}
+                  refreshKey={loadNonce}
                 />
                 {storedDecision?.state === 'missing' && networkNodes.length > 0 && (
                   <span className="text-[12px] text-muted-foreground">

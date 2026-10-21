@@ -8,9 +8,8 @@
  * page's live level hash, via ONE read (`get_graph_version_state`, §4 D233). A change
  * to another level — a deep-tier upload on the product page — moves nothing here. The
  * snapshot's whole tuple ("snapshot v9 · P3 · R2 · F5 · S4") is the title. The metrics
- * half is the page's own stored answer. Beside it, `FreshnessBadge` says whether the
- * computed rows name the data now loaded — the chip states the version, the badge
- * states the verdict, and neither writes anything.
+ * half is the page's own stored answer. The verdict uses that same answer's
+ * level-aware provenance, never the project-wide roll-up (§4 D312).
  *
  * "unsaved" is said per level when the live content matches no version yet; a version
  * is taken automatically after every promotion, combine and deep-tier upload (§4
@@ -20,7 +19,7 @@
 import { Badge } from "@/components/ui/badge";
 import { useDatasetVersion } from "@/hooks/useDatasetVersion";
 import { LEVEL_LABEL, snapshotTupleTitle, type GraphLevel } from "@/lib/trust/graphLevels";
-import { FreshnessBadge } from "./FreshnessBadge";
+import { NetworkAnalysisBadge, type NetworkAnalysisState } from "./NetworkAnalysisBadge";
 
 export type MetricsOutcome = "reused" | "computed" | "in progress" | "unknown" | null;
 
@@ -56,6 +55,9 @@ export function GraphVersionChip({
   metricsComputedAt,
   outcome,
   approximation,
+  analysisState,
+  analysisHash,
+  refreshKey,
 }: {
   projectId: string | null | undefined;
   /** WP 11.3 — the level this page shows. Omitted = the composite (as before). */
@@ -64,8 +66,13 @@ export function GraphVersionChip({
   outcome?: MetricsOutcome;
   /** true when the page is showing a figure it computed itself and did not store */
   approximation?: boolean;
+  analysisState: NetworkAnalysisState;
+  /** Process structure returns its run's input hash rather than per-row verdicts. */
+  analysisHash?: string | null;
+  /** Changes after a graph reload or an analysis read/recalculation completes. */
+  refreshKey?: string | number;
 }) {
-  const ds = useDatasetVersion(projectId);
+  const ds = useDatasetVersion(projectId, refreshKey);
   if (!projectId) return null;
   // A database before WP 11.1 has no levels block: the page says the composite, as
   // it did, rather than "unsaved" for a level the database cannot number.
@@ -91,7 +98,13 @@ export function GraphVersionChip({
       >
         {ds.loading && !ds.currentHash ? "Graph version…" : text}
       </Badge>
-      <FreshnessBadge projectId={projectId} />
+      <NetworkAnalysisBadge state={
+        analysisState === "current" && analysisHash !== undefined
+          ? ds.loading ? "loading"
+            : !analysisHash || !lvl?.hash ? "unknown"
+              : analysisHash === lvl.hash ? "current" : "stale"
+          : analysisState
+      } />
     </div>
   );
 }

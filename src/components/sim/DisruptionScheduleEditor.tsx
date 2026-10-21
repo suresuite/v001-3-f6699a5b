@@ -96,8 +96,8 @@ export function DisruptionScheduleEditor({
         const outageOnly =
           !isLeadTimeDelay(d.magnitude_pct) && target.kind === "supplier" && uncapacitated.includes(target.id);
         return (
-          <div key={i} className="rounded-sm border border-border">
-            <div className="flex items-center gap-2 border-b border-border px-3 py-1">
+          <div key={i} className="overflow-hidden rounded-sm border border-black bg-sky-50/40">
+            <div className="flex items-center gap-2 border-b border-black/20 bg-sky-100/70 px-3 py-1">
               <span className="shrink-0 text-[11px] font-medium text-muted-foreground">
                 Event {i + 1}
               </span>

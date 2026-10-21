@@ -182,6 +182,6 @@ for one you did.
 
 ---
 
-*Generated from data contract `471875903c82`, engine `0.8.1`,
+*Generated from data contract `cc0268e99d85`, engine `0.8.1`,
 sidecar `supabase/contract/organization_members.contract.yaml`, table created by `20260709000002_super_admin_phase1.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

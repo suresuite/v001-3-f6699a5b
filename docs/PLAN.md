@@ -504,6 +504,8 @@ else cites the D-number or the §4.1 row. `npm run check:docs` enforces it.
 | **D310** | **The nexus ranking is not what a disruption costs, is computed on a click, and states no baseline.** Since D307 a node is ranked by its static demand at risk — the share of finished-goods demand lost if it alone fails with no rerouting, no stock, no recovery and no policy. A supplier the project's own backup-supplier or safety-stock policy fully covers ranks the same as one nothing covers, and a two-week outage cannot be told from a nine-week one. The card computes on a **Run prediction** click, and names neither the data version, the policy version nor the engine build the figure came from (§5 T4). The engine has a supplier outage battery that would answer the question and no product path calls it (D111). Owner-requested, 2026-10-21: rank every material and supplier by the lost sales of a shared disruption (start week 26, 2–9 weeks), under the project's policies, prepared in advance, on `Project AA - ver3` | `supabase/functions/_shared/criticalNodes.ts` (the static score); `src/components/MLPrediction.tsx` (the Run button, no baseline); `scsim/scsim/stress/battery.py` (`_run_battery`, uncalled by any product path) | **OPEN — WP 17.4** — the battery, its store, the job and the card are built (`scsim.stress.nexus`, `20261021000001`, `nexus-stress.yml`, `MLPrediction.tsx`); what remains is the first published battery, for `Project AA - ver3`, after the merge |
 | **D311** | **The engine cannot disrupt a material.** `TargetType` has `node:supplier`, `node:plant` and a behaviour-neutral `edge:lane`; the disruption state is sized per SUPPLIER, so the only way to stop a material is to stop every supplier of it — which also stops every other material those suppliers ship. `project_map._map_events` skips a `material:*` target with a warning (D112's "land later in M7"). A per-material stress test is therefore not expressible | `scsim/scsim/entities/enums.py` `TargetType`; `scsim/scsim/core/context.py` (`lt_block_end`, `cap_factor` sized `n_sups`); `scsim/scsim/io/project_map.py` `UNSUPPORTED_EVENT_KINDS` | **CLOSED ✅ for the engine API (WP 17.1, engine 0.8.1)** — `node:material`, a per-link block, the per-link firm view read by P-S.1/P-S.2/P-T.2/P-P.9; `test_material_disruption.py` (8). The PLATFORM schedule path still skips `material:*` (mapper, dispatch gate, presets) — that half is D112's, WP 6.4 |
 
+| **D312** | **A network page reports the project-wide freshness roll-up and its warning never refreshes with the network.** `GraphVersionChip` appends `FreshnessBadge`, whose worst-table verdict includes unrelated network results and seeded policies; `project_freshness` still compares mirrored row anchors against the composite even though analyses now key on a level. The badge and graph-version hook read only on mount/project change, so refreshing or recalculating the displayed network leaves their old answers on screen. Process reachability likewise re-reads only on project/user change. Owner-reported on `Project AA - ver3`, 2026-10-21 | `src/components/trust/GraphVersionChip.tsx`; `src/components/trust/useProjectFreshness.ts`; `src/hooks/useDatasetVersion.tsx`; `src/pages/ProductLevelNetwork.tsx`; `src/pages/ProcessLevelNetwork.tsx`; `src/pages/FirmLevelNetwork.tsx`; `supabase/migrations/20261001000018_project_freshness_names_its_reader.sql` | **CLOSED for the network pages (no migration).** The chip displays the shown analysis's own server verdict from `storedMetricsDecision`, or the process run's input hash compared with the process hash. The project roll-up and its second dataset/hash label are no longer used there. A successful graph reload and completed metrics read/recalculation refresh the version; process structure and visible product metrics re-read after reload. Loading, in-progress, missing provenance and failed reads cannot claim current. Older version responses cannot overwrite a newer refresh or another project. `networkAnalysisBadge.test.tsx`, `datasetVersionRefresh.test.tsx`. The project-wide Trust Report retains its existing semantics; this change neither clears its stale rows nor changes its SQL comparison. |
+
 ### 4.1 Code map — the data layer
 
 The defect table above records what is **wrong**. This records where the data layer
@@ -24782,6 +24784,38 @@ nothing. A negative volume or price is still a row finding.
 **Gate results.** `ingestValidate.test.ts` 31 of 31: a blank volume/price that lands, a zero price
 that lands with a warning, and a negative price that does not.
 
+### D312 — network freshness follows the displayed analysis and refresh action · 2026-10-21 · no migration
+
+**Blueprint §8.4 / G5, Phase 11 follow-up.** WP 11.3 made the version label level-specific,
+but left a project-wide verdict beside it; WP 10.1's reload path updated the graph without
+re-reading either badge. A successful recalculation could therefore leave the same warning.
+
+The network chip now reads its verdict from the analysis the page displays. Product and firm
+use the database's per-row, scope-aware verdict; process compares the returned run hash with
+its process hash. It displays only that level's version/hash and the analysis status. Version
+reads refresh after graph loads and completed metrics reads, with request cancellation so a
+slower previous response cannot overwrite them. Visible product metrics and process structure
+also re-read after graph refresh. Cache reuse is still reuse; a genuine stale result still
+requests recalculation. No computation, policy, input, saved hash, provenance, grant or RLS
+rule changes. The project-wide Trust Report remains a separate project-wide diagnostic and
+its composite comparison is unchanged; it is no longer presented as this network's verdict.
+
+**Gap check.** `input-hash`, `single-source`, T1/T2: reuse the server's scope-aware answer,
+never manufacture a current verdict to clear a warning. A running or failed analysis and
+missing provenance remain distinct. Regression checks cover stale-to-current, different
+composite versus level hashes, a genuinely changed process hash, same-project refresh,
+late responses, and project changes. Added React 18's test renderer as a dev-only dependency
+so the hook tests exercise mounted refreshes rather than only inspect source text.
+
+**Gate results.** Vitest 1,882 of 1,882 passed; production build passed;
+`contract:check` passed (the two existing R10/R13 warnings remain). `npm run lint` ran every
+gate: typecheck holds its 15-error baseline, `audit:ui`, `check:docs`, and notebooks pass;
+eslint remains at its 289-error / 110-warning baseline, with no new errors. Moving source
+lines required refreshing four sidecars' surface anchors and regenerating their contract
+views; most generated page changes are only the shared contract fingerprint. No migration,
+so a database rehearsal is not applicable. Deployment and a live Project AA read are still
+pending merge; local tests do not establish the state of that project's production data.
+
 ### WP 17.2 — Engine: the nexus battery · 2026-10-21 · no migration · engine 0.8.1 amendment
 
 Shipped in one pull request with WP 17.3, whose entry follows and carries the findings and gate
@@ -24819,6 +24853,12 @@ analysis kind and three functions (WP 17.3). Nothing is a new table.
    the detection lag and arrive a lead time later). The tests now hold cover at three weeks, where a
    2-week outage is absorbed, a 9-week one is not, and the backup covers its target completely.
 6. **Not built, stated**: time to recover and the wide-CI badge per cell.
+7. **CI found what two local modes could not** (`migrations run`, `--since HEAD`): the read's
+   `data_is_current` called `analysis_run_is_current`, which re-derives a run's scope from the
+   `analysis_kinds` row — a SEEDED row, absent from a base built from the schema artifact. A
+   simulation-scoped battery then read as stale on the first look. The read now compares the run's
+   own `input_hash` with `current_level_hash` for the run's own `input_scope`, so it depends on no
+   catalog row; all three rehearsal modes pass.
 
 **Gate results.** `contract:check` green (two standing warnings). `contract:rehearse` green, all
 rehearsals including `900`. scsim 583, sim-worker 184, notebooks 32, vitest 1 869 of 1 869. Change
