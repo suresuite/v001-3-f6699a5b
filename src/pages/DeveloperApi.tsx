@@ -384,14 +384,12 @@ export default function DeveloperApi({ isCollapsed, setIsCollapsed }: Props) {
   }, [nbProjectId]);
 
   const nbProject = projects.find((p) => p.id === nbProjectId) ?? null;
-  // The newest BASELINE: a scenario with disruptions pre-filled as SCENARIO_ID
-  // would make every notebook's "baseline" a stress test.
-  const nbScenario =
-    nbScenarios.find((s) => !Array.isArray(s.disruption_schedule) || s.disruption_schedule.length === 0) ?? null;
-  const nbPolicyVersion = nbPolicyVersions[0] ?? null;
 
   // Mirrors the notebook's CONFIG cell exactly (same "# ── CONFIG" marker the
-  // download patcher and the .ipynb template share).
+  // download patcher and the .ipynb template share). The PROJECT is the one selected
+  // here; the scenario and the policy version are the reader's choice, so they are
+  // left blank — the tables on this tab list them, and blank picks a baseline /
+  // snapshots the current policies.
   const nbConfigCell = useMemo(() => {
     if (!nbProject) return '';
     return [
@@ -399,17 +397,13 @@ export default function DeveloperApi({ isCollapsed, setIsCollapsed }: Props) {
       `# Filled from /developer → Notebook for project “${nbProject.name}”.`,
       `BASE_URL = "${API_BASE}"`,
       `PROJECT_ID = "${nbProject.id}"`,
-      nbScenario
-        ? `SCENARIO_ID = "${nbScenario.id}"  # ${nbScenario.name}`
-        : 'SCENARIO_ID = ""         # no baseline scenario yet — the notebook creates one',
-      nbPolicyVersion
-        ? `POLICY_VERSION_ID = "${nbPolicyVersion.id}"  # ${nbPolicyVersion.label ?? 'unlabelled'}`
-        : 'POLICY_VERSION_ID = ""   # no snapshots yet — the notebook makes one',
+      'SCENARIO_ID = ""         # choose one from the Scenarios table on /developer; "" = pick a baseline (or create one)',
+      'POLICY_VERSION_ID = ""   # choose one from the Policy versions table; "" = snapshot the current policies',
       'SUPPLIER_ID = ""         # a supplier id from your own data, for the disruption examples',
       'MODE = "auto"            # "auto" = live when an API key is found, else the offline demo; "live"; "demo"',
       'ACKNOWLEDGE_WARNINGS = False  # True = run anyway when the pre-run data check only warns (missing values use the platform defaults)',
     ].join('\n');
-  }, [nbProject, nbScenario, nbPolicyVersion]);
+  }, [nbProject]);
 
   const downloadNotebook = async (path: NotebookPath = NOTEBOOKS[0].path) => {
     setNbDownloading(true);
@@ -1046,7 +1040,7 @@ for kpi in ("fill_rate", "lost_units", "lost_sales_value", "max_backlog", "ttr_w
           <p className="px-3 py-3 text-[12.5px] leading-[1.55] text-[#3f3f46] [text-wrap:pretty]">
             Each notebook is the Python version of one workflow in the app. Without a key it runs
             in demo mode on recorded engine output; pick your project below first and a download
-            fills in its ids.
+            fills in its project id. Choose the scenario and policy version yourself.
           </p>
           {NOTEBOOKS.map((nb, i) => (
             <div key={nb.path} className="border-t border-[#e5e5e5] p-3">
@@ -1102,7 +1096,7 @@ for kpi in ("fill_rate", "lost_units", "lost_sales_value", "max_backlog", "ttr_w
         </MobilePanel>
 
         <ApiCodeBlock
-          title="Notebook CONFIG cell (pre-filled)"
+          title="Notebook CONFIG cell (project filled in)"
           code={nbConfigCell || '# Select a project to fill in BASE_URL, PROJECT_ID, SCENARIO_ID, POLICY_VERSION_ID'}
         />
       </MobileGroup>
@@ -1504,7 +1498,8 @@ for kpi in ("fill_rate", "lost_units", "lost_sales_value", "max_backlog", "ttr_w
                   Each notebook is the Python version of one workflow in the app, for Google Colab or
                   a local Jupyter. Without a key it runs in demo mode on recorded engine output for
                   the Example project; with one it works on your project. Pick a project below first —
-                  a download fills in its ids{nbProject ? ` (now: “${nbProject.name}”)` : ''}.
+                  a download fills in its project id{nbProject ? ` (now: “${nbProject.name}”)` : ''}. The
+                  scenario and the policy version are yours to choose from the tables below.
                 </p>
               </div>
               <div className={`${SURFACE} divide-y divide-[--hair-border]`}>
@@ -1572,7 +1567,7 @@ for kpi in ("fill_rate", "lost_units", "lost_sales_value", "max_backlog", "ttr_w
                 )}
 
                 <ApiCodeBlock
-                  title="Notebook CONFIG cell (pre-filled in every download — or paste it over a notebook's CONFIG cell)"
+                  title="Notebook CONFIG cell (project filled in every download — or paste it over a notebook's CONFIG cell)"
                   code={nbConfigCell || '# Select a project to fill in BASE_URL, PROJECT_ID, SCENARIO_ID, POLICY_VERSION_ID'}
                 />
               </div>
@@ -1729,7 +1724,7 @@ for kpi in ("fill_rate", "lost_units", "lost_sales_value", "max_backlog", "ttr_w
                 <span className="font-medium">Secrets</span> panel as{' '}
                 <span className="font-mono">SURESUITE_API_KEY</span> — the notebook reads it from
                 there (or from the environment / a hidden prompt when run locally). Open in Colab
-                downloads your pre-filled copy and opens Colab — load it with{' '}
+                downloads your copy (project filled in) and opens Colab — load it with{' '}
                 <span className="font-medium">File → Upload notebook</span>.
               </div>
             </div>

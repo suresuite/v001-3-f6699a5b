@@ -125,6 +125,9 @@ export default function SimulationLab({ isCollapsed, setIsCollapsed }: Props) {
     if (projectParam) setGlobalSelectedProjectId(projectParam);
   }, [projectParam, setGlobalSelectedProjectId]);
 
+  // What the automatic pick chose, so a later one never overrides the reader's own.
+  const autoSelected = useRef<string | null>(null);
+  const upgradedFor = useRef<string | null>(null);
   // Auto-select first scenario when list loads (if nothing pre-selected from URL)
   useEffect(() => {
     const paramId = searchParams.get("scenario_id");
@@ -133,11 +136,38 @@ export default function SimulationLab({ isCollapsed, setIsCollapsed }: Props) {
     // the oldest row and is read-only here (§4 D227), so it is chosen only when
     // it is the only scenario. A `?model=` link still selects it explicitly.
     const first = scenarios.find((s) => !isValidationBaseline(s)) ?? scenarios[0];
-    if (!selectedId && first) setSelectedId(first.id);
+    if (!selectedId && first) {
+      autoSelected.current = first.id;
+      setSelectedId(first.id);
+    }
     if (selectedId && !scenarios.find((s) => s.id === selectedId)) {
+      autoSelected.current = first?.id ?? null;
       setSelectedId(first?.id ?? null);
     }
   }, [scenarios, selectedId, searchParams]);
+
+  // Open on the scenario of the newest completed run, not the oldest scenario. The
+  // run data arrives after the scenario list, so this upgrades the automatic pick
+  // ONCE per project, and only while the reader has not chosen anything
+  // themselves (a run finishing later never moves the selection). The validated
+  // baseline stays out of it for the reason above (§4 D227).
+  useEffect(() => {
+    if (!projectId || upgradedFor.current === projectId) return;
+    if (searchParams.get("scenario_id")) return;
+    let latest: { id: string; at: number } | null = null;
+    for (const s of scenarios) {
+      const run = runsByScenario[s.id];
+      if (!run || isValidationBaseline(s)) continue;
+      const at = Date.parse(run.created_at) || 0;
+      if (!latest || at > latest.at) latest = { id: s.id, at };
+    }
+    if (!latest) return;
+    upgradedFor.current = projectId;
+    if (selectedId === autoSelected.current && selectedId !== latest.id) {
+      autoSelected.current = latest.id;
+      setSelectedId(latest.id);
+    }
+  }, [projectId, scenarios, runsByScenario, selectedId, searchParams]);
 
   const selected = useMemo(
     () => scenarios.find((s) => s.id === selectedId) ?? null,

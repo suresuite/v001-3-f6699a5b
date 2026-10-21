@@ -142,7 +142,12 @@ export function ScenarioList({
           </div>
         ) : null}
         {[...scenarios]
-          .sort((a, b) => Number(isValidationBaseline(b)) - Number(isValidationBaseline(a)))
+          // The validated baseline stays pinned first; the rest, newest first.
+          .sort(
+            (a, b) =>
+              Number(isValidationBaseline(b)) - Number(isValidationBaseline(a)) ||
+              (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0),
+          )
           .map((s) => {
           const on = s.id === selectedId;
           const baseline = isValidationBaseline(s);

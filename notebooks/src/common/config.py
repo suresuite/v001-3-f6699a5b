@@ -1,6 +1,7 @@
 # ── CONFIG ──────────────────────────────────────────────────────────────────
-# Filled in for you when you download this notebook from the app's /developer →
-# Notebook tab. Leave it as it is to try the offline demo first.
+# The app fills in PROJECT_ID when you download this notebook from /developer →
+# Notebook; choose SCENARIO_ID and POLICY_VERSION_ID yourself (that tab lists them)
+# or leave them blank. Leave it all as it is to try the offline demo first.
 BASE_URL = "https://wckdrutwkytwcomrlpib.supabase.co/functions/v1/api/v1"
 PROJECT_ID = ""          # "" = the first project your key can see
 SCENARIO_ID = ""         # a baseline scenario; "" = pick one without disruptions (or create one)
