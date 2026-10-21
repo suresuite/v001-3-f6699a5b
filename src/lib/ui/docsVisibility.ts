@@ -31,55 +31,12 @@
  * database by `docs_list_faq`.
  */
 import { DOC_GROUPS, getPage } from "@/components/docs/registry";
+import { canReadSection, sectionAudience, type DocsAudience, type DocsReleases } from "./docsAudience";
 
-export type DocsAudience = "public" | "internal" | "confidential";
-
-export const DOCS_AUDIENCES: { value: DocsAudience; label: string; description: string }[] = [
-  { value: "public", label: "Public", description: "Anyone can read it, signed in or not." },
-  { value: "internal", label: "Internal", description: "Any signed-in user can read it." },
-  {
-    value: "confidential",
-    label: "Confidential",
-    description: "Super admins, and users granted Confidential Documentation access.",
-  },
-];
-
-/** What a section is when nothing says otherwise. */
-export const DEFAULT_DOCS_AUDIENCE: DocsAudience = "confidential";
-
-/** section key → audience, as read from `docs_section_releases`. */
-export type DocsReleases = Record<string, DocsAudience>;
-
-const RANK: Record<DocsAudience, number> = { public: 0, internal: 1, confidential: 2 };
-
-export function isDocsAudience(value: unknown): value is DocsAudience {
-  return value === "public" || value === "internal" || value === "confidential";
-}
-
-/** The highest audience a reader may see. */
-export function docsReaderLevel(reader: {
-  signedIn: boolean;
-  isSuperAdmin: boolean;
-  hasConfidentialGrant: boolean;
-}): DocsAudience {
-  if (!reader.signedIn) return "public";
-  if (reader.isSuperAdmin || reader.hasConfidentialGrant) return "confidential";
-  return "internal";
-}
-
-/** A section's audience; unknown or unreadable means confidential. */
-export function sectionAudience(releases: DocsReleases | null, sectionKey: string): DocsAudience {
-  const a = releases?.[sectionKey];
-  return isDocsAudience(a) ? a : DEFAULT_DOCS_AUDIENCE;
-}
-
-export function canReadAudience(audience: DocsAudience, level: DocsAudience): boolean {
-  return RANK[audience] <= RANK[level];
-}
-
-export function canReadSection(releases: DocsReleases | null, sectionKey: string, level: DocsAudience): boolean {
-  return canReadAudience(sectionAudience(releases, sectionKey), level);
-}
+// The rules that need no registry live in `docsAudience.ts`, so the always-loaded
+// capability gate can apply them without pulling the whole manual's registry into
+// the entry bundle; they are re-exported here so no reader of this module changes.
+export * from "./docsAudience";
 
 /** Whether the reader can open any section at all — the manual's front door. */
 export function canReadAnySection(releases: DocsReleases | null, level: DocsAudience): boolean {
@@ -89,11 +46,6 @@ export function canReadAnySection(releases: DocsReleases | null, level: DocsAudi
 /** Whether any section is public — what the public site's Docs links follow. */
 export function hasPublicSection(releases: DocsReleases | null): boolean {
   return DOC_GROUPS.some((g) => sectionAudience(releases, g.key) === "public");
-}
-
-/** True for `/docs`, `/docs/<slug>`, and the legacy `/help` paths that redirect there. */
-export function isDocsPath(pathname: string): boolean {
-  return /^\/(docs|help)(\/|$)/.test(pathname);
 }
 
 /**
