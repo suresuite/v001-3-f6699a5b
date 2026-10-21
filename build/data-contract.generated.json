@@ -5176,7 +5176,7 @@
               "page": "ProjectPolicies.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/hooks/useVerifiableExports.tsx:146",
+              "evidence": "src/hooks/useVerifiableExports.tsx:127",
               "confirmed": true
             }
           ],
@@ -5255,7 +5255,7 @@
               "page": "ProjectPolicies.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/hooks/useVerifiableExports.tsx:146",
+              "evidence": "src/hooks/useVerifiableExports.tsx:127",
               "confirmed": true
             }
           ],
@@ -5295,7 +5295,7 @@
               "page": "ProjectPolicies.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/hooks/useVerifiableExports.tsx:146",
+              "evidence": "src/hooks/useVerifiableExports.tsx:127",
               "confirmed": true
             }
           ],
@@ -5335,7 +5335,7 @@
               "page": "ProjectPolicies.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/hooks/useVerifiableExports.tsx:146",
+              "evidence": "src/hooks/useVerifiableExports.tsx:127",
               "confirmed": true
             }
           ],
@@ -5439,7 +5439,7 @@
               "page": "ProjectPolicies.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/hooks/useVerifiableExports.tsx:146",
+              "evidence": "src/hooks/useVerifiableExports.tsx:127",
               "confirmed": true
             }
           ],
@@ -5479,7 +5479,7 @@
               "page": "ProjectPolicies.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/hooks/useVerifiableExports.tsx:146",
+              "evidence": "src/hooks/useVerifiableExports.tsx:127",
               "confirmed": true
             }
           ],
@@ -5519,7 +5519,7 @@
               "page": "ProjectPolicies.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/hooks/useVerifiableExports.tsx:146",
+              "evidence": "src/hooks/useVerifiableExports.tsx:127",
               "confirmed": true
             }
           ],
@@ -26627,7 +26627,7 @@
           "page": "SimulationLab.tsx",
           "via": "table read",
           "grain": "column",
-          "evidence": "src/hooks/useVerifiableExports.tsx:243",
+          "evidence": "src/hooks/useVerifiableExports.tsx:235",
           "confirmed": true
         }
       ],
@@ -32435,17 +32435,17 @@
       "surfaces": [
         {
           "page": "ProjectPolicies.tsx",
-          "via": "component ItemSeriesExplorer (mounted by RunValidateStage) → select kind,item_id from run_item_series",
+          "via": "component ItemSeriesExplorer (mounted by RunValidateStage) → select kind,item_id,series from run_item_series (every item, paged)",
           "grain": "table",
-          "evidence": "src/components/sim/ItemSeriesExplorer.tsx:88",
+          "evidence": "src/components/sim/ItemSeriesExplorer.tsx:119",
           "confirmed": true,
-          "note": "Run & Validate is where an inspection run is STARTED, and the explorer sits under it: it first reads the run's item index (ids only), then fetches one item's `series` on demand — the payload is a few MB for a large project, so it is never read whole."
+          "note": "Run & Validate is where an inspection run is STARTED, and the explorer sits under it. It reads every item's row for the run, 100 rows a read, once per run: the inventory explorer's ranked tables need every material and every finished good at once (a few MB for a large project). It used to read an id index and then one item on demand, which could chart an item and could not rank them. The table stays a sibling of `run_replications` so none of this rides the realtime stream."
         },
         {
           "page": "SimulationLab.tsx",
-          "via": "component ItemSeriesExplorer (mounted by ResultsDashboard) → select kind,item_id from run_item_series",
+          "via": "component ItemSeriesExplorer (mounted by ResultsDashboard) → select kind,item_id,series from run_item_series (every item, paged)",
           "grain": "table",
-          "evidence": "src/components/sim/ItemSeriesExplorer.tsx:88",
+          "evidence": "src/components/sim/ItemSeriesExplorer.tsx:119",
           "confirmed": true,
           "note": "Simulation Lab dispatches no inspection run, so this panel shows rows only for a run started from Run & Validate, and says so rather than rendering empty without a reason (§4 D113's shape)."
         }
@@ -32677,14 +32677,14 @@
               "page": "ProjectPolicies.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/components/sim/ItemSeriesExplorer.tsx:88",
+              "evidence": "src/components/sim/ItemSeriesExplorer.tsx:119",
               "confirmed": true
             },
             {
               "page": "SimulationLab.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/components/sim/ItemSeriesExplorer.tsx:88",
+              "evidence": "src/components/sim/ItemSeriesExplorer.tsx:119",
               "confirmed": true
             }
           ],
@@ -32724,14 +32724,14 @@
               "page": "ProjectPolicies.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/components/sim/ItemSeriesExplorer.tsx:88",
+              "evidence": "src/components/sim/ItemSeriesExplorer.tsx:119",
               "confirmed": true
             },
             {
               "page": "SimulationLab.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/components/sim/ItemSeriesExplorer.tsx:88",
+              "evidence": "src/components/sim/ItemSeriesExplorer.tsx:119",
               "confirmed": true
             }
           ],
@@ -32771,14 +32771,14 @@
               "page": "ProjectPolicies.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/components/sim/ItemSeriesExplorer.tsx:118",
+              "evidence": "src/components/sim/ItemSeriesExplorer.tsx:119",
               "confirmed": true
             },
             {
               "page": "SimulationLab.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/components/sim/ItemSeriesExplorer.tsx:118",
+              "evidence": "src/components/sim/ItemSeriesExplorer.tsx:119",
               "confirmed": true
             }
           ],
@@ -32881,7 +32881,7 @@
           "page": "ProjectPolicies.tsx",
           "via": "useVerifiableExports → select * from run_replications",
           "grain": "table",
-          "evidence": "src/hooks/useVerifiableExports.tsx:246",
+          "evidence": "src/hooks/useVerifiableExports.tsx:227",
           "confirmed": true,
           "note": "The run-results workbook. This is the path by which a replication row leaves the system, so it is the one A5's Reproducibility Record has to bind (`result-binding`, still owed — WP 10.4, which absorbed WP 9.2)."
         }
@@ -34612,7 +34612,7 @@
           "page": "SimulationLab.tsx",
           "via": "table read",
           "grain": "column",
-          "evidence": "src/hooks/useVerifiableExports.tsx:241",
+          "evidence": "src/hooks/useVerifiableExports.tsx:222",
           "confirmed": true
         }
       ],
@@ -39561,7 +39561,7 @@
           "page": "ProjectPolicies.tsx",
           "via": "useVerifiableExports → select * from simulation_runs",
           "grain": "table",
-          "evidence": "src/hooks/useVerifiableExports.tsx:235",
+          "evidence": "src/hooks/useVerifiableExports.tsx:216",
           "confirmed": true,
           "note": "The run-results workbook, whose reproducibility sheet binds the run from this row (WP 10.4)."
         }
@@ -45109,5 +45109,5 @@
   },
   "orphans": [],
   "phantom_tables": [],
-  "contract_version": "c4d649ec46c3"
+  "contract_version": "3e120b0dd569"
 }

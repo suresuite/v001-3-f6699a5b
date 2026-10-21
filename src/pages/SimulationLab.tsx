@@ -1028,6 +1028,7 @@ export default function SimulationLab({ isCollapsed, setIsCollapsed }: Props) {
                     primaryKpi={selected.primary_kpi}
                     scenario={selected}
                     credibility={cred.resolveRun(latestRun)}
+                    projectName={projects.find((p) => p.id === projectId)?.name ?? null}
                   />
                 ) : (
                   <CompareScenariosPanel

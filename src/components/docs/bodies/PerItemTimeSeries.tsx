@@ -1,4 +1,6 @@
-// §6.3 section 11 — per-item time series. Deepened in WP 5.2j.
+// §6.3 section 11 — per-item time series. Deepened in WP 5.2j; the inventory
+// explorer (G17 / §9.5.1: ranked tables, multi-select charts, the workbook, and
+// per-product finished-goods stock from the engine) added in place.
 //
 // ── WHAT THE PAGE OMITTED, AND WHAT IT GOT WRONG ──────────────────────────
 //
@@ -29,7 +31,7 @@ export default function PerItemTimeSeries() {
 
   return (
     <>
-      <PageTitle lead="What happened to one material or one product, week by week — and the switch you have to throw before the run to get it.">
+      <PageTitle lead="Every material's and every finished good's stock, week by week, ranked by risk and downloadable to Excel — and the switch you have to throw before the run to get it.">
         Per-item time series
       </PageTitle>
 
@@ -45,7 +47,9 @@ export default function PerItemTimeSeries() {
           <strong>Single</strong> tab. It is not in Simulation Lab, and it is not on the multi-run
           tab, because <strong>the engine only writes item series for a run with exactly one
           replication</strong>. Ask for it on a run with more and the request is dropped with a
-          warning rather than honoured.
+          warning rather than honoured. Simulation Lab shows the explorer for such a run and,
+          for any other, links to where one is started: a Lab scenario carries its own
+          replication count, so the Lab cannot start one without writing a scenario.
         </p>
       </Callout>
 
@@ -119,6 +123,20 @@ export default function PerItemTimeSeries() {
                       "How much you actually delivered. The gap between this and demand is the whole of the service story, and every service KPI is a summary of it."}
                     {s.key === "backlog" &&
                       "What was owed and not yet delivered, carried forward. A backlog that grows week on week is a chain that is not catching up — the level matters less than whether the line is climbing."}
+                    {s.key === "fg_on_hand" &&
+                      "Finished goods you were holding at the end of that week, after the week's completions — the engine's own stock, summed across products it is the finished-goods inventory on the run's inventory chart. A make-to-order product holds none by design and reads 0."}
+                    {s.key === "fg_target" &&
+                      "The finished-goods stock the plan aimed for next week (S): a base-stock or min–max S you typed, days of cover times projected demand, or this week's forecast, plus any FG safety stock. 0 for a make-to-order product."}
+                    {s.key === "make_to_stock" &&
+                      "Not a count: 1 when the engine ran this product make-to-stock, 0 when make-to-order, the same every week. It is the mode the engine resolved — the Plant row, else the product, else the project — so the explorer shows it rather than re-deciding it."}
+                    {s.key === "projected_demand" &&
+                      "The demand the plan projected for that week, before the week's draw — the plan never reads the realized future."}
+                    {s.key === "requirement" &&
+                      "What the plan required production to cover that week: projected demand, the finished-goods gap and the backlog."}
+                    {s.key === "planned" &&
+                      "The production the plan asked the line for that week. Production is what was actually started."}
+                    {s.key.startsWith("mrp_") &&
+                      "The MRP record for a material planned by MRP: need over the lead time, stock after production, what is on the way, and the net. Present only for a run with MRP materials."}
                     {s.key === "lost_units" && (
                       <>
                         Demand that went away rather than waiting. Read it first: a backlog is a
@@ -138,6 +156,49 @@ export default function PerItemTimeSeries() {
         </div>
       </Section>
 
+      <Section id="the-tables" title="The two tables, and how they are ranked">
+        <P>
+          The explorer opens on <strong>Materials</strong>; the switch beside it shows{" "}
+          <strong>Finished goods</strong>. Each table has every item of the run, riskiest first, and
+          leaves out the weeks before the warm-up ends.
+        </P>
+        <P>
+          <strong>Materials</strong>: suppliers, average and minimum on hand, weeks at zero, the
+          first week it ran out, average in transit, average use per week, minimum cover in weeks
+          (minimum on hand over average use) and the total ordered. Ranked by weeks at zero, then by
+          the thinnest cover — the order notebook 04 uses.
+        </P>
+        <P>
+          <strong>Finished goods</strong>: fulfillment mode, average and minimum finished-goods
+          stock, average target, weeks with no stock while demand was waiting, the first such week,
+          weeks of cover, fill rate (everything delivered over everything demanded, so backlog
+          served late counts), average backlog and lost units. Ranked by the largest shortfall —
+          lost units plus average backlog — then by weeks out of stock, then by the lowest fill
+          rate. That puts make-to-stock and make-to-order products on one scale.
+        </P>
+        <Callout tone="limit" title="What the tables cannot say">
+          <p>
+            <strong>Use is derived, not measured.</strong> It is each product&apos;s production
+            (units started) times its bill of materials, flattened through sub-assemblies. The
+            engine consumes materials at production start, so it is the consumption it booked —
+            but it is computed for this view, and so is minimum cover.
+          </p>
+          <p>
+            <strong>A sub-assembly has no row.</strong> The engine holds stock per leaf material
+            and per finished good; an intermediate component is flattened into the materials
+            beneath it.
+          </p>
+          <p>
+            <strong>A make-to-order product says &ldquo;not stocked&rdquo;, never 0.</strong> It
+            holds no finished-goods stock by design; its service is its backlog and its lost units.
+          </p>
+          <p>
+            <strong>A run recorded before finished-goods stock was kept per product</strong> shows
+            the products table without its stock columns and says so: run a new inspection.
+          </p>
+        </Callout>
+      </Section>
+
       <Section id="the-explorer" title="Using the explorer">
         <Steps
           steps={[
@@ -153,21 +214,39 @@ export default function PerItemTimeSeries() {
               ),
             },
             {
-              title: "Choose products or materials",
+              title: "Choose materials or finished goods",
               body: (
                 <>
-                  Two buttons, and they are two different sets of lines. The header tells you how
-                  many of each this run has.
+                  Two buttons, and two different tables. The header tells you how many of each this
+                  run has. The search box filters by id or name.
                 </>
               ),
             },
             {
-              title: "Find your item",
+              title: "Tick the items you want to see",
               body: (
                 <>
-                  <strong>The list shows the first 30 only.</strong> Past that, type in the search
-                  box — the count under the list says how many are hidden. An item you cannot see
-                  is not an item without a series.
+                  Each ticked row draws its own chart below the table, in the order you ticked them,
+                  up to twelve at once. A material shows on hand and in transit with a marker on
+                  every week it ran out, and below it orders placed as bars with use as a line (and
+                  the MRP record, when it has one). A finished good shows its stock against its
+                  target with stockout markers, and below it demand, production and fulfillment
+                  with the backlog as an area, plus the plan&apos;s projected demand and planned
+                  production.
+                </>
+              ),
+            },
+            {
+              title: "Download Excel",
+              body: (
+                <>
+                  For the selected items, or for all of them. The workbook opens with the run&apos;s
+                  reproducibility <strong>record</strong> — the dataset, policy, scenario, seed and
+                  engine that produced these numbers, and their limits — then the{" "}
+                  <strong>materials</strong> and <strong>products</strong> tables, one weekly sheet
+                  per selected item, and a long <strong>weekly</strong> sheet (week, kind, item,
+                  measure, value) for every item in the download. It needs the Export right on the
+                  project.
                 </>
               ),
             },
@@ -192,10 +271,11 @@ export default function PerItemTimeSeries() {
           useful question is which of those moved first.
         </P>
         <P>
-          The three material lines are drawn together on one axis on purpose. If on-hand is falling
-          while orders placed are flat, the policy is not reacting; if orders are rising and
-          in-transit is not, the supply is not answering. Those are different problems with
-          different fixes, and the chart distinguishes them at a glance in a way the KPIs never can.
+          A material&apos;s two charts share their weeks on purpose. If on-hand is falling while
+          orders placed are flat, the policy is not reacting; if orders are rising and in-transit is
+          not, the supply is not answering. Those are different problems with different fixes, and
+          the charts distinguish them at a glance in a way the KPIs never can. A material the
+          disruption did not touch, used less: production stopped for want of another one.
         </P>
       </Section>
 

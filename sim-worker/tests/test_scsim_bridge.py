@@ -195,8 +195,17 @@ def test_inspection_run_emits_item_series_rows():
     prod = by_kind["product"][0]["series"]
     # PLAN.md §24 WP 14.4 added the plan's own record: projected demand, the
     # requirement and planned production (built is `production`).
+    # The inventory explorer (G17/§9.5.1) added FG stock per product, its target
+    # and the mode the engine resolved — passed through by the generic mapping.
     assert set(prod) == {"demand", "production", "fulfillment", "backlog", "lost_units",
-                         "projected_demand", "requirement", "planned"}
+                         "projected_demand", "requirement", "planned",
+                         "fg_on_hand", "fg_target", "make_to_stock"}
+    # The project is make-to-stock, so the product holds stock and says so; the
+    # per-product series sums (one product) to the run's own `fg_units` series.
+    assert set(prod["make_to_stock"]) == {1.0}
+    assert any(v > 0 for v in prod["fg_on_hand"])
+    fg_units = out["replications"][0]["time_series"]["fg_units"]
+    assert prod["fg_on_hand"] == pytest.approx(fg_units, abs=1e-4)
     horizon_weeks = 52  # 365 days → engine floor
     for series in list(mat.values()) + list(prod.values()):
         assert len(series) == horizon_weeks

@@ -21138,13 +21138,13 @@ export const REFERENCE_TABLES: RefTable[] = [
     "surfaces": [
       {
         "page": "ProjectPolicies.tsx",
-        "via": "component ItemSeriesExplorer (mounted by RunValidateStage) → select kind,item_id from run_item_series",
-        "evidence": "src/components/sim/ItemSeriesExplorer.tsx:88"
+        "via": "component ItemSeriesExplorer (mounted by RunValidateStage) → select kind,item_id,series from run_item_series (every item, paged)",
+        "evidence": "src/components/sim/ItemSeriesExplorer.tsx:119"
       },
       {
         "page": "SimulationLab.tsx",
-        "via": "component ItemSeriesExplorer (mounted by ResultsDashboard) → select kind,item_id from run_item_series",
-        "evidence": "src/components/sim/ItemSeriesExplorer.tsx:88"
+        "via": "component ItemSeriesExplorer (mounted by ResultsDashboard) → select kind,item_id,series from run_item_series (every item, paged)",
+        "evidence": "src/components/sim/ItemSeriesExplorer.tsx:119"
       }
     ],
     "governance": {
@@ -21378,7 +21378,7 @@ export const REFERENCE_TABLES: RefTable[] = [
       {
         "page": "ProjectPolicies.tsx",
         "via": "useVerifiableExports → select * from run_replications",
-        "evidence": "src/hooks/useVerifiableExports.tsx:246"
+        "evidence": "src/hooks/useVerifiableExports.tsx:227"
       }
     ],
     "governance": {
@@ -25881,7 +25881,7 @@ export const REFERENCE_TABLES: RefTable[] = [
       {
         "page": "ProjectPolicies.tsx",
         "via": "useVerifiableExports → select * from simulation_runs",
-        "evidence": "src/hooks/useVerifiableExports.tsx:235"
+        "evidence": "src/hooks/useVerifiableExports.tsx:216"
       }
     ],
     "governance": {
