@@ -67,9 +67,6 @@ Read follows project reachability. Written by `refresh_node_list_for_project`, w
 |---|---|---|---|
 | `DataManager.tsx` | rpc get_node_list | `src/pages/DataManager.tsx:446` | yes |
 | `FirmLevelNetwork.tsx` | rpc get_node_list | `src/components/MapView.tsx:355` | yes |
-| `FirmLevelNetwork.tsx` | rpc get_critical_node_stats (MLPrediction, §4 D307) | `src/components/MLPrediction.tsx:93` | yes |
-| `ProcessLevelNetwork.tsx` | rpc get_critical_node_stats (MLPrediction, §4 D307) | `src/components/MLPrediction.tsx:93` | yes |
-| `ProductLevelNetwork.tsx` | rpc get_critical_node_stats (MLPrediction, §4 D307) | `src/components/MLPrediction.tsx:93` | yes |
 | `ProductLevelNetwork.tsx` | rpc project_freshness (GraphVersionChip → FreshnessBadge, WP 10.1) | `src/components/trust/useProjectFreshness.ts:28` | yes |
 | `SimulationLab.tsx` | rpc project_freshness | `src/components/trust/useProjectFreshness.ts:28` | yes |
 
@@ -473,6 +470,6 @@ Tiers upstream of the focal plant: 0 the plant itself, 1 a direct supplier, 2 an
 
 ---
 
-*Generated from data contract `fed80c132892`, engine `0.8.1`,
+*Generated from data contract `471875903c82`, engine `0.8.1`,
 sidecar `supabase/contract/node_list.contract.yaml`, table created by `20250829101944_b2ded57f-be29-4ae7-afff-38b3712e92e5.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

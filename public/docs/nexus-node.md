@@ -1,46 +1,42 @@
 # Nexus Node Guide
 
-A **nexus node** is a point in your supply network whose loss, on its own, would stop a large share of what you sell. The **Nexus Node Prediction** panel on the network pages finds these nodes for the selected project.
+A **nexus node** is a supplier or a purchased material whose outage, on its own, costs you the most sales. The **Nexus node prediction** panel on the network pages shows them for the selected project, ranked by **lost sales in €** under one shared disruption scenario.
 
-## What the score means
+Nothing runs when you open the panel. The stress test is prepared in advance and the panel reads the stored result.
 
-Each node's score is its **demand at risk**: the share of finished-goods demand you could not serve if that node alone were lost and nothing were rerouted, rebalanced or drawn from stock.
+## What is tested
 
-A node is **nexus** when losing it alone puts at least **50% of finished-goods demand** at risk, weighted by weekly volume. 50% is the default threshold. This is an absolute test, not a quota:
+- **Targets:** every supplier, and every material a supplier delivers. Sub-assemblies (made in-house), products, customers and the plant are not targets.
+- **One at a time:** each target is disrupted alone. There are no compound events.
+- **The outage:** a full stop. The target delivers nothing while it lasts, and goods already in transit arrive when it ends.
+  - A **supplier** outage stops everything that supplier delivers.
+  - A **material** outage stops every supplier's deliveries of that material, and nothing else they deliver.
+- **When:** the outage starts in **week 26**, or in the first week after the warm-up if the warm-up ends later. Every target is hit in the same week.
+- **How long:** each target is tested at **2, 3, 4, 5, 6, 7, 8 and 9 weeks**.
+- **Your policies apply:** safety stock, reorder rules, backup suppliers, multi-sourcing, allocation and unmet-demand handling all run as configured. The losses are what remains after your own mitigations.
 
-- A well-diversified network can have no nexus nodes at all.
-- A single-product chain is nexus all along its critical path.
+## How lost sales are measured
 
-## How it is computed
+For each target and duration, the simulation runs twice on the same random draws: once with the outage, once without. The figure is the **extra** lost sales the outage causes, in €, over the measured window, averaged over the replications.
 
-The score is computed from your project's lane graph: the inbound, BOM and outbound lanes built from your uploads. The lane type decides how a loss travels downstream:
+The **Average** column is the mean of the eight durations. The table opens ranked by it, and you can sort by any duration instead. A target that is harmless at 2 weeks and costly at 9 weeks shows that pattern across its row.
 
-| Lane | Rule |
-|---|---|
-| Inbound — supplier → material | The material loses that supplier's **share** of its weekly supply. |
-| BOM — material → product | A product needs **all** of its materials, so it loses as much as its worst-hit material. |
-| Outbound — product → customer | Each product's weekly demand is the **weight** its loss carries. |
+A target that loses nothing says why:
 
-**Worked example.** A product needs materials M1 and M2. Suppliers S1 and S3 each deliver half of M1, and S2 is the only source of M2.
+- **Covered** — stock or a policy, such as a backup supplier, absorbed the outage.
+- **Backordered** — customers waited instead of being lost, so a backlog built up. €0 lost sales does not mean nothing happened.
 
-- Losing **S2** puts **100%** of demand at risk.
-- Losing **S1** or **S3** puts **50%** at risk each.
+## The baseline
 
-All three suppliers are nexus: S2 is well above the threshold, and S1 and S3 are exactly at it.
+Every result is tied to the run it came from. The panel states it before showing a figure:
 
-## What the panel shows
+- the **Validated Model** — the stress test only runs on a validated baseline;
+- the **data version** and the **policy version** it used;
+- the **engine build** that computed it;
+- the scenario, the number of replications, and when it was prepared.
 
-- **Counts:** total nodes, nexus nodes and non-nexus nodes.
-- **Top five:** the five nexus nodes with the highest demand at risk. For each, you see its role, the materials it is the only source of, and how many products it affects.
-- **Substitutions:** any assumption the score had to make because your data didn't say. For example, every product is weighted equally when no outbound volume was uploaded.
-- **Staleness:** "lanes changed since — re-run" when your data changed after the last run.
+If your project's data changed after the stress test was prepared, the panel says so and still shows the prepared result. It never recomputes on view.
 
-## Where results are stored
+## The first-order estimate
 
-Scores are stored once per node, so they survive the next upload. Each score records which version of your data it was computed from.
-
-## Limits
-
-This is a **first-order** estimate. It ignores safety stock, recovery time and rerouting, so it can overstate the impact of a short outage and understate a long one.
-
-To see an outage play out over time, run a **stress test** in the Simulation Lab. The "single-source materials" count on the lens pages is a separate, structural fact about sourcing; the two answer different questions.
+The earlier score, **demand at risk**, is still computed by the network analysis. It is the share of finished-goods demand lost if a node alone fails, with no rerouting, no stock and no recovery. It answers a different, static question and is no longer the panel's ranking.

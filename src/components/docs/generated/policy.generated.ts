@@ -2094,6 +2094,45 @@ export const ANALYSIS_KINDS: AnalysisKind[] = [
     ]
   },
   {
+    "kind": "nexus_stress",
+    "computedBy": "scripts/nexus/nexus_job.py via .github/workflows/nexus-stress.yml (PLAN.md §27 WP 17.4)",
+    "codeVersion": "the engine build, scsim-<ENGINE_VERSION>+<digest> (sim_worker.build.code_version)",
+    "entityType": "material | supplier",
+    "note": "The nexus battery (§4 D310): every supplier and supplied material disrupted alone; one result row per target with its lost sales in € per duration and the Average it ranks by. Keyed on the SIMULATION scope (`hash_inputs`) of the data version it ran on, opened only on an active Validated Model, published whole (`analysis_publish_nexus_stress`), read by `get_nexus_stress_results` (`rehearsal/900`).",
+    "params": [
+      {
+        "name": "scenario",
+        "type": "object",
+        "default": null,
+        "meaning": "The shared scenario, `scsim.stress.nexus.NEXUS_SCENARIO` as the engine exported it (start week, durations, effect, measure). Part of the key."
+      },
+      {
+        "name": "scenario_hash",
+        "type": "string",
+        "default": null,
+        "meaning": "sha256 of `scenario`; the publish refuses rows computed under another."
+      },
+      {
+        "name": "replications",
+        "type": "integer",
+        "default": 10,
+        "meaning": "Replications per cell, each paired with the undisrupted run on the same seeds."
+      },
+      {
+        "name": "run_settings",
+        "type": "object",
+        "default": null,
+        "meaning": "The horizon, seed, CRN, confidence level and adopted warm-up, read from the Validated Model's protocol by the job."
+      },
+      {
+        "name": "model_validation_id",
+        "type": "uuid",
+        "default": null,
+        "meaning": "Written by `analysis_start_nexus_stress`, with `model_hash`, `policy_version_id`, `policy_hash`, `dataset_version_id`, `graph_hash` and `hash_inputs` — the server's binding, over anything the caller sent."
+      }
+    ]
+  },
+  {
     "kind": "process_structure",
     "computedBy": "public.process_structure (SQL, WP 10.1)",
     "codeVersion": "process_structure@wp101.1",

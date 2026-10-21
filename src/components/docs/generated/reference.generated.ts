@@ -313,7 +313,23 @@ export const REFERENCE_TABLES: RefTable[] = [
       }
     ],
     "ingestDataset": null,
-    "surfaces": [],
+    "surfaces": [
+      {
+        "page": "FirmLevelNetwork.tsx",
+        "via": "rpc get_nexus_stress_results (MLPrediction, PLAN.md §27 WP 17.5)",
+        "evidence": "src/components/MLPrediction.tsx:77"
+      },
+      {
+        "page": "ProcessLevelNetwork.tsx",
+        "via": "rpc get_nexus_stress_results (MLPrediction, PLAN.md §27 WP 17.5)",
+        "evidence": "src/components/MLPrediction.tsx:77"
+      },
+      {
+        "page": "ProductLevelNetwork.tsx",
+        "via": "rpc get_nexus_stress_results (MLPrediction, PLAN.md §27 WP 17.5)",
+        "evidence": "src/components/MLPrediction.tsx:77"
+      }
+    ],
     "governance": {
       "read": null,
       "write": null,
@@ -518,6 +534,21 @@ export const REFERENCE_TABLES: RefTable[] = [
     ],
     "ingestDataset": null,
     "surfaces": [
+      {
+        "page": "FirmLevelNetwork.tsx",
+        "via": "rpc get_nexus_stress_results (MLPrediction, PLAN.md §27 WP 17.5)",
+        "evidence": "src/components/MLPrediction.tsx:77"
+      },
+      {
+        "page": "ProcessLevelNetwork.tsx",
+        "via": "rpc get_nexus_stress_results (MLPrediction, PLAN.md §27 WP 17.5)",
+        "evidence": "src/components/MLPrediction.tsx:77"
+      },
+      {
+        "page": "ProductLevelNetwork.tsx",
+        "via": "rpc get_nexus_stress_results (MLPrediction, PLAN.md §27 WP 17.5)",
+        "evidence": "src/components/MLPrediction.tsx:77"
+      },
       {
         "page": "ProductLevelNetwork.tsx",
         "via": "rpc project_freshness (GraphVersionChip → FreshnessBadge, WP 10.1)",
@@ -13872,21 +13903,6 @@ export const REFERENCE_TABLES: RefTable[] = [
         "page": "FirmLevelNetwork.tsx",
         "via": "rpc get_node_list",
         "evidence": "src/components/MapView.tsx:355"
-      },
-      {
-        "page": "FirmLevelNetwork.tsx",
-        "via": "rpc get_critical_node_stats (MLPrediction, §4 D307)",
-        "evidence": "src/components/MLPrediction.tsx:93"
-      },
-      {
-        "page": "ProcessLevelNetwork.tsx",
-        "via": "rpc get_critical_node_stats (MLPrediction, §4 D307)",
-        "evidence": "src/components/MLPrediction.tsx:93"
-      },
-      {
-        "page": "ProductLevelNetwork.tsx",
-        "via": "rpc get_critical_node_stats (MLPrediction, §4 D307)",
-        "evidence": "src/components/MLPrediction.tsx:93"
       },
       {
         "page": "ProductLevelNetwork.tsx",
