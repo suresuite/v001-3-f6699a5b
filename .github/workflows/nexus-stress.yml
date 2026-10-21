@@ -171,4 +171,5 @@ jobs:
         if: needs.cells.result != 'success' || failure()
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: python scripts/nexus/nexus_job.py fail --bundle bundle.json --reason "shards: ${{ needs.cells.result }}"
+          CELLS_RESULT: ${{ needs.cells.result }}
+        run: python scripts/nexus/nexus_job.py fail --bundle bundle.json --reason "shard jobs ended $CELLS_RESULT"
