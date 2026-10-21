@@ -27847,7 +27847,7 @@ owes). Re-run is a new request; nothing re-runs on page view.
 - `MLPrediction.tsx` (all three network pages, desktop and mobile skin): **the Run prediction button
   goes.** Opening the card reads `get_nexus_stress_results` and shows, in order:
   1. **Baseline** — "Data v… · Policies v… · Engine scsim-… · prepared <date>", the scenario in one
-     line ("each material and supplier disrupted alone · full outage from week 26 of the KPI window ·
+     line ("each material and supplier disrupted alone · full outage from week <start> (week 26, or warm-up + 1 if later) ·
      2–9 weeks · <R> replications"), and the clean reference's own lost sales;
   2. **Nexus materials** and **Nexus suppliers** — two tables (tabs on mobile), columns `Rank ·
      Target · 2 wk · 3 wk · … · 9 wk · Average`, every value lost sales in €, **opened sorted by
