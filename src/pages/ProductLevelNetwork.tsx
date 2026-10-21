@@ -56,6 +56,7 @@ import { calculateSupplierMetrics, calculateMaterialMetrics } from '@/utils/netw
 import { MobileGroup, MobilePageHeader, ProjectChip } from '@/components/mobile';
 import { RiskDataNotice } from '@/components/network/RiskDataNotice';
 import { GraphVersionChip, type MetricsOutcome } from '@/components/trust/GraphVersionChip';
+import type { NetworkAnalysisState } from '@/components/trust/NetworkAnalysisBadge';
 import { analyzerOutcome, storedMetricsDecision } from '@/lib/network/storedMetrics';
 import {
   GraphCard,
@@ -201,6 +202,8 @@ export default function NetworkVisualization({ isCollapsed, setIsCollapsed }: Ne
   }>>([]);
   const [networkMetricsLoading, setNetworkMetricsLoading] = useState(false);
   const [metricsOutcome, setMetricsOutcome] = useState<MetricsOutcome>(null);
+  const [metricsStatus, setMetricsStatus] = useState<{ projectId: string; state: NetworkAnalysisState } | null>(null);
+  const [metricsRevision, setMetricsRevision] = useState(0);
   const [disruptionDialogOpen, setDisruptionDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'network' | 'map'>('network');
   // Labels default ON, as on the Process-level view: node ids and each edge's flow.
@@ -284,6 +287,7 @@ export default function NetworkVisualization({ isCollapsed, setIsCollapsed }: Ne
     };
 
     setNetworkMetricsLoading(true);
+    setMetricsStatus({ projectId, state: 'loading' });
     try {
       let rows = await readStored();
       let decision = storedMetricsDecision(rows);
@@ -309,6 +313,7 @@ export default function NetworkVisualization({ isCollapsed, setIsCollapsed }: Ne
       }
 
       setNetworkMetrics(rows);
+      setMetricsStatus({ projectId, state: outcome === 'in progress' && decision.state !== 'current' ? 'in progress' : decision.state });
       setMetricsOutcome(outcome);
       setMetricsMetadata({
         lastCalculated: decision.computedAt,
@@ -327,9 +332,11 @@ export default function NetworkVisualization({ isCollapsed, setIsCollapsed }: Ne
       }
     } catch (error) {
       console.error('Error in fetchNetworkMetrics:', error);
+      setMetricsStatus({ projectId, state: 'unavailable' });
       toast.error('Failed to load network metrics');
     } finally {
       setNetworkMetricsLoading(false);
+      setMetricsRevision((revision) => revision + 1);
     }
   };
 
@@ -647,7 +654,7 @@ export default function NetworkVisualization({ isCollapsed, setIsCollapsed }: Ne
     if (showAnalytics && globalSelectedProjectId && user) {
       fetchNetworkMetrics(globalSelectedProjectId);
     }
-  }, [showAnalytics, globalSelectedProjectId, user]);
+  }, [showAnalytics, globalSelectedProjectId, user, loadNonce]);
 
   // Manual refresh function
   const handleRefreshMetrics = async () => {
@@ -1111,6 +1118,8 @@ export default function NetworkVisualization({ isCollapsed, setIsCollapsed }: Ne
                 projectId={globalSelectedProjectId}
                 metricsComputedAt={metricsMetadata?.lastCalculated ?? null}
                 outcome={metricsOutcome}
+                analysisState={loading ? 'loading' : metricsStatus?.projectId === globalSelectedProjectId ? metricsStatus.state : 'loading'}
+                refreshKey={`${loadNonce}:${metricsRevision}`}
               />
               <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
                 <SupplierVolumeChart
