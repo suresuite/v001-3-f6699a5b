@@ -86,7 +86,14 @@ export const ENGINE_CHANGES: EngineChange[] = [
       "WP 16.5",
       "ADR 0003"
     ],
-    "amendments": [],
+    "amendments": [
+      {
+        "date": "2026-10-20",
+        "commit": null,
+        "tier": 2,
+        "summary": "An inspection run (one replication, full trace) also records each product's finished-goods stock and its target week by week (`product.fg_on_hand`, `product.fg_target`, summing to `fg_units`) and the fulfillment mode the engine resolved (`product.make_to_stock`, 1 = make-to-stock). Output only: no KPI, series or frozen reference run moved."
+      }
+    ],
     "backfilled": false,
     "unrecordedChanges": null
   },

@@ -1606,7 +1606,7 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
     ]
   },
   "per-item-time-series": {
-    "minutes": 6,
+    "minutes": 9,
     "sections": [
       {
         "id": "why",
@@ -1614,7 +1614,11 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
       },
       {
         "id": "the-measures",
-        "title": "The 15 measures, and what each one is a count of"
+        "title": "The 18 measures, and what each one is a count of"
+      },
+      {
+        "id": "the-tables",
+        "title": "The two tables, and how they are ranked"
       },
       {
         "id": "the-explorer",

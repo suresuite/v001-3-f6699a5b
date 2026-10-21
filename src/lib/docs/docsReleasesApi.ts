@@ -9,7 +9,7 @@
  * explicitly because the browser calls as `anon` (§4 D155).
  */
 import { supabase } from "@/integrations/supabase/client";
-import { isDocsAudience, type DocsAudience, type DocsReleases } from "@/lib/ui/docsVisibility";
+import { isDocsAudience, type DocsAudience, type DocsReleases } from "@/lib/ui/docsAudience";
 
 // The generated Supabase types predate these tables and functions.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

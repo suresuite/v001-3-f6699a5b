@@ -1,30 +1,39 @@
-// Single-run inspection mode — per-item weekly series (blueprint G17 / §9.5.1
-// — W3). An inspection run (1 replication, user-chosen seed, full-debug
-// trace) persists per-material on-hand / in-transit / orders and per-product
-// demand / production / fulfillment / backlog / lost-units weekly series to
-// run_item_series; this panel is the picker + chart over that evidence. It
-// renders nothing for runs without item series (i.e. every multi-rep run).
+// Inventory explorer — single-run inspection mode, per-item weekly series
+// (blueprint G17 / §13 B0 follow-on item 3, "W3"; §9.5.1). An inspection run
+// (1 replication, user-chosen seed, full-debug trace) persists every material's
+// and every finished good's weekly record to run_item_series. This panel ranks
+// them by risk, charts the ones a user selects, and downloads them to Excel —
+// notebook 04's steps 5 and 8 for a user who does not run notebooks.
+//
+// The tables and the workbook are computed in `src/lib/sim/inventoryExplorer.ts`
+// and `inventoryWorkbook.ts`; this file loads the evidence and draws it. It
+// renders nothing for runs without item series (i.e. every multi-rep run),
+// unless the caller asked for the absence to be explained.
 
-import { useEffect, useMemo, useState } from "react";
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip as RTooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import { Microscope } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Download, Microscope } from "lucide-react";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-
-interface ItemRef {
-  kind: "material" | "product";
-  item_id: string;
-}
+import { useAuth } from "@/hooks/useAuth";
+import { useProjectRights } from "@/hooks/useProjectRights";
+import type { SimulationRun } from "@/hooks/useSimulationRun";
+import { downloadWorkbook } from "@/lib/policies/excel";
+import { fetchProjectLanes } from "@/lib/policies/projectLanes";
+import { assembleRunRecord, RUN_SCENARIO_COLUMNS, type RunScenarioRow } from "@/lib/trust/assembleRunRecord";
+import {
+  EXPLORER_LIMITS,
+  deriveInventory,
+  snapshotInputs,
+  type DerivedInventory,
+  type ExplorerInputs,
+  type ItemKind,
+  type ItemSeriesRow,
+} from "@/lib/sim/inventoryExplorer";
+import { buildInventoryWorkbook, inventoryFileName } from "@/lib/sim/inventoryWorkbook";
+import { ItemCharts } from "@/components/sim/inventory/ItemCharts";
+import { MaterialTable, ProductTable } from "@/components/sim/inventory/InventoryTable";
 
 const SERIES_LABEL: Record<string, string> = {
   on_hand: "On hand",
@@ -35,6 +44,11 @@ const SERIES_LABEL: Record<string, string> = {
   fulfillment: "Fulfillment",
   backlog: "Backlog",
   lost_units: "Lost units",
+  // Inventory explorer (G17/§9.5.1) — finished-goods stock per product, its
+  // target S, and the mode the engine resolved (an attribute, never a line).
+  fg_on_hand: "FG on hand",
+  fg_target: "FG target",
+  make_to_stock: "Make-to-stock (1) or make-to-order (0)",
   // PLAN.md §24 WP 14.4 — the plan's own record per product.
   projected_demand: "Projected demand (plan)",
   requirement: "Requirement (plan)",
@@ -46,17 +60,23 @@ const SERIES_LABEL: Record<string, string> = {
   mrp_net: "MRP net",
 };
 
-const SERIES_COLORS = [
-  "hsl(215 80% 50%)",
-  "hsl(25 95% 50%)",
-  "hsl(150 65% 40%)",
-  "hsl(280 60% 55%)",
-  "hsl(0 70% 55%)",
-];
+const label = (key: string) => SERIES_LABEL[key] ?? key;
+
+/** Charts drawn at once; the workbook carries every selected item regardless. */
+const MAX_CHARTS = 12;
+
+/** Rows per read of run_item_series (one row is one item's whole record). */
+const PAGE = 100;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const sb = supabase as any;
 
 interface Props {
   runId: string;
   warmupWeeks?: number | null;
+  /** The project's name, for the workbook's file name and record. Absent, both
+   *  use the project id — as the run-results export does. */
+  projectName?: string | null;
   /** What to say when the run carries no per-item evidence.
    *
    *  Omitted, the panel renders nothing — right on /policies, where the
@@ -65,247 +85,374 @@ interface Props {
    *  run, so the panel was empty there by construction and said nothing about
    *  why — §4 D113's shape exactly. Passing a hint turns "empty forever" into
    *  a state with a remedy the reader can actually reach. */
-  emptyHint?: string;
+  emptyHint?: ReactNode;
 }
 
-export function ItemSeriesExplorer({ runId, warmupWeeks = null, emptyHint }: Props) {
-  const [items, setItems] = useState<ItemRef[] | null>(null);
-  const [kind, setKind] = useState<"material" | "product">("product");
-  const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [series, setSeries] = useState<Record<string, number[]> | null>(null);
-  const [loadingSeries, setLoadingSeries] = useState(false);
+interface Context extends ExplorerInputs {
+  run: SimulationRun | null;
+}
 
-  // Item index for this run (cheap: ids only). Empty ⇒ not an inspection run.
+const key = (kind: ItemKind, id: string) => `${kind}\u0000${id}`;
+
+
+export function ItemSeriesExplorer({ runId, warmupWeeks = null, projectName, emptyHint }: Props) {
+  const { user } = useAuth();
+  const [rows, setRows] = useState<ItemSeriesRow[] | null>(null);
+  const [ctx, setCtx] = useState<Context | null>(null);
+  const [kind, setKind] = useState<ItemKind>("material");
+  const [query, setQuery] = useState("");
+  // Selection order is chart order and workbook-sheet order.
+  const [selected, setSelected] = useState<string[]>([]);
+  const [busy, setBusy] = useState<"selected" | "all" | null>(null);
+  const rights = useProjectRights(ctx?.run?.project_id ?? null);
+
+  // Every item's record for this run, paged. Empty ⇒ not an inspection run.
   useEffect(() => {
     let alive = true;
-    setItems(null);
-    setSelectedId(null);
-    setSeries(null);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sb = supabase as any;
-    void sb
-      .from("run_item_series")
-      .select("kind,item_id")
-      .eq("run_id", runId)
-      .order("item_id")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .then(({ data, error }: any) => {
+    setRows(null);
+    setCtx(null);
+    setSelected([]);
+    void (async () => {
+      const all: ItemSeriesRow[] = [];
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await sb
+          .from("run_item_series")
+          .select("kind,item_id,series")
+          .eq("run_id", runId)
+          .order("kind")
+          .order("item_id")
+          .range(from, from + PAGE - 1);
         if (!alive) return;
         if (error) {
-          console.warn("run_item_series index load failed", error);
-          setItems([]);
-          return;
+          console.warn("run_item_series load failed", error);
+          break;
         }
-        setItems((data ?? []) as ItemRef[]);
-      });
+        all.push(...((data ?? []) as ItemSeriesRow[]));
+        if ((data ?? []).length < PAGE) break;
+      }
+      if (alive) setRows(all);
+    })();
     return () => {
       alive = false;
     };
   }, [runId]);
 
-  // The chosen item's series, fetched on demand (one row).
+  // The run's own frozen inputs (BOM, lanes) and the items' display names —
+  // read only once the run has item series to explain.
   useEffect(() => {
-    if (!selectedId) {
-      setSeries(null);
-      return;
-    }
+    if (!rows || rows.length === 0) return;
     let alive = true;
-    setLoadingSeries(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sb = supabase as any;
-    void sb
-      .from("run_item_series")
-      .select("series")
-      .eq("run_id", runId)
-      .eq("kind", kind)
-      .eq("item_id", selectedId)
-      .maybeSingle()
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .then(({ data, error }: any) => {
-        if (!alive) return;
-        setLoadingSeries(false);
-        if (error || !data) {
-          console.warn("run_item_series load failed", error);
-          setSeries(null);
-          return;
+    void (async () => {
+      const { data: run } = await sb.from("simulation_runs").select("*").eq("id", runId).maybeSingle();
+      const r = (run ?? null) as (SimulationRun & { dataset_version_id?: string | null }) | null;
+      let snapshot: unknown = null;
+      if (r?.dataset_version_id) {
+        const { data: dsv } = await sb
+          .from("dataset_versions")
+          .select("snapshot")
+          .eq("id", r.dataset_version_id)
+          .maybeSingle();
+        snapshot = dsv?.snapshot ?? null;
+      }
+      const names = new Map<string, string>();
+      if (r?.project_id) {
+        for (const [table, id] of [["materials", "material_id"], ["products", "product_id"]] as const) {
+          const { data } = await sb.from(table).select(`${id},name`).eq("project_id", r.project_id);
+          for (const row of (data ?? []) as Array<Record<string, string | null>>) {
+            if (row[id] && row.name) names.set(String(row[id]), row.name);
+          }
         }
-        setSeries((data.series ?? {}) as Record<string, number[]>);
-      });
+      }
+      const inputs = snapshotInputs(snapshot);
+      let next: Context = { run: r, snapshot, source: snapshot ? "snapshot" : "none", names };
+      // A v1 snapshot has no deep BOM; fall back to the live lanes, and say so.
+      if (r?.project_id && (!snapshot || !("bom_multi_level" in inputs))) {
+        const lanes = await fetchProjectLanes(r.project_id, user);
+        next = { ...next, source: "live", liveBom: lanes.bom, liveInbound: lanes.inbound };
+      }
+      if (alive) setCtx(next);
+    })();
     return () => {
       alive = false;
     };
-  }, [runId, kind, selectedId]);
+  }, [rows, runId, user]);
 
-  const ofKind = useMemo(() => (items ?? []).filter((i) => i.kind === kind), [items, kind]);
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const list = q ? ofKind.filter((i) => i.item_id.toLowerCase().includes(q)) : ofKind;
-    return list.slice(0, 30);
-  }, [ofKind, query]);
+  const w0 = Math.max(0, warmupWeeks ?? 0);
+  const derived = useMemo(
+    () => (rows && rows.length > 0 ? deriveInventory(rows, ctx, w0) : null),
+    [rows, ctx, w0],
+  );
 
-  const counts = useMemo(() => {
-    const c = { material: 0, product: 0 };
-    for (const i of items ?? []) c[i.kind] += 1;
-    return c;
-  }, [items]);
-
-  const chartData = useMemo(() => {
-    if (!series) return [];
-    const keys = Object.keys(series).filter((k) => Array.isArray(series[k]));
-    if (keys.length === 0) return [];
-    const n = Math.min(...keys.map((k) => series[k].length));
-    return Array.from({ length: n }, (_, week) => {
-      const row: Record<string, number> = { week };
-      keys.forEach((k) => {
-        row[k] = series[k][week];
-      });
-      return row;
-    });
-  }, [series]);
-
-  // Not an inspection run (or index still loading with zero rows). Render
-  // nothing, unless the caller asked for the absence to be explained.
-  if (!items || items.length === 0) {
-    if (!items || !emptyHint) return null;
+  if (!rows || rows.length === 0 || !derived) {
+    if (!rows || !emptyHint) return null;
     return (
       <div className="rounded-md border border-dashed bg-card px-3 py-2 text-[11px] text-muted-foreground">
-        <span className="font-semibold text-foreground">Per-item weekly series</span>{" "}
-        — {emptyHint}
+        <span className="font-semibold text-foreground">Inventory explorer</span> {"\u2014"} {emptyHint}
       </div>
     );
   }
 
-  const seriesKeys = series ? Object.keys(series).filter((k) => Array.isArray(series[k])) : [];
+  const download = async (scope: "selected" | "all") => {
+    if (!rights.can("export")) {
+      toast.error(rights.refusal("export") ?? "Export isn't enabled for you on this project.");
+      return;
+    }
+    setBusy(scope);
+    try {
+      const run = ctx?.run ?? null;
+      let record = null;
+      let recordAbsentBecause: string | undefined;
+      if (run?.project_id) {
+        try {
+          const { data: scenario } = await sb
+            .from("scenarios")
+            .select(RUN_SCENARIO_COLUMNS)
+            .eq("id", run.scenario_id)
+            .maybeSingle();
+          record = await assembleRunRecord({
+            run,
+            scenario: (scenario ?? null) as RunScenarioRow | null,
+            projectId: run.project_id,
+            projectName,
+            userId: user?.id ?? null,
+          });
+          if (ctx?.source === "live") {
+            record.limits = [...record.limits, {
+              ref: "T2",
+              limit: "This run's dataset version predates the deep BOM in the snapshot.",
+              consequence: "Use and suppliers were read from the project's CURRENT bill of materials and lanes, " +
+                "which may differ from what the run read.",
+            }];
+          }
+        } catch (err) {
+          recordAbsentBecause = `The record could not be assembled: ${(err as Error).message ?? err}`;
+        }
+      } else {
+        recordAbsentBecause = "The run row could not be read.";
+      }
+      const wb = buildInventoryWorkbook({
+        record,
+        recordAbsentBecause,
+        materials: derived.materials,
+        products: derived.products,
+        rows,
+        use: derived.use,
+        selected: selected.map((k) => {
+          const [kd, id] = k.split("\u0000");
+          return { kind: kd as ItemKind, id };
+        }),
+        scope,
+      });
+      downloadWorkbook(wb, inventoryFileName(projectName ?? run?.project_id ?? "project", runId));
+      toast.success("Inventory workbook downloaded");
+    } catch (err) {
+      console.error("inventory export failed", err);
+      toast.error(`Export failed: ${(err as Error).message ?? err}`);
+    } finally {
+      setBusy(null);
+    }
+  };
 
   return (
-    <div className="rounded-md border bg-card">
+    <InventoryExplorerView
+      rows={rows}
+      derived={derived}
+      warmupWeeks={warmupWeeks}
+      liveSource={ctx?.source === "live"}
+      kind={kind}
+      onKind={(k) => {
+        setKind(k);
+        setQuery("");
+      }}
+      query={query}
+      onQuery={setQuery}
+      selected={selected}
+      onToggle={(k) => setSelected((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]))}
+      busy={busy}
+      canExport={rights.can("export")}
+      exportRefusal={rights.refusal("export")}
+      onDownload={(scope) => void download(scope)}
+    />
+  );
+}
+
+export interface InventoryExplorerViewProps {
+  rows: ItemSeriesRow[];
+  derived: DerivedInventory;
+  warmupWeeks: number | null;
+  /** The BOM and lanes are the project's current ones, not the run's snapshot. */
+  liveSource: boolean;
+  kind: ItemKind;
+  onKind: (k: ItemKind) => void;
+  query: string;
+  onQuery: (q: string) => void;
+  /** Selection keys (`kind\u0000id`), in the order they were ticked. */
+  selected: string[];
+  onToggle: (key: string) => void;
+  busy: "selected" | "all" | null;
+  canExport: boolean;
+  exportRefusal: string | null;
+  onDownload: (scope: "selected" | "all") => void;
+}
+
+/** What the explorer draws — no reads, no state of its own. */
+export function InventoryExplorerView({
+  rows, derived, warmupWeeks, liveSource, kind, onKind, query, onQuery, selected, onToggle,
+  busy, canExport, exportRefusal, onDownload,
+}: InventoryExplorerViewProps) {
+  const byKey = new Map(rows.map((r) => [key(r.kind, r.item_id), r]));
+  const q = query.trim().toLowerCase();
+  const match = (id: string, name: string | null) =>
+    !q || id.toLowerCase().includes(q) || (name ?? "").toLowerCase().includes(q);
+  const materials = derived.materials.filter((r) => match(r.id, r.name));
+  const products = derived.products.filter((r) => match(r.id, r.name));
+  const selectedOfKind = new Set(
+    selected.filter((k) => k.startsWith(`${kind}\u0000`)).map((k) => k.slice(kind.length + 1)),
+  );
+  const toggle = (id: string) => onToggle(key(kind, id));
+  const counts = { material: derived.materials.length, product: derived.products.length };
+
+  const title = (r: ItemSeriesRow) => {
+    const name = derived.names.get(r.item_id);
+    const head = name ? `${r.item_id} \u00b7 ${name}` : r.item_id;
+    if (r.kind === "material") {
+      const sup = derived.suppliers.get(r.item_id)?.join(", ") || "no supplier in the run's data";
+      const users = derived.users.get(r.item_id)?.join(", ") || "no product";
+      return `${head} \u2014 from ${sup} \u00b7 used by ${users}`;
+    }
+    const p = derived.products.find((x) => x.id === r.item_id);
+    const mode = p?.mode === "mts" ? "make-to-stock" : p?.mode === "mto" ? "make-to-order" : "mode not recorded";
+    return `${head} \u2014 ${mode}`;
+  };
+
+  const charted = selected.map((k) => byKey.get(k)).filter((r): r is ItemSeriesRow => !!r);
+
+  const exportTitle = canExport ? undefined : exportRefusal ?? undefined;
+  const btn =
+    "inline-flex min-h-11 items-center gap-1 rounded-md border px-2 text-[11px] transition-colors md:h-7 md:min-h-0 " +
+    "hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50";
+
+  return (
+    <div className="min-w-0 rounded-md border bg-card" data-testid="inventory-explorer">
       <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2">
-        <Microscope className="h-3.5 w-3.5 text-primary" />
-        <span className="text-xs font-semibold">Per-item weekly series (inspection run)</span>
-        <span className="text-[10px] text-emerald-600 dark:text-emerald-400">
-          engine data · {counts.product} product(s) · {counts.material} material(s)
+        <Microscope className="h-3.5 w-3.5 shrink-0 text-primary" />
+        <span className="min-w-0 text-xs font-semibold">Inventory explorer (inspection run)</span>
+        <span className="min-w-0 text-[10px] text-emerald-600 dark:text-emerald-400">
+          engine data {"\u00b7"} {counts.material} material(s) {"\u00b7"} {counts.product} finished good(s)
         </span>
         <div className="flex-1" />
-        <div className="flex items-center gap-1">
-          {(["product", "material"] as const).map((k) => (
+        <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Item kind">
+          {(["material", "product"] as const).map((k) => (
             <button
               key={k}
               type="button"
-              onClick={() => {
-                setKind(k);
-                setSelectedId(null);
-                setQuery("");
-              }}
+              aria-pressed={k === kind}
+              onClick={() => onKind(k)}
               className={cn(
-                "h-6 min-h-11 px-2 rounded-md text-[10px] border transition-colors capitalize md:min-h-0",
-                k === kind
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-card hover:bg-muted/50 border-border",
+                "h-6 min-h-11 rounded-md border px-2 text-[10px] transition-colors md:min-h-0",
+                k === kind ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card hover:bg-muted/50",
               )}
             >
-              {k}s
+              {k === "material" ? "Materials" : "Finished goods"}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-[240px_minmax(0,1fr)] gap-0">
-        <div className="border-b md:border-b-0 md:border-r p-2 flex flex-col gap-2">
-          <Input
-            placeholder={`Search ${counts[kind]} ${kind}s…`}
-            className="h-7 min-h-11 text-xs md:min-h-0"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <div className="flex flex-col gap-0.5 overflow-y-auto max-h-56">
-            {filtered.map((i) => (
-              <button
-                key={i.item_id}
-                type="button"
-                onClick={() => setSelectedId(i.item_id)}
-                className={cn(
-                  "text-left px-2 py-1 min-h-11 flex items-center rounded text-[11px] font-mono truncate transition-colors md:min-h-0 md:block",
-                  i.item_id === selectedId
-                    ? "bg-primary text-primary-foreground"
-                    : "hover:bg-muted/50",
-                )}
-                title={i.item_id}
-              >
-                {i.item_id}
-              </button>
-            ))}
-            {filtered.length === 0 && (
-              <span className="text-[11px] text-muted-foreground px-2 py-1">No match.</span>
-            )}
-            {ofKind.length > filtered.length && query.trim() === "" && (
-              <span className="text-[10px] text-muted-foreground px-2 py-1">
-                Showing first {filtered.length} of {ofKind.length} — type to search.
-              </span>
-            )}
+      <div className="space-y-2 p-2">
+        <ul className="list-disc space-y-0.5 pl-4 text-[10px] text-muted-foreground">
+          {EXPLORER_LIMITS.map((l) => (
+            <li key={l.limit}>{l.limit}</li>
+          ))}
+          {warmupWeeks != null && warmupWeeks > 0 && (
+            <li>Weeks before the warm-up ends (week {warmupWeeks}) are left out of the tables.</li>
+          )}
+          {liveSource && (
+            <li>
+              This run&apos;s dataset version predates the deep BOM in its snapshot, so use and suppliers are
+              read from the project&apos;s current data.
+            </li>
+          )}
+        </ul>
+
+        {kind === "product" && !derived.fgRecorded && (
+          <div
+            className="rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200"
+            role="status"
+          >
+            This run predates per-product finished-goods stock; run a new inspection.
           </div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            placeholder={`Search ${counts[kind]} ${kind === "material" ? "materials" : "finished goods"}\u2026`}
+            className="h-7 min-h-11 w-full min-w-0 basis-full text-xs md:min-h-0 md:max-w-xs md:basis-auto md:flex-1"
+            value={query}
+            onChange={(e) => onQuery(e.target.value)}
+            aria-label="Search items"
+          />
+          <div className="flex-1" />
+          <button
+            type="button"
+            className={btn}
+            disabled={busy !== null || selected.length === 0 || !canExport}
+            title={exportTitle ?? (selected.length === 0 ? "Select one or more items first" : undefined)}
+            onClick={() => onDownload("selected")}
+          >
+            <Download className="h-3.5 w-3.5 shrink-0" />
+            {busy === "selected" ? "Preparing\u2026" : `Download Excel (${selected.length} selected)`}
+          </button>
+          <button
+            type="button"
+            className={btn}
+            disabled={busy !== null || !canExport}
+            title={exportTitle}
+            onClick={() => onDownload("all")}
+          >
+            <Download className="h-3.5 w-3.5 shrink-0" />
+            {busy === "all" ? "Preparing\u2026" : "Download Excel (all items)"}
+          </button>
         </div>
 
-        <div className="p-2 min-h-[200px]">
-          {!selectedId ? (
-            <div className="h-full flex items-center justify-center text-[11px] text-muted-foreground p-6">
-              Pick a {kind} to see its weekly {kind === "material" ? "on-hand / in-transit / orders" : "demand / production / fulfillment"} series from this run.
-            </div>
-          ) : loadingSeries ? (
-            <div className="h-full flex items-center justify-center text-[11px] text-muted-foreground p-6">
-              Loading series…
-            </div>
-          ) : chartData.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-[11px] text-muted-foreground p-6">
-              No series persisted for this item.
-            </div>
-          ) : (
-            <>
-              <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1 font-mono">
-                {selectedId}
-              </div>
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={chartData} margin={{ top: 6, right: 10, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeOpacity={0.15} />
-                  <XAxis dataKey="week" tick={{ fontSize: 9 }} />
-                  <YAxis tick={{ fontSize: 9 }} width={44} domain={["auto", "auto"]} />
-                  <RTooltip contentStyle={{ fontSize: 10 }} />
-                  {warmupWeeks != null && warmupWeeks > 0 && (
-                    <ReferenceLine
-                      x={warmupWeeks}
-                      stroke="hsl(var(--destructive))"
-                      strokeDasharray="4 3"
-                      label={{ value: "warm-up", fontSize: 9, fill: "hsl(var(--destructive))" }}
-                    />
-                  )}
-                  {seriesKeys.map((k, i) => (
-                    <Line
-                      key={k}
-                      type="monotone"
-                      dataKey={k}
-                      name={SERIES_LABEL[k] ?? k}
-                      stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
-                      strokeWidth={1.4}
-                      dot={false}
-                      isAnimationActive={false}
-                    />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-              <div className="flex flex-wrap gap-3 px-1 pt-1">
-                {seriesKeys.map((k, i) => (
-                  <span key={k} className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                    <span
-                      className="inline-block h-1.5 w-3 rounded-sm"
-                      style={{ background: SERIES_COLORS[i % SERIES_COLORS.length] }}
-                    />
-                    {SERIES_LABEL[k] ?? k}
-                  </span>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
+        {kind === "material" ? (
+          <MaterialTable rows={materials} selected={selectedOfKind} onToggle={toggle} />
+        ) : (
+          <ProductTable rows={products} selected={selectedOfKind} onToggle={toggle} />
+        )}
+        <p className="text-[10px] text-muted-foreground">
+          Riskiest first:{" "}
+          {kind === "material"
+            ? "most weeks at zero, then the thinnest cover."
+            : "largest shortfall (lost units + average backlog), then most weeks out of stock while demand waited, then lowest fill rate."}{" "}
+          Select rows to chart them; the workbook holds the tables, every selected item week by week, and the
+          reproducibility record.
+        </p>
+
+        {charted.length === 0 ? (
+          <div className="flex items-center justify-center rounded border border-dashed p-6 text-[11px] text-muted-foreground">
+            Select one or more rows to chart their weeks.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+            {charted.slice(0, MAX_CHARTS).map((r) => (
+              <ItemCharts
+                key={key(r.kind, r.item_id)}
+                row={r}
+                title={title(r)}
+                warmupWeeks={warmupWeeks}
+                use={r.kind === "material" ? derived.use.get(r.item_id) : undefined}
+                fgRecorded={derived.fgRecorded}
+                label={label}
+              />
+            ))}
+          </div>
+        )}
+        {charted.length > MAX_CHARTS && (
+          <p className="text-[10px] text-muted-foreground">
+            Showing the first {MAX_CHARTS} of {charted.length} selected; the workbook carries all of them.
+          </p>
+        )}
       </div>
     </div>
   );

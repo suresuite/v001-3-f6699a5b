@@ -21,6 +21,7 @@ MATERIAL_KEYS = ("material.on_hand", "material.in_transit", "material.orders")
 PRODUCT_KEYS = (
     "product.demand", "product.production", "product.fulfillment",
     "product.backlog", "product.lost_units",
+    "product.fg_on_hand", "product.fg_target", "product.make_to_stock",
 )
 
 
@@ -129,3 +130,84 @@ def test_project_map_inspection_ignored_with_warning_for_multi_rep():
 def test_project_map_without_inspection_keeps_weekly_trace():
     mapping = from_project_data(**_project_data_kwargs(False, 1))
     assert mapping.scenario.settings.trace_verbosity == TraceVerbosity.WEEKLY
+
+
+# ── Per-product finished-goods stock (inventory explorer, G17/§9.5.1) ──────
+#
+# The engine kept FG stock per product every week and exported only its sum
+# (`fg_units` / `fg_value`). These pin the per-product series to that sum, so a
+# reader of `product.fg_on_hand` sees the same stock the KPI was computed from.
+
+def _mixed_fg_network() -> "Network":
+    """Two MTS products — one with a typed base-stock S, one whose target is
+    derived from the forecast — and one MTO product, all on one material."""
+    from scsim import BomLine, Material, Network, Product, Supplier, SupplierLink
+    from scsim.entities.enums import DemandModel, FulfillmentMode
+
+    def prod(pid, mode, demand, s=None):
+        return Product(id=pid, unit_price=10.0, demand_mode=demand,
+                       demand_model=DemandModel.TRIANGULAR,
+                       production_capacity=400.0, fulfillment_mode=mode,
+                       fg_base_stock=s)
+    return Network(
+        suppliers=[Supplier(id="s1")],
+        materials=[Material(id="m1", cost=2.0), Material(id="m2", cost=5.0)],
+        products=[
+            prod("p_s", FulfillmentMode.MTS, 100.0, s=400.0),
+            prod("p_f", FulfillmentMode.MTS, 60.0),
+            prod("p_o", FulfillmentMode.MTO, 80.0),
+        ],
+        bom=[BomLine(product_id="p_s", material_id="m1", rate=1.0),
+             BomLine(product_id="p_f", material_id="m1", rate=2.0),
+             BomLine(product_id="p_f", material_id="m2", rate=1.0),
+             BomLine(product_id="p_o", material_id="m2", rate=1.0)],
+        supplier_links=[
+            SupplierLink(supplier_id="s1", material_id="m1", cost=2.0, lead_time_weeks=2),
+            SupplierLink(supplier_id="s1", material_id="m2", cost=5.0, lead_time_weeks=2),
+        ],
+    )
+
+
+def _fg_run():
+    sc = _scenario(_mixed_fg_network(), model_seeds=1,
+                   trace_verbosity=TraceVerbosity.FULL_DEBUG)
+    return sc, run_scenario(sc)
+
+
+def test_fg_on_hand_sums_to_fg_units_every_week():
+    _, res = _fg_run()
+    fg = res.item_series["product.fg_on_hand"]
+    assert fg.shape == (3, res.fr_series.shape[1])
+    assert fg.sum() > 0  # the MTS products do hold stock
+    assert np.allclose(fg.sum(axis=0), res.extra_series["fg_units"][0])
+
+
+def test_fg_on_hand_valued_at_cogs_is_fg_value():
+    from scsim.core.engine import compile_scenario
+    sc, res = _fg_run()
+    cogs = compile_scenario(sc).model.fg_unit_cogs
+    value = (res.item_series["product.fg_on_hand"] * cogs[:, None]).sum(axis=0)
+    assert np.allclose(value, res.extra_series["fg_value"][0])
+
+
+def test_make_to_order_product_holds_no_fg_and_reads_as_mto():
+    _, res = _fg_run()
+    o = res.item_ids["product"].index("p_o")
+    assert not res.item_series["product.fg_on_hand"][o].any()
+    assert not res.item_series["product.fg_target"][o].any()
+    mts = res.item_series["product.make_to_stock"]
+    assert mts.shape == res.item_series["product.fg_on_hand"].shape
+    assert (mts[o] == 0).all()
+    for pid in ("p_s", "p_f"):
+        assert (mts[res.item_ids["product"].index(pid)] == 1).all(), pid
+
+
+def test_base_stock_product_target_is_its_s():
+    _, res = _fg_run()
+    s = res.item_ids["product"].index("p_s")
+    # Week 0's target is written at week 0's PH-70 like every other week; no
+    # P-P.4 is configured, so nothing adds a safety stock on top of S.
+    assert np.allclose(res.item_series["product.fg_target"][s], 400.0)
+    # …and the derived one moves with the forecast rather than reading a constant.
+    f = res.item_ids["product"].index("p_f")
+    assert res.item_series["product.fg_target"][f].std() > 0

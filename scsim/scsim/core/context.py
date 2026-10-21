@@ -810,6 +810,11 @@ class WeeklyTrace:
     # I_mat (single-run inspection surface, platform blueprint §9.5.1/G17).
     I_transit: Optional[np.ndarray] = None
     O_mat: Optional[np.ndarray] = None
+    # Per-product finished-goods stock and its target S^FG, week by week — the
+    # per-item halves of the `fg_units` scalar (inspection only). Zero for a
+    # make-to-order product, which holds no FG stock by design (ADR 0001).
+    FG: Optional[np.ndarray] = None
+    FG_TARGET: Optional[np.ndarray] = None
 
     def __post_init__(self) -> None:
         T = self.horizon
@@ -836,6 +841,8 @@ class WeeklyTrace:
             self.I_mat = np.zeros((self.n_mats, T))
             self.I_transit = np.zeros((self.n_mats, T))
             self.O_mat = np.zeros((self.n_mats, T))
+            self.FG = np.zeros((self.n_prods, T))
+            self.FG_TARGET = np.zeros((self.n_prods, T))
 
 
 class WriteGuardError(RuntimeError):

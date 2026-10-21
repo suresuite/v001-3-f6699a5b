@@ -27,15 +27,15 @@ import {
   type ResolvedCapabilities,
 } from '@/lib/capabilities';
 import {
-  canReadAnySection,
-  canReadDocsPath,
   canReadSection,
   docsReaderLevel,
-  hasPublicSection,
   isDocsPath,
   type DocsAudience,
   type DocsReleases,
-} from '@/lib/ui/docsVisibility';
+} from '@/lib/ui/docsAudience';
+// The registry-dependent half of the docs rule — loaded with the releases, never
+// in the entry chunk (it imports the whole manual's registry; see docsAudience.ts).
+type DocsRules = Pick<typeof import('@/lib/ui/docsVisibility'), 'canReadAnySection' | 'canReadDocsPath' | 'hasPublicSection'>;
 import { fetchDocsReleases } from '@/lib/docs/docsReleasesApi';
 import { capabilitiesReloadKey } from '@/lib/auth/sessionRefresh';
 
@@ -101,18 +101,26 @@ export const CapabilitiesProvider = ({ children }: { children: ReactNode }) => {
   // answer (another user, a sign-out) is dropped rather than applied.
   const seq = useRef(0);
   const [docsReleases, setDocsReleases] = useState<DocsReleases | null>(null);
+  const [docsRules, setDocsRules] = useState<DocsRules | null>(null);
   const [docsLoading, setDocsLoading] = useState(true);
 
   // Read for everyone, signed in or not: a public section must render before
   // sign-in. A failed read leaves `null`, which every rule reads as
   // confidential — the manual closes rather than opens.
+  // The rules arrive in the same wait as the releases (`docs.loading`), so the
+  // docs gate never decides without them; until then every docs path is closed.
   const refreshDocs = useCallback(async () => {
+    const rules = import('@/lib/ui/docsVisibility').then(
+      (m) => setDocsRules(m),
+      (e) => console.warn('[docs] the audience rules could not be loaded; every section is closed:', e),
+    );
     try {
       setDocsReleases(await fetchDocsReleases());
     } catch (e) {
       console.warn('[docs] section releases could not be read; every section is confidential:', e);
       setDocsReleases(null);
     } finally {
+      await rules;
       setDocsLoading(false);
     }
   }, []);
@@ -193,10 +201,12 @@ export const CapabilitiesProvider = ({ children }: { children: ReactNode }) => {
       loading: docsLoading,
       level: docsLevel,
       canReadSection: (sectionKey: string) => canReadSection(docsReleases, sectionKey, docsLevel),
-      anyReadable: canReadAnySection(docsReleases, docsLevel),
-      anyPublic: hasPublicSection(docsReleases),
+      anyReadable: docsRules ? docsRules.canReadAnySection(docsReleases, docsLevel) : false,
+      anyPublic: docsRules ? docsRules.hasPublicSection(docsReleases) : false,
       refresh: refreshDocs,
     };
+    // Closed until the rules have loaded — the same answer as "unreadable".
+    const canReadDocsPath = docsRules?.canReadDocsPath ?? (() => false);
     const canAccessPage = (pathname: string): boolean => {
       // The manual has no page capability of its own: each SECTION has an
       // audience a super admin sets (docsVisibility.ts). Decided before the
@@ -224,7 +234,7 @@ export const CapabilitiesProvider = ({ children }: { children: ReactNode }) => {
       allModelsAllowed: capabilities?.models.all_allowed ?? true,
       docs,
     };
-  }, [capabilities, loading, ready, serverCaps, refresh, user, docsReleases, docsLoading, refreshDocs]);
+  }, [capabilities, loading, ready, serverCaps, refresh, user, docsReleases, docsRules, docsLoading, refreshDocs]);
 
   return <CapabilitiesContext.Provider value={value}>{children}</CapabilitiesContext.Provider>;
 };

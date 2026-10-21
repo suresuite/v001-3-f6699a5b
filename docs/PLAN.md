@@ -24200,7 +24200,7 @@ four project rights on it are theirs (D279). (4) Who gains the page on deploy is
 that is an organization Owner or Admin with a `user` account; that is a §15 reading after the
 merge, not one a branch can take (D153).
 
-### D7 — blank `volume` and `unit_price`, and a zero `unit_price`, land on an inbound upload · 2026-10-09 · no migration
+### D7 — blank `volume` and `unit_price` land on an inbound upload · 2026-10-09 · no migration
 
 **What was asked.** An inbound-logistics file with 180 rows whose `volume` (and a few whose
 `unit_price`) was blank held every one of them in tier 1 as `required_blank`, and the owner asked
@@ -24211,23 +24211,17 @@ for blank data to upload.
 `fields_defaulted`), so tier 2 holds NULL — never 0, which is what D7 is about and still holds. The
 engine's defaults were already declared and need nothing: a NULL volume is a lane with no supply
 share, a NULL price is 1.0 with a `warn` MappingWarning. The volume's blank case is now a declared
-substitution on the sidecar. A negative volume or price is still a row finding; `lead_time` stays
-required. The columns were always nullable, so no migration.
-
-**Then, on the owner's follow-up, a zero `unit_price` lands WITH A WARNING.** The rule gained one
-contract key, `warn_at_or_below` (`contract.schema.json`, the generated `IngestRule`): a value in
-bounds but at or below it lands with a row-level `warn` finding (`at_warning_threshold`) instead of
-an error, so the row is promoted, because only `error` findings hold a row in tier 1. `unit_price` is
-`{min: 0, warn_at_or_below: 0}`: the engine reads a zero price as 1.0 with a MappingWarning (already
-declared under `substitutions`), and the warning makes that visible at upload (§5 T2). The review
-screen already rendered `warn` findings. The pre-upload preview in `UploadWizard.tsx` showed only
-errors, and any error hides the Upload button; it now lists row warnings separately, and they block
-nothing.
+substitution on the sidecar. The value rules stand: a negative volume ~~and a price of ZERO or less
+are~~ is still a row finding — a blank says "not known"~~, a zero says something false~~. *(Superseded
+the same day: a zero `unit_price` now lands with a warning — see the D7 entry "…and a zero
+`unit_price`…" at the end of §16.)* `lead_time` stays
+required. The columns were always nullable, so no migration; `UploadWizard.tsx` is untouched because
+a described dataset is validated by the server from the generated spec alone.
 
 **Gate results.** `contract:generate` regenerated the spec and pages (every page's contract-hash
-footer moves). `contract:check` passes. `ingestValidate.test.ts` 31 of 31: the D7 tests now use a
-blank `lead_time`, the remaining required numeric, plus a blank volume/price that lands, a zero price
-that lands with a warning, and a negative price that does not. `npm test`: the only failures are the six `manualExample.test.ts` "retains
+footer moves). `contract:check` passes. `ingestValidate.test.ts` 29 of 29: the D7 tests now use a
+blank `lead_time`, the remaining required numeric, plus a blank volume/price that lands and a zero
+price that does not. `npm test`: the only failures are the six `manualExample.test.ts` "retains
 its reviewed content" checks, which fail the same way on the base branch without this change.
 
 **Gap check.** The §10 exit line "blank `volume` is rejected" was true of WP 3.2 and is left as
@@ -24756,7 +24750,37 @@ carries the change record). Release report 0.8.1 against 0.8.0's archived build:
 and `unit_price` land on an inbound upload" after `4deac74`; it runs only on a full clone), and
 eslint's 289 pre-existing errors, none in a file this package touched.
 
+**Base merge, same day (`main` at `16b6f1d6`).** `main` had fixed both `contract:check` reds above
+(#404) and amended 0.8.0 with an output-only inspection-run change; the engine sources merged without
+conflict, and every conflict was a generated file, regenerated rather than picked: table pages,
+data contract, registry, wheels and manifest (build `scsim-0.8.1+84cc3f4faaa9`), worker fixture,
+docs index, change-record views, the 0.8.1 release report (28 of 28 rows still *identical*). **And
+the step this package had missed**: the notebook demo records each run's `code_version`, so it was
+re-recorded (`record_demo.py`) and the six notebooks rebuilt — only the engine version and build moved.
+After the merge: `contract:check` green; scsim 571, sim-worker 184, notebooks 32, vitest 1 869 of
+1 869; every generator `--check` current; eslint 289 errors, identical to `main`'s.
+
 **Gap check.** WP 17.2 inherits a working target; nothing in it moves.
+
+### D7 — blank `volume` and `unit_price`, and a zero `unit_price`, land on an inbound upload · 2026-10-09 · no migration
+
+*The follow-up to the D7 entry above. `181bd35f` wrote it INTO that entry and renamed its heading to
+this one — §16 is append-only and `contract:check` R7 keys on every heading it has ever seen, so
+`main` went red. The original entry is restored with the superseded sentence struck through, and the
+follow-up stands here, under the heading it was given, as its own entry.*
+
+**On the owner's follow-up, a zero `unit_price` lands WITH A WARNING.** The rule gained one
+contract key, `warn_at_or_below` (`contract.schema.json`, the generated `IngestRule`): a value in
+bounds but at or below it lands with a row-level `warn` finding (`at_warning_threshold`) instead of
+an error, so the row is promoted, because only `error` findings hold a row in tier 1. `unit_price` is
+`{min: 0, warn_at_or_below: 0}`: the engine reads a zero price as 1.0 with a MappingWarning (already
+declared under `substitutions`), and the warning makes that visible at upload (§5 T2). The review
+screen already rendered `warn` findings. The pre-upload preview in `UploadWizard.tsx` showed only
+errors, and any error hides the Upload button; it now lists row warnings separately, and they block
+nothing. A negative volume or price is still a row finding.
+
+**Gate results.** `ingestValidate.test.ts` 31 of 31: a blank volume/price that lands, a zero price
+that lands with a warning, and a negative price that does not.
 
 ## 17. Sequencing
 

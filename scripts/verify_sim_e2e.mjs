@@ -441,10 +441,15 @@ if (TEST_INSPECTION && run?.status === "done") {
             `run_item_series?select=series&run_id=eq.${inspRunId}&kind=eq.product&item_id=eq.${encodeURIComponent(prods[0].item_id)}&limit=1`,
           );
           const series = one.body?.[0]?.series ?? {};
-          const keys = Object.keys(series).sort().join(",");
-          keys === "backlog,demand,fulfillment,lost_units,production"
-            ? pass(`product series keys: ${keys}`)
-            : fail(`product series keys '${keys}' != backlog,demand,fulfillment,lost_units,production`);
+          // A SUPERSET check: the engine adds product measures over time (the
+          // plan's record in WP 14.4, finished-goods stock for the inventory
+          // explorer), and an exact list went stale the first time it did.
+          const keys = Object.keys(series).sort();
+          const base = ["backlog", "demand", "fulfillment", "lost_units", "production"];
+          const missing = base.filter((k) => !keys.includes(k));
+          missing.length === 0
+            ? pass(`product series keys: ${keys.join(",")}`)
+            : fail(`product series keys '${keys.join(",")}' lack ${missing.join(",")}`);
         }
       }
     }
