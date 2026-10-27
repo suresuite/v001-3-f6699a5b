@@ -179,7 +179,7 @@ fields:
     type: "text"
     unit: null
     unit_source: none
-    computed_by: "classify_node_echelon"
+    computed_by: "node_echelon_from_flags"
     meaning: >-
       THE LEGACY FOUR-VALUE VOCABULARY — `customer`, `product`, `material`,
       `supplier`, plus `unknown`. Since WP 8.1 it is DERIVED from `echelon`
@@ -212,7 +212,7 @@ fields:
     type: "text"
     unit: null
     unit_source: none
-    computed_by: "classify_node_echelon"
+    computed_by: "node_echelon_from_flags"
     meaning: >-
       `initcap` of `node_type`, derived by the refresh from the same single
       rule. It carries no information `node_type` does not; WP 8.3 reads
@@ -566,7 +566,7 @@ fields:
     type: "text"
     unit: null
     unit_source: none
-    computed_by: "classify_node_echelon"
+    computed_by: "node_echelon_from_flags"
     meaning: >-
       THE node's role in the supply chain, authored once and read rather
       than re-inferred. CHECK-constrained to `customer`, `product`,
@@ -583,7 +583,11 @@ fields:
       the substitution T1 forbids. `subassembly` is the value the old
       vocabulary had no word for — §15 run 35433474185 found 65 nodes that
       are both a BOM target and a BOM source on one project, every one of
-      which the old rule called a `product`.
+      which the old rule called a `product`. Since §4 D314 the priority ladder
+      is `node_echelon_from_flags`, reached from two collectors that gather the
+      same seven facts — `classify_node_echelon` for one node and
+      `node_list_attributes` for a whole project, which the refresh uses — so the
+      rule is still written once and the refresh is one pass, not one per node.
     grain: identifier
     engine:
       consumed_by: null
