@@ -1739,6 +1739,91 @@ def _apply_primary_choice(
             "otherwise pick"))
 
 
+def recovery_responses(recovery: dict) -> set[str]:
+    """The recovery responses a run applies: none while recovery is switched off.
+
+    `enabled: false` on the scenario's playbook ("Recovery enabled" on the card)
+    means disruptions hit raw. Before engine 0.8.2 the mapper never read it, so a
+    ticked strategy ran with the switch off.
+    """
+    if recovery.get("enabled", True) is False:
+        return set()
+    return {str(r) for r in (recovery.get("response") or [])}
+
+
+def _scenario_backup_links(
+    recovery: dict, links: list[SupplierLink], w: list[MappingWarning],
+) -> tuple[list[SupplierLink], dict[str, dict]]:
+    """Backup sources a scenario's playbook ENTERS for P-S.1 (engine 0.8.2).
+
+    ``recovery.backup_lanes`` is a list of ``{material_id, supplier_id, lead_time_weeks,
+    unit_price, capacity_per_week?, supplier_name?}`` — a source the planner states for
+    this scenario because no uploaded lane offers one. Each becomes a ``backup_only``
+    link: never the material's primary, no planned share, used only while P-S.1
+    reroutes. Read only when the Backup supplier response is on, so a scenario that
+    does not use it compiles exactly as before. Returns the links and, for a supplier
+    no uploaded lane names, the entity fields it needs.
+    """
+    entries = recovery.get("backup_lanes") or []
+    if not entries or "dual_source_activate" not in recovery_responses(recovery):
+        return [], {}
+    existing = {(l.supplier_id, l.material_id) for l in links}
+    sourced = {l.material_id for l in links}
+    known_sup = {l.supplier_id for l in links}
+    out: list[SupplierLink] = []
+    new_sups: dict[str, dict] = {}
+    for i, e in enumerate(entries):
+        ent = f"scenario:backup_lanes[{i}]"
+        if not isinstance(e, dict):
+            w.append(MappingWarning("warn", ent, "backup_lanes", "not an object — skipped"))
+            continue
+        mat = str(e.get("material_id") or "").strip()
+        sup = str(e.get("supplier_id") or "").strip()
+        try:
+            lt = float(e.get("lead_time_weeks"))
+            price = float(e.get("unit_price"))
+        except (TypeError, ValueError):
+            lt = price = float("nan")
+        if not mat or not sup or not (lt == lt) or not (price == price):
+            w.append(MappingWarning(
+                "warn", ent, "backup_lanes",
+                "a backup source needs a material, a supplier, a lead time and a unit price — skipped"))
+            continue
+        if mat not in sourced:
+            w.append(MappingWarning(
+                "warn", ent, "material_id",
+                f"{mat!r} has no uploaded supplier, so there is no primary to back up — skipped"))
+            continue
+        if (sup, mat) in existing:
+            w.append(MappingWarning(
+                "info", ent, "supplier_id",
+                f"{sup!r} already supplies {mat!r} through an uploaded lane — the uploaded lane "
+                "is the backup; the entered one is not added"))
+            continue
+        if price <= 0:
+            w.append(MappingWarning("warn", ent, "unit_price",
+                                    f"unit price {price:g} must be above 0 — skipped"))
+            continue
+        out.append(SupplierLink(
+            supplier_id=sup, material_id=mat, cost=price, backup_only=True,
+            lead_time_weeks=int(_clamp(round(lt), 1, 51, w=w, entity=ent,
+                                       field="lead_time_weeks", unit=" wk")),
+        ))
+        existing.add((sup, mat))
+        if sup not in known_sup and sup not in new_sups:
+            cap = e.get("capacity_per_week")
+            new_sups[sup] = {
+                "name": str(e.get("supplier_name") or sup),
+                "capacity_per_week": float(cap) if cap not in (None, "") and float(cap) > 0 else None,
+            }
+    if out:
+        w.append(MappingWarning(
+            "info", "scenario", "backup_lanes",
+            f"{len(out)} backup source(s) entered on this scenario, not uploaded — used only "
+            f"while backup_supplier reroutes: {[f'{l.supplier_id}->{l.material_id}' for l in out][:5]}"))
+    return out, new_sups
+
+
 def _composite_target(key_body: str, targets: set[str]) -> Optional[str]:
     """The target id inside a composite ``<owner>::<target>`` key, or None.
 
@@ -2512,6 +2597,10 @@ def from_project_data(data: ProjectData) -> MappingResult:
             tally.add(f"inbound_logistics.{field}", source, lane, count=any_spread)
             tally.value(f"inbound_logistics.{field}", lane, val)
     _apply_primary_choice(links, data.policies, w)
+    backup_links, backup_sups = _scenario_backup_links(
+        (data.policies.get("default") or {}).get("recovery") or {}, links, w)
+    links.extend(backup_links)
+    sup_ids.update(backup_sups)
 
     # BOM materials with no source link cannot be simulated. Since D166 this
     # says what it always claimed: a material here has NO inbound arc at all,
@@ -2591,6 +2680,11 @@ def from_project_data(data: ProjectData) -> MappingResult:
             capacity_per_week=_sup_capacity(sid),
             reliability_score=_sup_reliability(sid),
         )
+        if sid not in backup_sups else
+        # A supplier only a scenario's entered backup names: its capacity is the
+        # one entered beside it (blank = unlimited), its reliability the default.
+        Supplier(id=sid, name=backup_sups[sid]["name"],
+                 capacity_per_week=backup_sups[sid]["capacity_per_week"])
         for sid in sorted(sup_ids)
     ]
     cap_by_sup = {s.id: s.capacity_per_week for s in suppliers}
@@ -3598,14 +3692,45 @@ def _map_policies(
                 "warn", "policy:fg_safety_stock", "fg_safety_stock",
                 "finished-goods safety stock requires make_to_stock — skipped under MTO"))
 
-    responses = set(recovery.get("response") or [])
+    # `enabled: false` switches every recovery response off (engine 0.8.2); the
+    # sourcing strategy's own backup below is strategic, not a recovery response.
+    responses = recovery_responses(recovery)
+
+    def _rec_num(key: str, lo: float, hi: float, unit: str) -> Optional[float]:
+        v = recovery.get(key)
+        if v in (None, ""):
+            return None
+        try:
+            return _clamp(float(v), lo, hi, w=w, entity="policy:recovery", field=key, unit=unit)
+        except (TypeError, ValueError):
+            w.append(MappingWarning("warn", "policy:recovery", key, f"{v!r} is not a number — ignored"))
+            return None
+
     if strategy in ("primary_backup", "dual_sourcing", "multi") \
             or "dual_source_activate" in responses:
         out["backup_supplier"] = {}
+        # Blank = each backup lane's own lead time; a number overrides every backup's.
+        blt = _rec_num("backup_lead_time_weeks", 1, 26, " wk") \
+            if "dual_source_activate" in responses else None
+        if blt is not None:
+            out["backup_supplier"]["backup_lead_time_weeks"] = int(round(blt))
     if responses & {"mode_shift", "expedite_freight", "reroute"}:
         out["expedited_shipments"] = {}
+        exp = _rec_num("expedite_cost_pct", 1, 50, " %")
+        if exp is not None:
+            out["expedited_shipments"]["premium_pct_of_cost"] = exp
     if "capacity_flex" in responses:
         out["short_term_capacity"] = {}
+        ot = _rec_num("overtime_cost_pct", 1, 25, " %")
+        if ot is not None:
+            out["short_term_capacity"]["overtime_premium_pct_of_price"] = ot
+    # A response with no engine model is said, not silently dropped (§4 D114).
+    unmodelled = sorted(responses & {"safety_stock_drawdown", "demand_shaping"})
+    if unmodelled:
+        w.append(MappingWarning(
+            "warn", "policy:recovery", "response",
+            f"recovery response(s) {unmodelled} have no engine model and change nothing in "
+            "this run — material reallocation is `allocate_materials` (P-P.9)"))
 
     # P-S.4 early warning — recovery.detection_lag_days finally reaches the
     # engine, compressing how fast every reactive policy engages.
@@ -3635,6 +3760,12 @@ def _map_policies(
             if v is not None and prod and (prod_ids is None or prod in prod_ids):
                 priority[prod] = float(v)
         params: dict[str, Any] = {"activation": "during_disruption"}
+        win = _rec_num("allocation_horizon_weeks", 1, 13, " wk")
+        if win is not None:
+            params["window_weeks"] = int(round(win))
+        cost = _rec_num("annual_labor_cost", 0, 1e9, " €")
+        if cost is not None:
+            params["annual_cost"] = cost
         if priority:
             params["objective"] = "priority_weighted"
             params["priority_weights"] = priority

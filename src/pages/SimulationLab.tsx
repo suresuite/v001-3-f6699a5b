@@ -70,7 +70,7 @@ import {
   gateFindingsToFindings,
   type Finding,
 } from "@/lib/policies/validationService";
-import type { RecoveryConfig } from "@/lib/sim/recoveryScore";
+import type { InboundLane, RecoveryConfig } from "@/lib/sim/recovery";
 
 interface Props {
   isCollapsed: boolean;
@@ -839,6 +839,7 @@ export default function SimulationLab({ isCollapsed, setIsCollapsed }: Props) {
           readOnlyReason={readOnlyReason}
           findingsSource={serverFindings ? "gate rejection" : "pre-run check"}
           supplierIds={itemMasters.suppliers.map((s) => s.supplier_id)}
+          inboundLanes={itemMasters.lanes.inbound as unknown as InboundLane[]}
           latestRun={latestRun}
           reps={reps}
           runVersionLabel={runVersionLabel}
@@ -1013,6 +1014,7 @@ export default function SimulationLab({ isCollapsed, setIsCollapsed }: Props) {
                       onSave={(patch) => update(selected.id, patch)}
                       supplierIds={supplierIds}
                       uncapacitated={uncapacitated}
+                      inboundLanes={itemMasters.lanes.inbound as unknown as InboundLane[]}
                     />
                   </ReadOnlyFrame>
                 ) : pane === "run" ? (

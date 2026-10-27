@@ -4,6 +4,19 @@
 
 Every engine version, what it changed, and whether results stay comparable across it. Authored once in `scsim/CHANGELOG.yaml` and gated in CI (PLAN.md §25, gate `engine-ledger`). *Comparable* answers the user's question; *Tier* is the engineering classification (Part IX §9.5) — a patch can still change results for some projects.
 
+## 0.8.2 · 2026-10-27 · Tier 2
+
+**Changed for some projects.** Results change only for a scenario whose playbook switches recovery off while ticking strategies, states a strategy cost or horizon, or enters a backup supplier; every other scenario runs exactly as before (every frozen reference run kept its digest).
+
+A scenario's recovery playbook now runs as it reads. "Recovery enabled" off switches every recovery strategy off (it was never read, so ticked strategies ran anyway). Each strategy's cost or horizon field reaches its policy instead of being ignored, and the backup lead time can be left blank to mean each backup supplier's own. A backup supplier can be entered on a scenario for a material no uploaded supplier backs up: it is used only while the primary is disrupted and is never made the primary. A strategy the engine does not model is named in the run's notes instead of being silently dropped.
+
+*Technical.* `recovery_responses()` gates `_map_policies` on `recovery.enabled`. `backup_lead_time_weeks` → P-S.1 `backup_lead_time_weeks` (blank = the link's own), `overtime_cost_pct` → P-P.5 `overtime_premium_pct_of_price`, `expedite_cost_pct` → P-T.2 `premium_pct_of_cost`, `allocation_horizon_weeks` / `annual_labor_cost` → P-P.9 `window_weeks` / `annual_cost`. `SupplierLink.backup_only` (default false): `primary_rank` ranks it after every uploaded link, `CompiledModel.link_backup_only` excludes it from P-S.2's planned shares, and `_scenario_backup_links` adds one per `recovery.backup_lanes` entry only while `dual_source_activate` is on, with a `Supplier` for an id no uploaded lane names. A `safety_stock_drawdown` or `demand_shaping` response earns a mapping warning.
+
+- commit: not yet recorded
+- policies P-S.1, P-S.2, P-P.5, P-P.9, P-T.2
+- frozen reference runs moved: none
+- refs D114, D315
+
 ## 0.8.1 · 2026-10-21 · Tier 2
 
 **Comparable — results unchanged.** No existing scenario can carry a material event, so every result is unchanged (every frozen reference run kept its digest); material outages are new.

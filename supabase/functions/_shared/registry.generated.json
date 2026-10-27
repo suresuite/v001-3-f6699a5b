@@ -190,7 +190,7 @@
       "lane"
     ]
   },
-  "engine_version": "0.8.1",
+  "engine_version": "0.8.2",
   "entities": {
     "bom_line": {
       "description": "r_{p,m} \u2014 \u00a73.2. ALL listed materials are required (hard constraint, Eq. 8).",
@@ -1255,6 +1255,14 @@
       },
       "description": "Qualified (supplier \u00d7 material) source \u2014 \u00a73.4/\u00a73.5 SM-scoped variables.",
       "properties": {
+        "backup_only": {
+          "default": false,
+          "notes": "A backup source entered for one scenario (P-S.1), not an uploaded lane: it is never the material's primary and takes no planned share \u2014 only backup_supplier releases orders to it while the primary is disrupted.",
+          "scope": "SM",
+          "title": "Backup Only",
+          "type": "boolean",
+          "unit": "-"
+        },
         "cost": {
           "exclusiveMinimum": 0,
           "notes": "c_{m,s}",

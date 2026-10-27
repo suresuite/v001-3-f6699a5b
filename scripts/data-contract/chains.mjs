@@ -944,7 +944,7 @@ export function deriveScenarioSetup(root) {
  */
 export function deriveRecoveryLevers(root) {
   const map = readFileSync(join(root, "scsim", "scsim", "io", "project_map.py"), "utf8");
-  const start = map.indexOf('responses = set(recovery.get("response") or [])');
+  const start = map.indexOf("responses = recovery_responses(recovery)");
   if (start < 0) {
     throw new Error(
       "chains: the recovery-response block was not found in scsim/scsim/io/project_map.py. " +
@@ -954,7 +954,7 @@ export function deriveRecoveryLevers(root) {
   const region = map.slice(start);
   const plugins = new Map();
   // `if "x" in responses:` / `if responses & {"a", "b"}:` … `out["plugin"]`
-  const branch = /if\s+(?:strategy[^\n]*\n\s*or\s+)?(?:"([a-z_]+)" in responses|responses & \{([^}]*)\})[^\n]*:\n([\s\S]{0,1200}?)out\["(\w+)"\]/g;
+  const branch = /if\s+(?:strategy[^\n]*\n\s*or\s+)?(?:"([a-z_]+)" in responses|responses & \{([^}]*)\})[^\n]*:\n([\s\S]{0,2400}?)out\["(\w+)"\]/g;
   let m;
   while ((m = branch.exec(region))) {
     const keys = m[1] ? [m[1]] : [...m[2].matchAll(/"([a-z_]+)"/g)].map((x) => x[1]);
@@ -965,17 +965,17 @@ export function deriveRecoveryLevers(root) {
   }
 
   const pane = readFileSync(join(root, "src", "components", "sim", "DisruptionRecoveryPane.tsx"), "utf8");
-  const orderBlock = /const strategyOrder: RecoveryResponseKey\[\] = \[([\s\S]*?)\n\s{2}\];/.exec(pane);
-  if (!orderBlock) throw new Error("chains: `strategyOrder` not found in DisruptionRecoveryPane.tsx");
+  const score = readFileSync(join(root, "src", "lib", "sim", "recovery.ts"), "utf8");
+  const orderBlock = /export const OFFERED_STRATEGIES = \[([\s\S]*?)\n\] as const/.exec(score);
+  if (!orderBlock) throw new Error("chains: `OFFERED_STRATEGIES` not found in src/lib/sim/recovery.ts");
   const order = [...orderBlock[1].matchAll(/"([a-z_]+)"/g)].map((x) => x[1]);
 
   const descBlock = /const STRATEGY_DESCRIPTIONS: Record<RecoveryResponseKey, string> = \{([\s\S]*?)\n\};/.exec(pane);
   if (!descBlock) throw new Error("chains: `STRATEGY_DESCRIPTIONS` not found in DisruptionRecoveryPane.tsx");
   const desc = new Map([...descBlock[1].matchAll(/(\w+):\s*"((?:[^"\\]|\\.)*)"/g)].map((x) => [x[1], x[2]]));
 
-  const score = readFileSync(join(root, "src", "lib", "sim", "recoveryScore.ts"), "utf8");
   const labelBlock = /export const RESPONSE_LABELS: Record<RecoveryResponseKey, string> = \{([\s\S]*?)\n\};/.exec(score);
-  if (!labelBlock) throw new Error("chains: `RESPONSE_LABELS` not found in src/lib/sim/recoveryScore.ts");
+  if (!labelBlock) throw new Error("chains: `RESPONSE_LABELS` not found in src/lib/sim/recovery.ts");
   const labels = new Map([...labelBlock[1].matchAll(/(\w+):\s*"([^"]+)"/g)].map((x) => [x[1], x[2]]));
 
   // Each lever's own parameters, with units and defaults.
@@ -987,9 +987,9 @@ export function deriveRecoveryLevers(root) {
   while ((m = perLever.exec(paramBlock[1]))) {
     const rows = [
       ...m[2].matchAll(
-        /key:\s*"(\w+)",\s*label:\s*"([^"]+)",\s*unit:\s*"([^"]*)",\s*default:\s*([\d.]+)(?:,\s*step:\s*"[^"]*")?(?:,\s*hint:\s*"((?:[^"\\]|\\.)*)")?/g,
+        /key:\s*"(\w+)",\s*label:\s*"([^"]+)",\s*unit:\s*"([^"]*)",\s*default:\s*([\d.]+|null)(?:,\s*blankMeans:\s*"[^"]*")?(?:,\s*step:\s*"[^"]*")?(?:,\s*hint:\s*"((?:[^"\\]|\\.)*)")?/g,
       ),
-    ].map((x) => ({ key: x[1], label: x[2], unit: x[3], default: Number(x[4]), hint: x[5] ?? null }));
+    ].map((x) => ({ key: x[1], label: x[2], unit: x[3], default: x[4] === "null" ? null : Number(x[4]), hint: x[5] ?? null }));
     params.set(m[1], rows);
   }
 
@@ -1020,8 +1020,11 @@ export function deriveRecoveryLevers(root) {
   if (!enumBlock) throw new Error("chains: `RecoveryResponse` enum not found in schemas.ts");
   const valid = new Set([...enumBlock[1].matchAll(/"([a-z_]+)"/g)].map((x) => x[1]));
   const paneKeys = new Set(order);
+  // A token the labels mark retired (migration 20261027000003 rewrote it) is no
+  // missing control either.
+  const retired = new Set([...labels.entries()].filter(([, l]) => /\(retired\)/.test(l)).map(([k]) => k));
   const engineOnly = [...plugins.entries()]
-    .filter(([k]) => !paneKeys.has(k) && valid.has(k))
+    .filter(([k]) => !paneKeys.has(k) && valid.has(k) && !retired.has(k))
     .map(([key, plugin]) => ({ key, plugin, inGrid: grid.includes(key) }));
 
   if (levers.length < 4) throw new Error(`chains: parsed ${levers.length} recovery levers; the pane offers more`);

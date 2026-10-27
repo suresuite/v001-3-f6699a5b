@@ -133,6 +133,15 @@ class SupplierLink(BaseModel):
             "False everywhere → the manuscript rule: min cost, then lead time, then id.",
         ),
     )
+    backup_only: bool = Field(
+        False,
+        json_schema_extra=_meta(
+            "-", "SM",
+            "A backup source entered for one scenario (P-S.1), not an uploaded lane: it is "
+            "never the material's primary and takes no planned share — only backup_supplier "
+            "releases orders to it while the primary is disrupted.",
+        ),
+    )
 
     @model_validator(mode="after")
     def _check_lead_time_shape(self) -> "SupplierLink":
@@ -204,9 +213,11 @@ def primary_rank(link: SupplierLink) -> tuple:
     first; otherwise the manuscript rule (§3.5) — min cost, then shortest lead
     time, then supplier id. The ONE statement of the rule: `CompiledModel`,
     `Network.supplier_options` and P-P.1's planning lead times all sort by it,
-    so the three cannot pick different primaries.
+    so the three cannot pick different primaries. A scenario's backup-only link
+    ranks after every uploaded one, so it can never be a material's primary.
     """
-    return (not link.primary, link.cost, link.lead_time_weeks, link.supplier_id)
+    return (link.backup_only, not link.primary, link.cost, link.lead_time_weeks,
+            link.supplier_id)
 
 
 class Material(BaseModel):

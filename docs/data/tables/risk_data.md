@@ -253,6 +253,6 @@ When the row was last modified. Server-stamped.
 
 ---
 
-*Generated from data contract `3149bc72cb9a`, engine `0.8.1`,
+*Generated from data contract `5d56ecf5769b`, engine `0.8.2`,
 sidecar `supabase/contract/risk_data.contract.yaml`, table created by `20260915000003_risk_data.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

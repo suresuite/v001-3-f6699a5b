@@ -36,7 +36,7 @@
       "path": "scsim/scsim/io/project_map.py",
       "symbols": "_build_settings, _map_policies, from_project_data",
       "manual_page": "how-policies-work",
-      "sha256": "9ad0716075b6a87d35e260edf1a563f1580d7fc617030c56f951c8cb854cbad5"
+      "sha256": "0c3ba0c28ceb209ed9ce5d2e0cddd45b9399d89e03282acaed04f28e4c680d1e"
     },
     {
       "path": "sim-worker/sim_worker/local.py",

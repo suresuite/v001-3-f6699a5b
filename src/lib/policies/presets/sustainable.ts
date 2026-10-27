@@ -46,7 +46,7 @@ export const sustainable: PresetDefinition = {
       },
       recovery: {
         enabled: { value: true, why: "Recovery without breaking carbon cap." },
-        response: { value: ["safety_stock_drawdown", "demand_shaping"], why: "Avoid air freight; reshape demand instead." },
+        response: { value: ["safety_stock_drawdown"], why: "Avoid air freight; lean on the buffer. (Demand reshaping is not modelled — §4 D114.)" },
         cost_cap: { value: 15000, why: "Cap excludes premium-mode shifts." },
       },
     };

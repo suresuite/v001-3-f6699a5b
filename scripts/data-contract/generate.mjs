@@ -1572,7 +1572,7 @@ export function renderPolicyModule(contract, registry) {
     "  description: string | null;",
     "  plugin: string | null;",
     "  inGrid: boolean;",
-    "  params: { key: string; label: string; unit: string; default: number; hint: string | null }[];",
+    "  params: { key: string; label: string; unit: string; default: number | null; hint: string | null }[];",
     "};",
     "",
     "export type RecoveryLevers = {",

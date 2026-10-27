@@ -433,13 +433,15 @@ export const ENUM_OPTIONS: Record<string, readonly string[]> = {
 
 export const MULTI_SELECT_FIELDS = new Set(["response"]);
 export const MULTI_SELECT_OPTIONS: Record<string, readonly string[]> = {
-  // Restricted to the responses the scsim engine maps to policies:
-  // dual_source_activate → backup_supplier, mode_shift/reroute → expedited_shipments,
-  // capacity_flex → short_term_capacity, early_warning → early_warning_failover (P-S.4),
-  // allocate_materials → material_allocation (P-P.9).
+  // Restricted to the responses the scsim engine maps to policies, as the Simulation
+  // Lab card offers them (src/lib/sim/recovery.ts): dual_source_activate →
+  // backup_supplier, mode_shift → expedited_shipments, capacity_flex →
+  // short_term_capacity, allocate_materials → material_allocation (P-P.9). Not
+  // offered: `reroute` (retired — it was expediting under a second name, §4 D114) and
+  // `early_warning` (P-S.4; no early-warning capability is modelled for users yet).
+  // The edge validator still ACCEPTS both, so a stored row carrying one stays saveable.
   response: [
-    "reroute", "dual_source_activate", "mode_shift", "capacity_flex",
-    "early_warning", "allocate_materials",
+    "dual_source_activate", "mode_shift", "capacity_flex", "allocate_materials",
   ],
 };
 

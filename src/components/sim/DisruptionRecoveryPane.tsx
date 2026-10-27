@@ -8,12 +8,16 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { DisruptionScheduleEditor } from "./DisruptionScheduleEditor";
 import { PlaybookPicker } from "./PlaybookPicker";
-import { RecoveryResponse } from "@/lib/policies/schemas";
 import {
+  NOT_SIMULATED,
+  OFFERED_STRATEGIES,
   RESPONSE_LABELS,
+  type BackupLane,
+  type InboundLane,
   type RecoveryConfig,
   type RecoveryResponseKey,
-} from "@/lib/sim/recoveryScore";
+} from "@/lib/sim/recovery";
+import { BackupSupplierPanel } from "./BackupSupplierPanel";
 import type { Scenario } from "@/hooks/useScenarios";
 import { useRecoveryPlaybooks, type RecoveryPlaybook } from "@/hooks/useRecoveryPlaybooks";
 import { useGlobalProject } from "@/hooks/useGlobalProject";
@@ -31,6 +35,9 @@ interface Props {
    *  event editor picks targets the engine can disrupt (WP 9.4 slice 6). */
   supplierIds?: string[];
   uncapacitated?: string[];
+  /** The project's inbound lanes (raw), for the backup suppliers a disrupted
+   *  supplier's materials already have. */
+  inboundLanes?: InboundLane[];
   /**
    * Which card to render. `"all"` is both and is what desktop mounts, so the
    * desktop pane is unchanged. The phone tree renders the schedule as the
@@ -45,7 +52,9 @@ interface StrategyParamDef {
   key: keyof RecoveryConfig;
   label: string;
   unit: string;
-  default: number;
+  /** null = blank means the plugin's own rule (said in `blankMeans`). */
+  default: number | null;
+  blankMeans?: string;
   step?: string;
   hint?: string;
 }
@@ -56,17 +65,9 @@ const STRATEGY_PARAMS: Partial<Record<RecoveryResponseKey, StrategyParamDef[]>> 
       key: "backup_lead_time_weeks",
       label: "Backup supplier lead time",
       unit: "weeks",
-      default: 6,
-      hint: "Standard lead time assumed for all backup suppliers (Ts')",
-    },
-  ],
-  safety_stock_drawdown: [
-    {
-      key: "holding_cost_pct",
-      label: "Annual holding cost",
-      unit: "% of material cost",
-      default: 20,
-      hint: "Inventory carrying cost as a percentage of material value per year (hm)",
+      default: null,
+      blankMeans: "each backup's own lead time",
+      hint: "Leave blank to use each backup lane's own lead time; a number overrides every backup's (Ts')",
     },
   ],
   capacity_flex: [
@@ -78,7 +79,7 @@ const STRATEGY_PARAMS: Partial<Record<RecoveryResponseKey, StrategyParamDef[]>> 
       hint: "Additional cost per unit produced during overtime shifts (Cop)",
     },
   ],
-  demand_shaping: [
+  allocate_materials: [
     {
       key: "allocation_horizon_weeks",
       label: "Planning horizon",
@@ -103,16 +104,16 @@ const STRATEGY_PARAMS: Partial<Record<RecoveryResponseKey, StrategyParamDef[]>> 
       hint: "Premium to accelerate in-transit materials to the current week (Cexp)",
     },
   ],
-  reroute: [],
 };
 
 const STRATEGY_DESCRIPTIONS: Record<RecoveryResponseKey, string> = {
-  dual_source_activate: "Release orders to a predefined backup supplier when the primary is disrupted",
-  safety_stock_drawdown: "ABC-XYZ classified buffer stock protects against deep disruptions; incurs annual holding cost",
-  capacity_flex: "Activate overtime shifts when the revenue gain exceeds the overtime cost",
-  demand_shaping: "Revenue-maximising material allocation LP over a rolling planning horizon",
-  mode_shift: "Accelerate in-transit shipments when expedite revenue exceeds expedite cost",
-  reroute: "Redirect flows through alternative network paths",
+  dual_source_activate: "While a supplier is disrupted, reroute its materials' orders to another qualified supplier (P-S.1)",
+  safety_stock_drawdown: "Not simulated yet: the engine has no recovery model for safety stock — the buffer is the /policies safety stock",
+  capacity_flex: "Activate overtime shifts when the revenue gain exceeds the overtime cost (P-P.5)",
+  allocate_materials: "Revenue-maximising material allocation LP over a rolling planning horizon during a disruption (P-P.9)",
+  mode_shift: "Accelerate in-transit shipments when expedite revenue exceeds expedite cost (P-T.2)",
+  reroute: "Retired: ran expediting under a second name",
+  demand_shaping: "Retired: reached no engine model",
 };
 
 const DEFAULT_RECOVERY: RecoveryConfig = {
@@ -144,18 +145,21 @@ export function mergeRecovery(
 function StrategyParamInput({
   value,
   step,
+  placeholder,
   onCommit,
 }: {
-  value: number;
+  value: number | null;
   step: string;
-  onCommit: (v: number) => void;
+  /** When set, the field may be blank: committing null means "the plugin's rule". */
+  placeholder?: string;
+  onCommit: (v: number | null) => void;
 }) {
-  const [text, setText] = useState(String(value));
+  const [text, setText] = useState(value == null ? "" : String(value));
 
   // Resync when the committed value changes from outside (playbook switch,
   // reset to playbook, another field's mutual-exclusion side effect, etc).
   useEffect(() => {
-    setText(String(value));
+    setText(value == null ? "" : String(value));
   }, [value]);
 
   return (
@@ -163,16 +167,18 @@ function StrategyParamInput({
       type="number"
       step={step}
       value={text}
+      placeholder={placeholder}
       onChange={(e) => {
         const raw = e.target.value;
         setText(raw); // reflect exactly what was typed, including ""
         const v = parseFloat(raw);
         if (raw !== "" && Number.isFinite(v)) onCommit(v);
+        else if (raw === "" && placeholder) onCommit(null);
       }}
       onBlur={() => {
         const v = parseFloat(text);
-        if (text === "" || !Number.isFinite(v)) {
-          setText(String(value)); // revert display only, nothing to commit
+        if ((text === "" && !placeholder) || (text !== "" && !Number.isFinite(v))) {
+          setText(value == null ? "" : String(value)); // revert display only, nothing to commit
         }
       }}
       className="h-8 min-h-11 text-xs md:min-h-0"
@@ -201,6 +207,7 @@ export function DisruptionRecoveryPane({
   sections = "all",
   supplierIds,
   uncapacitated,
+  inboundLanes,
 }: Props) {
   const { globalSelectedProjectId: projectId } = useGlobalProject();
   const { playbooks, create: createPlaybook, update: updatePlaybook, remove: removePlaybook } =
@@ -306,15 +313,9 @@ export function DisruptionRecoveryPane({
   }, []);
   const canEditSelected = !!selectedPlaybook && !selectedPlaybook.is_system && selectedPlaybook.created_by === uid;
 
-  // Ordered list: paper strategies first, then reroute
-  const strategyOrder: RecoveryResponseKey[] = [
-    "dual_source_activate",
-    "safety_stock_drawdown",
-    "capacity_flex",
-    "demand_shaping",
-    "mode_shift",
-    "reroute",
-  ];
+  const backupLanes = (Array.isArray(overrides.backup_lanes)
+    ? overrides.backup_lanes
+    : effective.backup_lanes ?? []) as BackupLane[];
 
   const show = (s: Props["sections"]) => sections === "all" || sections === s;
 
@@ -388,10 +389,10 @@ export function DisruptionRecoveryPane({
           {/* Per-strategy cards */}
           <div className="flex flex-col gap-2">
             <Label className="text-xs">Response strategies</Label>
-            {strategyOrder
-              .filter((opt) => RecoveryResponse.options.includes(opt))
+            {OFFERED_STRATEGIES
               .map((opt) => {
                 const active = activeResponses.has(opt);
+                const notSimulated = NOT_SIMULATED.has(opt);
                 const params = STRATEGY_PARAMS[opt] ?? [];
                 return (
                   <div
@@ -417,7 +418,18 @@ export function DisruptionRecoveryPane({
                       <div className="flex flex-col gap-0.5 min-w-0">
                         <span className={cn("text-xs font-medium", active ? "text-foreground" : "text-muted-foreground")}>
                           {RESPONSE_LABELS[opt]}
+                          {notSimulated && (
+                            <Badge variant="outline" className="ml-2 text-[10px] font-normal">
+                              not simulated yet
+                            </Badge>
+                          )}
                         </span>
+                        {notSimulated && active && (
+                          <span className="text-[11px] text-muted-foreground">
+                            Saved on the scenario; the engine has no recovery model for it, so the run says so and
+                            nothing changes. The buffer the run holds is the safety stock set on /policies.
+                          </span>
+                        )}
                       </div>
                     </button>
 
@@ -426,32 +438,37 @@ export function DisruptionRecoveryPane({
                       <div className="border-t border-border/60 px-3 py-3 grid grid-cols-1 gap-3 md:grid-cols-2">
                         {params.map((f) => {
                           const stored = overrides[f.key as string];
-                          const displayVal = stored !== undefined && stored !== null
+                          const displayVal: number | null = stored !== undefined && stored !== null
                             ? Number(stored)
-                            : ((effective[f.key] as number | undefined) ?? f.default);
+                            : ((effective[f.key] as number | null | undefined) ?? f.default);
                           return (
                             <div key={f.key} className="flex flex-col gap-1">
                               <Label className="text-[11px]" title={f.hint}>
                                 {f.label}
                                 <span className="text-muted-foreground font-normal ml-1">({f.unit})</span>
                               </Label>
-                              {/* <Input
-                                type="number"
-                                step={f.step ?? "1"}
-                                value={displayVal}
-                                onChange={(e) =>
-                                  patchOverride(f.key, parseFloat(e.target.value) || f.default)
-                                }
-                                className="h-8 min-h-11 text-xs md:min-h-0"
-                              /> */}
                               <StrategyParamInput
                                 value={displayVal}
                                 step={f.step ?? "1"}
+                                placeholder={f.default == null ? f.blankMeans : undefined}
                                 onCommit={(v) => patchOverride(f.key, v)}
                                 />
                             </div>
                           );
                         })}
+                      </div>
+                    )}
+
+                    {/* P-S.1's sources for the suppliers this scenario disrupts */}
+                    {active && opt === "dual_source_activate" && (
+                      <div className="border-t border-border/60 px-3 py-3">
+                        <BackupSupplierPanel
+                          schedule={scenario.disruption_schedule}
+                          supplierIds={supplierIds ?? []}
+                          inbound={inboundLanes ?? []}
+                          entered={backupLanes}
+                          onChange={(next) => patchOverride("backup_lanes", next)}
+                        />
                       </div>
                     )}
                   </div>
