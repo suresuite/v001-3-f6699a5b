@@ -472,6 +472,6 @@ Staged rows that a LATER line of the same file repeats on the natural key. The p
 
 ---
 
-*Generated from data contract `abe84dd69756`, engine `0.8.1`,
+*Generated from data contract `3149bc72cb9a`, engine `0.8.1`,
 sidecar `supabase/contract/ingest_runs.contract.yaml`, table created by `20260829120000_erp_connector_phase1_2.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

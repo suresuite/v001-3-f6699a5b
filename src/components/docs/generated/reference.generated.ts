@@ -14047,7 +14047,7 @@ export const REFERENCE_TABLES: RefTable[] = [
         "unitColumn": null,
         "normalizeAtPromotion": null,
         "quantityGrain": "identifier",
-        "computedBy": "classify_node_echelon"
+        "computedBy": "node_echelon_from_flags"
       },
       {
         "name": "node_group",
@@ -14071,7 +14071,7 @@ export const REFERENCE_TABLES: RefTable[] = [
         "unitColumn": null,
         "normalizeAtPromotion": null,
         "quantityGrain": "identifier",
-        "computedBy": "classify_node_echelon"
+        "computedBy": "node_echelon_from_flags"
       },
       {
         "name": "description_text",
@@ -14393,7 +14393,7 @@ export const REFERENCE_TABLES: RefTable[] = [
         "csvHeader": null,
         "required": false,
         "validate": null,
-        "meaning": "THE node's role in the supply chain, authored once and read rather than re-inferred. CHECK-constrained to `customer`, `product`, `subassembly`, `material`, `supplier`, `plant`, `unknown`. D127 is what it replaces: eight independent classifiers, across SQL, four pages, the map component and the engine, each inferring a type at render time from a different signal because there is no type column on either edge table — and `supply_chain_data.from_location`'s own sidecar says the id alone cannot answer it (\"a supplier, a material, or the plant, depending on which lane produced it\"). TWO KINDS OF NOT-KNOWING, deliberately kept apart: NULL means never derived, and `unknown` means derived and unplaceable. Collapsing them is how \"we have not looked\" becomes \"we looked and found nothing\", which is the substitution T1 forbids. `subassembly` is the value the old vocabulary had no word for — §15 run 35433474185 found 65 nodes that are both a BOM target and a BOM source on one project, every one of which the old rule called a `product`.",
+        "meaning": "THE node's role in the supply chain, authored once and read rather than re-inferred. CHECK-constrained to `customer`, `product`, `subassembly`, `material`, `supplier`, `plant`, `unknown`. D127 is what it replaces: eight independent classifiers, across SQL, four pages, the map component and the engine, each inferring a type at render time from a different signal because there is no type column on either edge table — and `supply_chain_data.from_location`'s own sidecar says the id alone cannot answer it (\"a supplier, a material, or the plant, depending on which lane produced it\"). TWO KINDS OF NOT-KNOWING, deliberately kept apart: NULL means never derived, and `unknown` means derived and unplaceable. Collapsing them is how \"we have not looked\" becomes \"we looked and found nothing\", which is the substitution T1 forbids. `subassembly` is the value the old vocabulary had no word for — §15 run 35433474185 found 65 nodes that are both a BOM target and a BOM source on one project, every one of which the old rule called a `product`. Since §4 D314 the priority ladder is `node_echelon_from_flags`, reached from two collectors that gather the same seven facts — `classify_node_echelon` for one node and `node_list_attributes` for a whole project, which the refresh uses — so the rule is still written once and the refresh is one pass, not one per node.",
         "primaryKey": false,
         "unique": false,
         "references": null,
@@ -14407,7 +14407,7 @@ export const REFERENCE_TABLES: RefTable[] = [
         "unitColumn": null,
         "normalizeAtPromotion": null,
         "quantityGrain": "identifier",
-        "computedBy": "classify_node_echelon"
+        "computedBy": "node_echelon_from_flags"
       },
       {
         "name": "bom_depth",

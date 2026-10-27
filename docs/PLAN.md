@@ -506,6 +506,7 @@ else cites the D-number or the §4.1 row. `npm run check:docs` enforces it.
 
 | **D312** | **A network page reports the project-wide freshness roll-up and its warning never refreshes with the network.** `GraphVersionChip` appends `FreshnessBadge`, whose worst-table verdict includes unrelated network results and seeded policies; `project_freshness` still compares mirrored row anchors against the composite even though analyses now key on a level. The badge and graph-version hook read only on mount/project change, so refreshing or recalculating the displayed network leaves their old answers on screen. Process reachability likewise re-reads only on project/user change. Owner-reported on `Project AA - ver3`, 2026-10-21 | `src/components/trust/GraphVersionChip.tsx`; `src/components/trust/useProjectFreshness.ts`; `src/hooks/useDatasetVersion.tsx`; `src/pages/ProductLevelNetwork.tsx`; `src/pages/ProcessLevelNetwork.tsx`; `src/pages/FirmLevelNetwork.tsx`; `supabase/migrations/20261001000018_project_freshness_names_its_reader.sql` | **CLOSED for the network pages (no migration).** The chip displays the shown analysis's own server verdict from `storedMetricsDecision`, or the process run's input hash compared with the process hash. The project roll-up and its second dataset/hash label are no longer used there. A successful graph reload and completed metrics read/recalculation refresh the version; process structure and visible product metrics re-read after reload. Loading, in-progress, missing provenance and failed reads cannot claim current. Older version responses cannot overwrite a newer refresh or another project. `networkAnalysisBadge.test.tsx`, `datasetVersionRefresh.test.tsx`. The project-wide Trust Report retains its existing semantics; this change neither clears its stale rows nor changes its SQL comparison. |
 | **D313** | **The Product-level page's network metrics were computed on another graph, so its table was empty.** The page invoked `calculate-network-science-metrics`, which computes `network_metrics` on the FIRM graph (the lane graph only when the deep tier is incomplete) and mirrors onto `network_nodes`; it then read `get_network_metrics_for_materials`, which keeps a `network_nodes` row when its firm `uid` equals a `bom` lane endpoint (D137). On a project with a deep-tier network no firm id is a material id, so the table said "No material nodes with calculated network metrics found" while the chip said "reused" — a true statement about a run on a different graph. Owner-reported 2026-10-27 ("no stored metrics · reused", 367 materials, 65 suppliers) | `supabase/migrations/20261001000007_graph_levels_compute_once.sql` (`get_network_metrics_for_materials`, `analysis_kinds`); `supabase/functions/calculate-network-science-metrics/index.ts`; `src/pages/ProductLevelNetwork.tsx` (`fetchNetworkMetrics`) | **CLOSED (migration `20261027000001`).** A kind of its own, `product_metrics`, computed by the same function with `analysis_kind: 'product_metrics'` on the four-echelon graph built by `buildProductLevelGraph` — moved to `supabase/functions/_shared/productGraph.ts` (with `laneEdges.ts`) so the analyzer and the page build ONE graph; `src/lib/graph/` re-exports both. Keyed on the PROCESS level because `supply_chain_data` is rebuilt from `bom_multi_level`, which the product-level hash does not cover. Store only. The centralities moved to `_shared/centrality.ts` (one author for both kinds); the product kind is exact (all-source betweenness, shifted eigenvector — the layered graph is bipartite, where plain power iteration oscillates), the firm kind keeps its approximations, identical to 1e-12 on random graphs. `get_product_level_metrics` reads the current run else the newest, says `hash_is_current`, names nodes from the masters, refuses a stranger. The table's "Revenue" column (a firm's) is now the material's weekly flow. `rehearsal/910` (mutation-tested), `productMetrics.test.ts` |
+| **D314** | **Promoting an inbound or outbound upload into a TRON-sized project timed out, so the project could not be completed from the upload screen.** Every promotion rebuilds the project's lanes (D142) and each statement on the two lane tables then refreshes `node_list` for the whole project (D143), up to four refreshes per promotion. The refresh worked one node at a time and paid three costs the rule did not need: `node_list_discover` re-offered all 639 existing nodes to `INSERT … ON CONFLICT DO NOTHING`, whose row-level BEFORE INSERT triggers (`infer_node_list_metadata`, `normalize_node_location_fields`) classified each one before the conflict discarded it; the UPDATE referenced `e.echelon` three times and the planner pulled the subquery up, so `classify_node_echelon` (two scans of the lanes per call) ran three times per node; and every row was rewritten whether or not anything changed. One refresh took 3.6–3.9 s on an idle local database; with the real anonymised TRON files the BOM, inbound and outbound promotions took 1.1 s, 4.4 s and 12.2 s. Production gives an edge-function RPC `authenticator`'s 8 s (§16 · D170's exit), and the owner's inbound promotion was cancelled with "canceling statement due to statement timeout" (`ingest-file` `stage: apply`, 2026-10-27). The wizard showed only "Edge Function returned a non-2xx status code", because `UploadWizard.tsx` throws supabase-js's message and never reads the response body | `supabase/migrations/20260920000001_one_node_classifier.sql` (`classify_node_echelon`, `node_list_discover`, `refresh_node_list_for_project`); `supabase/functions/ingest-file/index.ts` (the `apply` 500); `src/components/UploadWizard.tsx` (`parseOnServer`, the landing branch) | **CLOSED for the timeout (migration `20261027000002`).** The priority ladder moved verbatim into `node_echelon_from_flags`, a pure function of the seven facts it reads; `classify_node_echelon` collects them for one node and the new `node_list_attributes` for a whole project in one GROUP BY, and both decide through it, so the rule is still authored once (D127) and `echelonMirror.test.ts` reads the ladder from its new home. Discovery offers only missing nodes, already typed; the refresh computes once (MATERIALIZED) and updates only rows whose values change. Same TRON files: 0.4 s, 1.4 s, 1.7 s. `rehearsal/920` (set = per-node for every node; a no-op refresh rewrites no row; a TRON-shaped project promotes each dataset in under 6 s), mutation-tested against the old bodies. **OPEN: the hidden error.** The wizard still discards the body of a non-2xx answer — a one-function client change, not made here. **Not done:** the four refreshes per promotion could be one; that changes `rebuild_supply_chain_lanes` and its callers and is not needed for the margin |
 
 ### 4.1 Code map — the data layer
 
@@ -24987,6 +24988,46 @@ replication · seed N". §27.2 rule 1 now names the variant. Recorded as a secon
 
 **Gate results.** scsim 587, sim-worker 192 (the job's eight), vitest green; wheels, release report
 (no KPI changed), change record, notebook demo regenerated and `--check` current.
+
+### D314 — a TRON-sized promotion fits in the 8 s it gets · 2026-10-27 · migration `20261027000002`
+
+**Blueprint §8 / G-ingestion, `ingestion-contract` and `single-source`.** Owner-reported while loading
+the anonymised Tronico (ACCURATE_Tron) files into a new project through /project-manager: BOM and the
+node list promoted, inbound showed "Edge Function returned a non-2xx status code". The browser's
+network panel had the real answer — `ingest-file` 500, `stage: apply`, "canceling statement due to
+statement timeout" — and the upload itself had worked; the promotion was rolled back whole.
+
+**Measured before changing anything.** On a local PostgreSQL 16 built by `contract:rehearse`, the
+seven real CSVs were landed and promoted through `ingest_land_file` + `ingest_apply_run` with rows
+built by the server's own `validateRows`: suppliers, materials, products and customers in under
+0.1 s each, BOM 1.1 s, inbound 4.4 s, outbound 12.2 s. The lane rebuild itself was 0.34 s. One
+`refresh_node_list_for_project` was 3.6–3.9 s, and its three per-node functions only 0.45 s of
+that: 0.65 s went to discovery's BEFORE INSERT triggers on 639 rows it then discarded, and the rest
+to the UPDATE evaluating the classifier three times per node and rewriting every row (§4 D314).
+
+**What changed.** `node_echelon_from_flags` (the ladder, moved verbatim), `node_list_attributes`
+(the set-based collector), and new bodies for `classify_node_echelon`, `node_list_discover` and
+`refresh_node_list_for_project`. Same files afterwards: 0.4 s, 1.4 s, 1.7 s. `node_list`'s sidecar
+names `node_echelon_from_flags` as `computed_by` for `echelon`, `node_type` and `node_group`.
+
+**What the previous package promised versus what this one found.**
+1. **WP 8.1 promised the refresh would run** (D143's dead trigger revived) and it does — four times
+   per promotion, at a cost nobody had measured on a project this size. D305 and the 44 s
+   `delete_project` (§16 · D170's exit) were the same class on other paths; this is the
+   promotion's instance.
+2. **The upload screen hides every server error.** `parseOnServer` and the landing branch throw
+   supabase-js's `error.message` and never read `error.context`, so a 400 with findings and a 500
+   with a database message look identical. Recorded as D314's open half rather than widened here.
+3. **The 8 s is a property of the deployment, not the code**: nothing in the repository states it,
+   so no gate can hold a promotion to it except a rehearsal that measures one. `920` §3 does, at
+   6 s, because CI is not production.
+
+**Gate results.** `contract:check` green (the two existing warnings); `contract:rehearse` green with
+`920` new — mutation-tested: with the pre-D314 bodies restored §2 fails (10 rows rewritten by a no-op
+refresh) and, with §2 skipped, §3 fails at 10.4 s for inbound; `echelonMirror.test.ts` fails when two
+branches of the new ladder are swapped. vitest 1 915 of 1 915; typecheck holds its 15-error baseline;
+`audit:ui`, `check:docs` and `notebooks` pass; eslint 282 errors, `main`'s count, none in the changed
+file. Deploys on merge; the owner then presses Promote again on the staged run.
 
 ## 17. Sequencing
 

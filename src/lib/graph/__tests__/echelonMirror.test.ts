@@ -2,7 +2,7 @@
  * THE MIRROR CANNOT DRIFT FROM THE AUTHORITY — Phase 8 / WP 8.3 / §4 D127.
  *
  * `src/lib/graph/echelon.ts` implements the same rule as
- * `public.classify_node_echelon`, because a page cannot call a plpgsql function on
+ * `public.classify_node_echelon` (whose ladder is `node_echelon_from_flags` since §4 D314), because a page cannot call a plpgsql function on
  * rows it holds in memory and the column that function fills is not in production
  * until this work merges.
  *
@@ -22,20 +22,19 @@ import { describe, expect, it } from 'vitest';
 import { ECHELON_PRIORITY, typedNodesFromLanes, type BomRow, type LaneRow } from '../echelon';
 import { ECHELONS } from '../types';
 
-const MIGRATION = 'supabase/migrations/20260920000001_one_node_classifier.sql';
+// §4 D314 moved the ladder out of `classify_node_echelon` (20260920000001) into
+// `node_echelon_from_flags`, which the per-node and the per-project collector both
+// call. The authority is where the RETURNs are, so that is the body read here.
+const MIGRATION = 'supabase/migrations/20261027000002_node_list_refresh_set_based.sql';
 
-/** The `RETURN '<echelon>'` sequence inside `classify_node_echelon`'s body. */
+/** The `RETURN '<echelon>'` sequence inside `node_echelon_from_flags`'s body. */
 function sqlBranchOrder(): string[] {
   const sql = readFileSync(MIGRATION, 'utf8');
-  const start = sql.indexOf('CREATE OR REPLACE FUNCTION public.classify_node_echelon');
-  expect(start, `${MIGRATION} no longer defines classify_node_echelon`).toBeGreaterThan(-1);
+  const start = sql.indexOf('CREATE OR REPLACE FUNCTION public.node_echelon_from_flags');
+  expect(start, `${MIGRATION} no longer defines node_echelon_from_flags`).toBeGreaterThan(-1);
   const end = sql.indexOf('$function$;', start);
   const body = sql.slice(start, end);
-  // Skip the guard's early `RETURN 'unknown'` for a blank id — it is an input check,
-  // not a branch of the priority order.
-  const guard = body.indexOf('IF p_node_id IS NULL');
-  const afterGuard = body.slice(body.indexOf('END IF;', guard));
-  return [...afterGuard.matchAll(/RETURN\s+'([a-z]+)'/g)].map((m) => m[1]);
+  return [...body.matchAll(/RETURN\s+'([a-z]+)'/g)].map((m) => m[1]);
 }
 
 describe('the client mirror matches classify_node_echelon', () => {
