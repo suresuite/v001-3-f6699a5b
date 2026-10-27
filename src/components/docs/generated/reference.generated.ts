@@ -328,6 +328,11 @@ export const REFERENCE_TABLES: RefTable[] = [
         "page": "ProductLevelNetwork.tsx",
         "via": "rpc get_nexus_stress_results (MLPrediction, PLAN.md §27 WP 17.5)",
         "evidence": "src/components/MLPrediction.tsx:77"
+      },
+      {
+        "page": "ProductLevelNetwork.tsx",
+        "via": "rpc get_product_level_metrics (kind product_metrics, PLAN.md §4 D313)",
+        "evidence": "src/pages/ProductLevelNetwork.tsx:289"
       }
     ],
     "governance": {
@@ -12357,11 +12362,6 @@ export const REFERENCE_TABLES: RefTable[] = [
         "page": "DataManager.tsx",
         "via": "rpc get_project_dataset_status",
         "evidence": "src/pages/DataManager.tsx:434"
-      },
-      {
-        "page": "ProductLevelNetwork.tsx",
-        "via": "rpc get_network_metrics_for_materials",
-        "evidence": "src/pages/ProductLevelNetwork.tsx:280"
       }
     ],
     "governance": {
@@ -19885,7 +19885,7 @@ export const REFERENCE_TABLES: RefTable[] = [
       {
         "page": "ProductLevelNetwork.tsx",
         "via": "rpc list_projects",
-        "evidence": "src/pages/ProductLevelNetwork.tsx:255"
+        "evidence": "src/pages/ProductLevelNetwork.tsx:259"
       },
       {
         "page": "ProjectIntelligence.tsx",
@@ -20716,7 +20716,7 @@ export const REFERENCE_TABLES: RefTable[] = [
       {
         "page": "ProductLevelNetwork.tsx",
         "via": "table read",
-        "evidence": "src/pages/ProductLevelNetwork.tsx:375"
+        "evidence": "src/pages/ProductLevelNetwork.tsx:385"
       }
     ],
     "governance": {

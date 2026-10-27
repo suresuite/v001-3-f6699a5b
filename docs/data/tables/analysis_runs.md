@@ -383,6 +383,6 @@ The VERSION of the level the run keyed on ("Firm graph v5") — the `graph_level
 
 ---
 
-*Generated from data contract `cc0268e99d85`, engine `0.8.1`,
+*Generated from data contract `abe84dd69756`, engine `0.8.1`,
 sidecar `supabase/contract/analysis_runs.contract.yaml`, table created by `20260917000006_analysis_store.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*
