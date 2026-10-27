@@ -1157,7 +1157,7 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
     ]
   },
   "experiments-and-comparison": {
-    "minutes": 3,
+    "minutes": 4,
     "sections": [
       {
         "id": "what-an-experiment-is",

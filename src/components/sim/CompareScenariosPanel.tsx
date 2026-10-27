@@ -17,7 +17,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { compareRows } from "@/lib/sim/pairedCompare";
-import { comparabilityFailures } from "@/lib/sim/comparability";
+import { comparabilityFailures, comparabilityNotes } from "@/lib/sim/comparability";
 import { isValidationBaseline } from "@/lib/sim/validationBaseline";
 import { compareScope, type CompareCandidate } from "@/lib/sim/labModel";
 import { kpiDisplay } from "@/lib/sim/kpiDisplay";
@@ -85,6 +85,9 @@ interface Challenger {
   scenario: Scenario;
   run: SimulationRun;
   failures: string[];
+  /** Said beside a valid pair, never a reason to refuse it (two engine versions
+   *  the change record says give the same results). */
+  notes: string[];
   rows: CompareRow[];
   tally: Tally;
 }
@@ -157,6 +160,7 @@ export function CompareScenariosPanel({
           scenario: s,
           run,
           failures: comparabilityFailures({ scenario: a, run: runA }, { scenario: s, run }),
+          notes: comparabilityNotes({ scenario: a, run: runA }, { scenario: s, run }),
         };
       });
   }, [a, runA, withResults, runsByScenario]);
@@ -353,6 +357,10 @@ export function CompareScenariosPanel({
         {focus && focus.failures.length > 0 ? (
           <MobileNote tone="caveat">
             {nameOf(focus.scenario)}: {focus.failures.join(" · ")}
+          </MobileNote>
+        ) : focus && focus.notes.length > 0 && !shortfall ? (
+          <MobileNote tone="caveat">
+            {nameOf(focus.scenario)}: {focus.notes.join(" · ")}
           </MobileNote>
         ) : multiple && !shortfall ? (
           <MobileNote tone="caveat">{multiple}</MobileNote>
@@ -594,6 +602,13 @@ export function CompareScenariosPanel({
                 excludes 0. Click a scenario for its full paired table.
               </span>
               {multiple ? <span>{multiple}</span> : null}
+              {ranked
+                .filter((c) => c.notes.length > 0)
+                .map((c) => (
+                  <span key={c.id}>
+                    {nameOf(c.scenario)}: {c.notes.join(" · ")}
+                  </span>
+                ))}
             </div>
           </>
         )}
