@@ -20,6 +20,7 @@ A single material can now be disrupted: every supplier's deliveries of that mate
 **Changed under this version without a bump:**
 
 - 2026-10-21 · Tier 2 — The nexus battery (`scsim.stress.nexus`, PLAN.md §27 WP 17.2): every supplier and every supplied material disrupted alone under one shared scenario — a full outage from week 26, or the first week after warm-up if later, for each of 2–9 weeks — with the lost sales in € paired against the undisrupted run, ranked by the average over the eight durations. The scenario is exported to the registry as `nexus_scenario`. A new library entry point only: no existing run, KPI or frozen reference run moved.
+- 2026-10-27 · Tier 2 — The nexus battery can run a declared variant of its shared scenario — another start week and/or another set of outage durations (`nexus_variant`), owner-requested for one 5-week outage from week 30 — stored whole beside its own hash; and a stored battery now records the root seed it ran on. The shared scenario and every result of it are unchanged: no existing run, KPI or frozen reference run moved.
 
 ## 0.8.0 · 2026-10-04 · Tier 3
 

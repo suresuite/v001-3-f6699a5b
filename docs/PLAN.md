@@ -24905,6 +24905,29 @@ errors, identical to `main`'s, none in a changed file.
 deploys on merge) and an active Validated Model on `Project AA - ver3`. Until then the card shows
 "Not prepared for this project yet" on every project.
 
+### WP 17.4 follow-up — a declared variant, and the first battery requested for Aumovio · 2026-10-27 · no migration · engine 0.8.1 amendment
+
+**Owner direction**: run the battery for `Aumovio` on Validated Model `2026Q4-4`, ONE 5-week outage
+from week 30, one replication, the seed recorded so more replications can follow on the same seed.
+
+**What changed.** `nexus_variant` (start week and/or durations; nothing else may vary) and a `spec`
+argument through `run_nexus_battery`, `rank_rows` and `merge_shards`, the default unchanged; the
+battery's summary records its root seed. The job takes `model_code`, `seed`, `start_week` and
+`durations`; its report no longer assumes 2/5/9-week columns. The card writes "5 weeks · 1
+replication · seed N". §27.2 rule 1 now names the variant. Recorded as a second 0.8.1 amendment.
+
+**What the previous package promised versus what this one found.**
+1. **The store was already ready for a variant**: `analysis_publish_nexus_stress` validates rows
+   against the RUN's declared `durations_weeks`, and the card reads its columns from them — so no
+   migration. The engine and the job were the only places the scenario was fixed.
+2. **The job's report would have failed on any other duration set** (it indexed `'2'`, `'5'`, `'9'`).
+3. **"More seeds later" needs no pooling**: replication streams are keyed by (seed, replication), so a
+   later battery with N replications on the same seed contains the one-replication battery exactly.
+4. **No battery has been published for any project yet**; this request is the first.
+
+**Gate results.** scsim 587, sim-worker 192 (the job's eight), vitest green; wheels, release report
+(no KPI changed), change record, notebook demo regenerated and `--check` current.
+
 ## 17. Sequencing
 
 | Phase | WPs | Focus | Blocks | Status |
@@ -27934,7 +27957,7 @@ Read against the code on 2026-10-21, base `72cc760`:
 
 | # | Rule |
 |---|---|
-| 1 | **One scenario, authored once.** The shared scenario — start week 26, durations 2–9 inclusive, full outage, effect, measure, replication budget — is ONE declared spec (`scsim/scsim/stress/nexus.py` `NEXUS_SCENARIO`, exported to the registry and read by the runner, the store's `params`, the card and the manual). **The start week is `max(26, t_w + 1)` in absolute simulation weeks (owner decision, 2026-10-21)**: week 26 when the warm-up has ended by then, otherwise the first week after it — a disruption never starts inside the warm-up. `t_w` is adopted ONCE from the clean reference and shared by every cell, so all targets are hit in the same week. Because the start then lies 1–26 weeks into the 52-week KPI window, a 9-week outage always leaves at least 17 window weeks to measure recovery. The adopted `t_w` and the start week it produced are stored with the battery and shown in the baseline. |
+| 1 | **One scenario, authored once.** The shared scenario — start week 26, durations 2–9 inclusive, full outage, effect, measure, replication budget — is ONE declared spec (`scsim/scsim/stress/nexus.py` `NEXUS_SCENARIO`, exported to the registry and read by the runner, the store's `params`, the card and the manual). **The start week is `max(26, t_w + 1)` in absolute simulation weeks (owner decision, 2026-10-21)**: week 26 when the warm-up has ended by then, otherwise the first week after it — a disruption never starts inside the warm-up. `t_w` is adopted ONCE from the clean reference and shared by every cell, so all targets are hit in the same week. Because the start then lies 1–26 weeks into the 52-week KPI window, a 9-week outage always leaves at least 17 window weeks to measure recovery. The adopted `t_w` and the start week it produced are stored with the battery and shown in the baseline. **A declared variant may replace the start week and/or the durations, and nothing else (owner, 2026-10-27 — Aumovio: one 5-week outage from week 30)**: `nexus_variant` builds it from `NEXUS_SCENARIO`, the battery stores it whole in `params.scenario` beside its own hash, the store validates rows against the run's own declared durations, and the card reads its columns from it. The start rule stays `max(start, t_w + 1)`. With one duration, the Average is that duration's cell. The battery also records its root seed: replication k draws from (seed, k), so a later battery with more replications on the same seed contains an earlier one exactly. |
 | 2 | **A disruption is a full outage of ONE target, and the only targets are SUPPLIERS and the MATERIALS they supply (owner, 2026-10-21).** Not sub-assemblies (made in-house, no supply link), not products, not customers, not the plant. Lead-time-extension semantics (§3.7: the target ships nothing in the window; in-transit units are deferred, never destroyed). A **supplier** target stops everything that supplier ships; a **material** target stops every supply link of that material and nothing else (D311). |
 | 3 | **The project's policies run, unchanged.** Every cell runs the policy version the battery binds through the same mapper as a platform run (`page-equals-run`): safety stock and reorder rules, backup supplier (P-S.1), multi-sourcing (P-S.2), detection lag and early warning (P-S.4), allocation (P-C.2), unmet-demand handling (P-C.1), the project's supply-chain model (D309). Lost sales are therefore what the chain loses *after* its own mitigations — which is the point. |
 | 4 | **Lost sales are incremental and paired.** Per cell and replication: `Δ lost sales = cell − clean reference`, on the same seeds (CRN), in **value (€, `lost_sales_value`) — the measure every table and ranking uses (owner decision, 2026-10-21)** — with a confidence interval; `lost_units` is stored beside it and not ranked on. Beside it: peak backlog, fill-rate drop over the window, time to recover. A target whose Δ is zero says WHY at display — absorbed by stock/policy, or unmet demand backordered rather than lost (P-C.1). |

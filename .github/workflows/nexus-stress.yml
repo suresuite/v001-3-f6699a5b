@@ -26,8 +26,10 @@ name: Nexus stress battery
 # committed wheels, so a runner image change cannot move a figure.
 #
 # TRIGGER: push `.github/nexus-stress-request` (key=value lines: project_name=,
-# optional model_validation_id=, dataset_version_id=, replications=,
-# actor_email=) — works from any branch — or run it by hand (default branch).
+# optional model_code= (e.g. 2026Q4-4) or model_validation_id=, dataset_version_id=,
+# replications=, seed=, start_week=, durations= (e.g. 5, 2,4 or 2-9), actor_email=)
+# — works from any branch — or run it by hand (default branch). Blank start_week
+# and durations mean the shared scenario (week 26, 2–9 weeks).
 # The writer exists in production only after migration `20261021000001` deploys.
 
 on:
@@ -41,6 +43,18 @@ on:
         required: true
       model_validation_id:
         description: "Validated Model id (blank = the project's active model)"
+        default: ""
+      model_code:
+        description: "Validated Model code, e.g. 2026Q4-4 (instead of the id)"
+        default: ""
+      seed:
+        description: "Root seed (blank = the model protocol's)"
+        default: ""
+      start_week:
+        description: "Outage start week (blank = 26)"
+        default: ""
+      durations:
+        description: "Outage durations in weeks: 5, 2,4 or 2-9 (blank = 2-9)"
         default: ""
       dataset_version_id:
         description: "Data version id (blank = the model's own)"
@@ -80,12 +94,20 @@ jobs:
             get() { grep -oP "^$1=\K.+" .github/nexus-stress-request | tail -1 || true; }
             echo "project_name=$(get project_name)" >> "$GITHUB_OUTPUT"
             echo "model_validation_id=$(get model_validation_id)" >> "$GITHUB_OUTPUT"
+            echo "model_code=$(get model_code)" >> "$GITHUB_OUTPUT"
+            echo "seed=$(get seed)" >> "$GITHUB_OUTPUT"
+            echo "start_week=$(get start_week)" >> "$GITHUB_OUTPUT"
+            echo "durations=$(get durations)" >> "$GITHUB_OUTPUT"
             echo "dataset_version_id=$(get dataset_version_id)" >> "$GITHUB_OUTPUT"
             echo "replications=$(get replications)" >> "$GITHUB_OUTPUT"
             echo "actor_email=$(get actor_email)" >> "$GITHUB_OUTPUT"
           else
             echo "project_name=${{ inputs.project_name }}" >> "$GITHUB_OUTPUT"
             echo "model_validation_id=${{ inputs.model_validation_id }}" >> "$GITHUB_OUTPUT"
+            echo "model_code=${{ inputs.model_code }}" >> "$GITHUB_OUTPUT"
+            echo "seed=${{ inputs.seed }}" >> "$GITHUB_OUTPUT"
+            echo "start_week=${{ inputs.start_week }}" >> "$GITHUB_OUTPUT"
+            echo "durations=${{ inputs.durations }}" >> "$GITHUB_OUTPUT"
             echo "dataset_version_id=${{ inputs.dataset_version_id }}" >> "$GITHUB_OUTPUT"
             echo "replications=${{ inputs.replications }}" >> "$GITHUB_OUTPUT"
             echo "actor_email=${{ inputs.actor_email }}" >> "$GITHUB_OUTPUT"
@@ -96,6 +118,10 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           PROJECT_NAME: ${{ steps.params.outputs.project_name }}
           MODEL_ID: ${{ steps.params.outputs.model_validation_id }}
+          MODEL_CODE: ${{ steps.params.outputs.model_code }}
+          SEED: ${{ steps.params.outputs.seed }}
+          START_WEEK: ${{ steps.params.outputs.start_week }}
+          DURATIONS: ${{ steps.params.outputs.durations }}
           DATASET_ID: ${{ steps.params.outputs.dataset_version_id }}
           REPS: ${{ steps.params.outputs.replications }}
           ACTOR_EMAIL: ${{ steps.params.outputs.actor_email }}
@@ -105,6 +131,10 @@ jobs:
           fi
           ARGS=(--project-name "$PROJECT_NAME" --replications "${REPS:-10}" --out bundle.json)
           [ -n "$MODEL_ID" ] && ARGS+=(--model-id "$MODEL_ID")
+          [ -n "$MODEL_CODE" ] && ARGS+=(--model-code "$MODEL_CODE")
+          [ -n "$SEED" ] && ARGS+=(--seed "$SEED")
+          [ -n "$START_WEEK" ] && ARGS+=(--start-week "$START_WEEK")
+          [ -n "$DURATIONS" ] && ARGS+=(--durations "$DURATIONS")
           [ -n "$DATASET_ID" ] && ARGS+=(--dataset-version-id "$DATASET_ID")
           [ -n "$ACTOR_EMAIL" ] && ARGS+=(--actor-email "$ACTOR_EMAIL")
           python scripts/nexus/nexus_job.py prepare "${ARGS[@]}"

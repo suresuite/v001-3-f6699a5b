@@ -26,6 +26,8 @@ from scsim.stress.nexus import (
     NexusTarget,
     all_targets,
     merge_shards,
+    nexus_scenario_hash,
+    nexus_variant,
     run_nexus_battery,
     start_week_for,
 )
@@ -172,3 +174,44 @@ def test_the_stored_shape(battery):
     row = battery.results()[0]
     assert set(row) == {"entity_type", "entity_id", "metrics"}
     assert set(row["metrics"]["by_duration"]) == {str(d) for d in NEXUS_SCENARIO["durations_weeks"]}
+
+
+def test_a_declared_variant_runs_one_duration_from_its_own_week():
+    # Owner-requested: one 5-week outage from week 30, everything else shared.
+    spec = nexus_variant(start_week=30, durations_weeks=[5])
+    assert spec["durations_weeks"] == [5] and spec["start_week"] == 30
+    assert {k: v for k, v in spec.items() if k not in ("start_week", "durations_weeks")} == \
+        {k: v for k, v in NEXUS_SCENARIO.items() if k not in ("start_week", "durations_weeks")}
+    assert nexus_scenario_hash(spec) != nexus_scenario_hash()
+    b = run_nexus_battery(scenario(BACKUP, horizon=100, analysis_window=60), spec=spec)
+    assert b.start_week == 30
+    assert all(sorted(r.by_duration) == [5] and r.average_eur == r.by_duration[5]["mean"] for r in b.rows)
+    s = b.summary()
+    assert s["scenario"] == spec and s["scenario_hash"] == nexus_scenario_hash(spec)
+    assert merge_shards([b.results()], spec) == b.results()
+
+
+def test_the_default_is_unchanged_by_the_variant_machinery(battery):
+    assert nexus_variant() == NEXUS_SCENARIO
+    assert battery.summary()["scenario_hash"] == nexus_scenario_hash()
+    assert sorted(battery.rows[0].by_duration) == NEXUS_SCENARIO["durations_weeks"]
+
+
+def test_a_bad_variant_is_refused():
+    with pytest.raises(NexusBatteryError):
+        nexus_variant(durations_weeks=[])
+    with pytest.raises(NexusBatteryError):
+        nexus_variant(start_week=0)
+
+
+def test_the_seed_and_replications_are_recorded():
+    # Replication k draws from (seed, k) (stats/seeds.py, keyed — never by
+    # sequential spawning), so seed 1 now and more replications later on the same
+    # seed is one battery with more replications. The battery records both.
+    spec = nexus_variant(durations_weeks=[5])
+    t = [NexusTarget("supplier", "s1")]
+    one = run_nexus_battery(scenario(THIN, model_seeds=1), targets=t, spec=spec)
+    three = run_nexus_battery(scenario(THIN, model_seeds=3), targets=t, spec=spec)
+    assert (one.replications, three.replications) == (1, 3)
+    assert one.rows[0].by_duration[5]["n"] == 1 and three.rows[0].by_duration[5]["n"] == 3
+    assert one.summary()["seed"] == three.summary()["seed"] == 42
