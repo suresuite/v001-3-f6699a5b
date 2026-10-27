@@ -53,6 +53,13 @@ describe('product_metrics — the analyzer measures the graph the page draws', (
     expect(by.get('M3')!.metrics.flow).toBe(0);
   });
 
+  it("a supplier's flow is what it delivers, and it is stored beside the materials", () => {
+    expect(by.get('S1')!.metrics.flow).toBe(30);
+    expect(by.get('S2')!.metrics.flow).toBe(10);
+    expect(results.filter((r) => r.entity_type === 'supplier').map((r) => r.entity_id).sort())
+      .toEqual(['S1', 'S2', 'S3', 'S4']);
+  });
+
   it('the shared material is the bridge — highest betweenness among materials', () => {
     const b = (id: string) => by.get(id)!.metrics.betweenness_centrality;
     expect(b('M1')).toBeGreaterThan(b('M2'));
@@ -103,5 +110,11 @@ describe('the page reads the product-level store, not the firm table (D137)', ()
     expect(page).toContain("supabase.rpc('get_product_level_metrics'");
     expect(page).toContain("analysis_kind: 'product_metrics'");
     expect(page).not.toContain("rpc('get_network_metrics_for_materials'");
+  });
+
+  it('shows the same run twice: a material table and a supplier table', () => {
+    expect(page).toContain("r.echelon === 'material'");
+    expect(page).toContain("r.echelon === 'supplier'");
+    expect(page).toMatch(/<NetworkMetricsTable\s+echelon="supplier"/);
   });
 });

@@ -332,7 +332,7 @@ export const REFERENCE_TABLES: RefTable[] = [
       {
         "page": "ProductLevelNetwork.tsx",
         "via": "rpc get_product_level_metrics (kind product_metrics, PLAN.md §4 D313)",
-        "evidence": "src/pages/ProductLevelNetwork.tsx:287"
+        "evidence": "src/pages/ProductLevelNetwork.tsx:289"
       }
     ],
     "governance": {
@@ -19885,7 +19885,7 @@ export const REFERENCE_TABLES: RefTable[] = [
       {
         "page": "ProductLevelNetwork.tsx",
         "via": "rpc list_projects",
-        "evidence": "src/pages/ProductLevelNetwork.tsx:255"
+        "evidence": "src/pages/ProductLevelNetwork.tsx:259"
       },
       {
         "page": "ProjectIntelligence.tsx",
@@ -20716,7 +20716,7 @@ export const REFERENCE_TABLES: RefTable[] = [
       {
         "page": "ProductLevelNetwork.tsx",
         "via": "table read",
-        "evidence": "src/pages/ProductLevelNetwork.tsx:375"
+        "evidence": "src/pages/ProductLevelNetwork.tsx:385"
       }
     ],
     "governance": {

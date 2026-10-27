@@ -24942,6 +24942,21 @@ baseline; vitest 1 909 of 1 909; `audit:ui` and `check:docs` pass; eslint 282 er
 type-checked with its two remote imports stubbed; Deno itself was not available in the session.
 Deploys on merge; the first live computation happens when the page is opened on a project after that.
 
+### D313 follow-up — a supplier table beside the material table · 2026-10-27 · no migration
+
+Owner request on [suresuite/v001-3-f6699a5b#412](https://github.com/suresuite/v001-3-f6699a5b/pull/412): the
+Product-level analytics list suppliers as well as materials. No new computation: `product_metrics`
+already stores every echelon of the graph, and `get_product_level_metrics` already returns them. The
+page now keeps the run's supplier rows too, and `NetworkMetricsTable` takes an `echelon` that changes
+its words only ("Nexus Suppliers", "Supplier Name", and a supplier's weekly flow = its deliveries,
+its share of each material's demand). Both tables read one run, so they cannot disagree about
+freshness. `productMetrics.test.ts` adds the supplier flow and the page wiring. **Gap check:** none
+new; the materials' and suppliers' centralities are normalised over the same whole graph, so they are
+comparable across the two tables. **Also fixed:** the first D313 commit moved `ProductLevelNetwork.tsx`'s
+lines under three sidecars' surface anchors (`projects`, `risk_data`, `analysis_results`); R12 reads the
+COMMITTED file, so the pre-commit `contract:check` passed and the commit itself would have failed it.
+The anchors are re-pointed and `contract:check` was re-run on a commit.
+
 ## 17. Sequencing
 
 | Phase | WPs | Focus | Blocks | Status |

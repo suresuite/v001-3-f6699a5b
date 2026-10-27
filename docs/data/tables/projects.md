@@ -71,7 +71,7 @@ Tier G rather than a data tier: `projects` holds no measured quantity. It is the
 | `FirmLevelNetwork.tsx` | rpc list_projects | `src/pages/FirmLevelNetwork.tsx:273` | yes |
 | `InteractiveNetworkSpace.tsx` | rpc list_projects | `src/pages/InteractiveNetworkSpace.tsx:339` | yes |
 | `ProcessLevelNetwork.tsx` | rpc list_projects | `src/pages/ProcessLevelNetwork.tsx:286` | yes |
-| `ProductLevelNetwork.tsx` | rpc list_projects | `src/pages/ProductLevelNetwork.tsx:255` | yes |
+| `ProductLevelNetwork.tsx` | rpc list_projects | `src/pages/ProductLevelNetwork.tsx:259` | yes |
 | `ProjectIntelligence.tsx` | rpc list_projects | `src/pages/ProjectIntelligence.tsx:187` | yes |
 | `ProjectPolicies.tsx` | rpc list_projects | `src/hooks/useProjects.ts:24` | yes |
 | `SimulationLab.tsx` | rpc list_projects | `src/hooks/useProjects.ts:24` | yes |
@@ -441,6 +441,6 @@ The owning organization by uuid. This is what the public /v1 API authorizes on (
 
 ---
 
-*Generated from data contract `3bf55906163f`, engine `0.8.1`,
+*Generated from data contract `abe84dd69756`, engine `0.8.1`,
 sidecar `supabase/contract/projects.contract.yaml`, table created by `20250820145734_c21e4e5b-37de-4359-9ebd-46271b89a375.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

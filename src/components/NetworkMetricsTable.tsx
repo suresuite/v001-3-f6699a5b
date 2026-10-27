@@ -10,9 +10,10 @@ interface NetworkMetric {
   uid: string;
   name: string;
   /**
-   * §4 D313 — the weekly flow through this material on the Product-level graph: the
-   * finished-goods demand propagated down the BOM to it. A material has no revenue,
-   * and the column that stood here read a FIRM's.
+   * §4 D313 — the weekly flow through this node on the Product-level graph: for a
+   * material, the finished-goods demand propagated down the BOM to it; for a
+   * supplier, its deliveries (its share of each material's demand). Neither has a
+   * revenue, and the column that stood here read a FIRM's.
    */
   flow: number | null;
   degree_centrality: number | null;
@@ -94,15 +95,40 @@ function provenanceSummary(metrics: NetworkMetric[]): string | null {
   return out;
 }
 
+/** Which echelon of the Product-level graph the table lists — the words differ, the measures do not. */
+type TableEchelon = 'material' | 'supplier';
+
+const WORDS: Record<TableEchelon, {
+  title: string; plural: string; nameHeader: string; flow: string; empty: string;
+}> = {
+  material: {
+    title: 'Nexus Materials',
+    plural: 'purchased materials',
+    nameHeader: 'Material Name',
+    flow: 'Demand propagated to the material',
+    empty: 'No purchased material',
+  },
+  supplier: {
+    title: 'Nexus Suppliers',
+    plural: 'suppliers',
+    nameHeader: 'Supplier Name',
+    flow: "The supplier's share of its materials' demand",
+    empty: 'No supplier',
+  },
+};
+
 interface NetworkMetricsTableProps {
   metrics: NetworkMetric[];
   loading?: boolean;
+  /** Defaults to `material`, the table this page always had. */
+  echelon?: TableEchelon;
 }
 
 type SortField = keyof NetworkMetric;
 type SortDirection = 'asc' | 'desc' | null;
 
-export function NetworkMetricsTable({ metrics, loading = false }: NetworkMetricsTableProps) {
+export function NetworkMetricsTable({ metrics, loading = false, echelon = 'material' }: NetworkMetricsTableProps) {
+  const words = WORDS[echelon];
   const [sortField, setSortField] = useState<SortField>('betweenness_centrality');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [showAll, setShowAll] = useState(false);
@@ -167,7 +193,7 @@ export function NetworkMetricsTable({ metrics, loading = false }: NetworkMetrics
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Network Science Metrics</CardTitle>
+          <CardTitle>Network Science Metrics - {words.title}</CardTitle>
           <CardDescription>Computing network centrality on the product-level graph…</CardDescription>
         </CardHeader>
         <CardContent>
@@ -183,12 +209,12 @@ export function NetworkMetricsTable({ metrics, loading = false }: NetworkMetrics
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Network Science Metrics</CardTitle>
-          <CardDescription>No network metrics are stored for this graph's materials.</CardDescription>
+          <CardTitle>Network Science Metrics - {words.title}</CardTitle>
+          <CardDescription>No network metrics are stored for this graph's {words.plural}.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="text-center text-muted-foreground py-8">
-            No purchased material on the product-level graph has computed metrics yet. Use
+            {words.empty} on the product-level graph has computed metrics yet. Use
             Recalculate to compute them; a project whose lanes are empty must be combined first.
           </div>
         </CardContent>
@@ -199,11 +225,11 @@ export function NetworkMetricsTable({ metrics, loading = false }: NetworkMetrics
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Network Science Metrics - Nexus Materials</CardTitle>
+        <CardTitle>Network Science Metrics - {words.title}</CardTitle>
         <CardDescription>
           {showAll 
-            ? `Network centrality of ${metrics.length} purchased materials on the product-level graph.`
-            : `Top ${Math.min(displayLimit, metrics.length)} of ${metrics.length} purchased materials by betweenness centrality.`
+            ? `Network centrality of ${metrics.length} ${words.plural} on the product-level graph.`
+            : `Top ${Math.min(displayLimit, metrics.length)} of ${metrics.length} ${words.plural} by betweenness centrality.`
           } Computed on the graph drawn above — suppliers, materials, finished products and customers, the BOM collapsed. Higher values indicate more critical positions.
         </CardDescription>
         {/* §4 D88 · T2 — the substitution is visible where the numbers are, not in
@@ -227,7 +253,7 @@ export function NetworkMetricsTable({ metrics, loading = false }: NetworkMetrics
                     className="h-auto p-0 font-semibold text-white hover:bg-transparent hover:text-white"
                     onClick={() => handleSort('name')}
                   >
-                    Material Name
+                    {words.nameHeader}
                     {getSortIcon('name')}
                   </Button>
                 </TableHead>
@@ -382,7 +408,7 @@ export function NetworkMetricsTable({ metrics, loading = false }: NetworkMetrics
         <div className="mt-4 text-sm text-muted-foreground">
           <div className="flex flex-wrap gap-4">
             <span><strong>Degree:</strong> Connection ratio to max possible</span>
-            <span><strong>Weekly flow:</strong> Demand propagated to the material</span>
+            <span><strong>Weekly flow:</strong> {words.flow}</span>
             <span><strong>Wtd. degree:</strong> Flow-weighted connections</span>
             <span><strong>Eigenvector:</strong> Connected to important nodes</span>
             <span><strong>Betweenness:</strong> Bridge between network clusters</span>
