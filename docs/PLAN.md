@@ -24960,6 +24960,10 @@ The anchors are re-pointed and `contract:check` was re-run on a commit.
 failed `rehearsal/910` §1: an artifact carries tables, not the rows a migration seeds, so `analysis_kinds`
 had no `product_metrics`. 910 now seeds the row `ON CONFLICT DO NOTHING`, as 570, 620 and 670 do, so the
 other two modes still test the migration's own declaration (the earlier mutation still fails there).
+**Rows per page** (owner request): both tables show 10 rows by default with a 10 / 20 / 50 / All
+selector, replacing the single "show more" toggle; the sentence above each table names the column
+the shown rows are ranked by, which had read "by betweenness centrality" whatever the sort.
+`networkMetricsTable.test.tsx`.
 
 ## 17. Sequencing
 
