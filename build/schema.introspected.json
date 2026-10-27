@@ -1,15 +1,15 @@
 {
   "$generator": "scripts/data-contract/introspect.mjs",
   "$doc": "EFFECTIVE schema replayed from supabase/migrations/*.sql in filename order. Generated — do not edit; `npm run contract:introspect -- --check` fails on drift.",
-  "migrations_found": 411,
-  "migrations_applied": 403,
+  "migrations_found": 412,
+  "migrations_applied": 404,
   "first_migration": "20250815000000_approved_users_base.sql",
-  "last_migration": "20261027000002_node_list_refresh_set_based.sql",
+  "last_migration": "20261027000003_recovery_vocabulary_reaches_engine.sql",
   "counts": {
     "tables": 94,
     "views": 8,
     "enums": 4,
-    "functions": 432,
+    "functions": 433,
     "shadowed_definitions": 4,
     "phantom_tables": 0,
     "unparsed_statements": 0,
@@ -29759,6 +29759,19 @@
       "volatility": null,
       "comment": null,
       "defined_by": "20261004000002_version_codes.sql"
+    },
+    {
+      "name": "recovery_config_canonical",
+      "signature": "recovery_config_canonical(jsonb, boolean)",
+      "args": [
+        "cfg jsonb",
+        "drop_demand_shaping boolean DEFAULT false"
+      ],
+      "returns": "jsonb LANGUAGE plpgsql IMMUTABLE SET search_path TO",
+      "security_definer": false,
+      "volatility": "IMMUTABLE",
+      "comment": "§4 D114 · D315. A recovery playbook in the engine's vocabulary: `responses` → ",
+      "defined_by": "20261027000003_recovery_vocabulary_reaches_engine.sql"
     },
     {
       "name": "refresh_node_list_for_project",

@@ -1144,7 +1144,7 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
       },
       {
         "id": "the-levers",
-        "title": "The 6 strategies"
+        "title": "The 5 strategies"
       },
       {
         "id": "playbooks",
@@ -1723,7 +1723,7 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
     ]
   },
   "engine-versions": {
-    "minutes": 20,
+    "minutes": 22,
     "sections": [
       {
         "id": "how-to-read",

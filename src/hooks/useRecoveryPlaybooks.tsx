@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import type { RecoveryConfig } from "@/lib/sim/recoveryScore";
+import type { RecoveryConfig } from "@/lib/sim/recovery";
 
 export interface RecoveryPlaybook {
   id: string;

@@ -227,6 +227,8 @@ class CompiledModel:
         )
         self.link_cost = np.array([l.cost for l in links])
         self.link_moq = np.array([l.moq for l in links])
+        # A scenario's backup-only source (P-S.1): never primary, no planned share.
+        self.link_backup_only = np.array([l.backup_only for l in links], dtype=bool)
         self.link_lt_dist = [l.lead_time_dist for l in links]
         # The bounded shapes (triangular, uniform; PLAN.md §26 WP 16.1) carry
         # their bounds, shifted by the lane's transit leg exactly as the planning

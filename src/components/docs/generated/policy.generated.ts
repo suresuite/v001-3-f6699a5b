@@ -3715,7 +3715,7 @@ export type RecoveryLever = {
   description: string | null;
   plugin: string | null;
   inGrid: boolean;
-  params: { key: string; label: string; unit: string; default: number; hint: string | null }[];
+  params: { key: string; label: string; unit: string; default: number | null; hint: string | null }[];
 };
 
 export type RecoveryLevers = {
@@ -3728,7 +3728,7 @@ export const RECOVERY_LEVERS: RecoveryLevers = {
     {
       "key": "dual_source_activate",
       "label": "Backup supplier",
-      "description": "Release orders to a predefined backup supplier when the primary is disrupted",
+      "description": "While a supplier is disrupted, reroute its materials' orders to another qualified supplier (P-S.1)",
       "plugin": "backup_supplier",
       "inGrid": true,
       "params": [
@@ -3736,31 +3736,23 @@ export const RECOVERY_LEVERS: RecoveryLevers = {
           "key": "backup_lead_time_weeks",
           "label": "Backup supplier lead time",
           "unit": "weeks",
-          "default": 6,
-          "hint": "Standard lead time assumed for all backup suppliers (Ts')"
+          "default": null,
+          "hint": "Leave blank to use each backup lane's own lead time; a number overrides every backup's (Ts')"
         }
       ]
     },
     {
       "key": "safety_stock_drawdown",
       "label": "Safety stock",
-      "description": "ABC-XYZ classified buffer stock protects against deep disruptions; incurs annual holding cost",
+      "description": "Not simulated yet: the engine has no recovery model for safety stock — the buffer is the /policies safety stock",
       "plugin": null,
       "inGrid": false,
-      "params": [
-        {
-          "key": "holding_cost_pct",
-          "label": "Annual holding cost",
-          "unit": "% of material cost",
-          "default": 20,
-          "hint": "Inventory carrying cost as a percentage of material value per year (hm)"
-        }
-      ]
+      "params": []
     },
     {
       "key": "capacity_flex",
       "label": "Overtime production",
-      "description": "Activate overtime shifts when the revenue gain exceeds the overtime cost",
+      "description": "Activate overtime shifts when the revenue gain exceeds the overtime cost (P-P.5)",
       "plugin": "short_term_capacity",
       "inGrid": true,
       "params": [
@@ -3774,11 +3766,11 @@ export const RECOVERY_LEVERS: RecoveryLevers = {
       ]
     },
     {
-      "key": "demand_shaping",
+      "key": "allocate_materials",
       "label": "Material reallocation",
-      "description": "Revenue-maximising material allocation LP over a rolling planning horizon",
-      "plugin": null,
-      "inGrid": false,
+      "description": "Revenue-maximising material allocation LP over a rolling planning horizon during a disruption (P-P.9)",
+      "plugin": "material_allocation",
+      "inGrid": true,
       "params": [
         {
           "key": "allocation_horizon_weeks",
@@ -3799,7 +3791,7 @@ export const RECOVERY_LEVERS: RecoveryLevers = {
     {
       "key": "mode_shift",
       "label": "Expedite shipments",
-      "description": "Accelerate in-transit shipments when expedite revenue exceeds expedite cost",
+      "description": "Accelerate in-transit shipments when expedite revenue exceeds expedite cost (P-T.2)",
       "plugin": "expedited_shipments",
       "inGrid": true,
       "params": [
@@ -3811,26 +3803,13 @@ export const RECOVERY_LEVERS: RecoveryLevers = {
           "hint": "Premium to accelerate in-transit materials to the current week (Cexp)"
         }
       ]
-    },
-    {
-      "key": "reroute",
-      "label": "Network rerouting",
-      "description": "Redirect flows through alternative network paths",
-      "plugin": "expedited_shipments",
-      "inGrid": true,
-      "params": []
     }
   ],
   "engineOnly": [
     {
       "key": "early_warning",
       "plugin": "early_warning_failover",
-      "inGrid": true
-    },
-    {
-      "key": "allocate_materials",
-      "plugin": "material_allocation",
-      "inGrid": true
+      "inGrid": false
     }
   ]
 };

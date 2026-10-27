@@ -36,6 +36,33 @@ export type EngineChange = {
 /** Newest first. */
 export const ENGINE_CHANGES: EngineChange[] = [
   {
+    "version": "0.8.2",
+    "date": "2026-10-27",
+    "commit": null,
+    "tier": 2,
+    "adr": null,
+    "summary": "A scenario's recovery playbook now runs as it reads. \"Recovery enabled\" off switches every recovery strategy off (it was never read, so ticked strategies ran anyway). Each strategy's cost or horizon field reaches its policy instead of being ignored, and the backup lead time can be left blank to mean each backup supplier's own. A backup supplier can be entered on a scenario for a material no uploaded supplier backs up: it is used only while the primary is disrupted and is never made the primary. A strategy the engine does not model is named in the run's notes instead of being silently dropped.",
+    "technical": "`recovery_responses()` gates `_map_policies` on `recovery.enabled`. `backup_lead_time_weeks` → P-S.1 `backup_lead_time_weeks` (blank = the link's own), `overtime_cost_pct` → P-P.5 `overtime_premium_pct_of_price`, `expedite_cost_pct` → P-T.2 `premium_pct_of_cost`, `allocation_horizon_weeks` / `annual_labor_cost` → P-P.9 `window_weeks` / `annual_cost`. `SupplierLink.backup_only` (default false): `primary_rank` ranks it after every uploaded link, `CompiledModel.link_backup_only` excludes it from P-S.2's planned shares, and `_scenario_backup_links` adds one per `recovery.backup_lanes` entry only while `dual_source_activate` is on, with a `Supplier` for an id no uploaded lane names. A `safety_stock_drawdown` or `demand_shaping` response earns a mapping warning.",
+    "policies": [
+      "P-S.1",
+      "P-S.2",
+      "P-P.5",
+      "P-P.9",
+      "P-T.2"
+    ],
+    "kpis": [],
+    "goldensMoved": [],
+    "comparable": "changed-for",
+    "comparability": "Results change only for a scenario whose playbook switches recovery off while ticking strategies, states a strategy cost or horizon, or enters a backup supplier; every other scenario runs exactly as before (every frozen reference run kept its digest).",
+    "refs": [
+      "D114",
+      "D315"
+    ],
+    "amendments": [],
+    "backfilled": false,
+    "unrecordedChanges": null
+  },
+  {
     "version": "0.8.1",
     "date": "2026-10-21",
     "commit": null,

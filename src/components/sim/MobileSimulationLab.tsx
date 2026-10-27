@@ -86,7 +86,7 @@ import { StressTestDrawer, type StressTestPreset } from "./StressTestCard";
 import { SurrogateCard } from "./SurrogateCard";
 import type { TrainingTotals } from "@/lib/sim/surrogateTraining";
 import { ReadOnlyFrame, type ReadOnlyAction } from "./ReadOnlyFrame";
-import { RESPONSE_LABELS, type RecoveryConfig, type RecoveryResponseKey } from "@/lib/sim/recoveryScore";
+import { RESPONSE_LABELS, type InboundLane, type RecoveryConfig, type RecoveryResponseKey } from "@/lib/sim/recovery";
 import { kpiDisplay } from "@/lib/sim/kpiDisplay";
 import { useTimeUnit, UNIT_LABEL_PLURAL } from "@/hooks/useTimeUnit";
 import { formatDuration, formatWeek } from "@/lib/sim/planningTime";
@@ -192,6 +192,8 @@ export interface MobileSimulationLabProps {
   settingsValidateLink?: boolean;
   findingsSource: "pre-run check" | "gate rejection";
   supplierIds: string[];
+  /** The project's inbound lanes, for the Backup supplier panel. */
+  inboundLanes?: InboundLane[];
   latestRun: SimulationRun | null;
   reps: Replication[];
   runVersionLabel: string | null;
@@ -262,6 +264,7 @@ export function MobileSimulationLab(props: MobileSimulationLabProps) {
     settingsValidateLink = true,
     findingsSource,
     supplierIds,
+    inboundLanes,
     latestRun,
     reps,
     runVersionLabel,
@@ -1059,6 +1062,8 @@ export function MobileSimulationLab(props: MobileSimulationLabProps) {
                   scenario={selected}
                   projectRecovery={projectRecovery}
                   onSave={onSaveScenario}
+                  supplierIds={supplierIds}
+                  inboundLanes={inboundLanes}
                 />
               </ReadOnlyFrame>
             </div>

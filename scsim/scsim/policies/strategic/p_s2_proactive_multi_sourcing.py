@@ -162,7 +162,8 @@ class ProactiveMultiSourcing(PolicyPlugin):
         shares = np.zeros(m.n_links)
         enabled = np.zeros(m.n_mats, dtype=bool)
         for mat in range(m.n_mats):
-            links = m.links_of_mat[mat]
+            # A scenario's backup-only source is P-S.1's alone: it takes no planned share.
+            links = m.links_of_mat[mat][~m.link_backup_only[m.links_of_mat[mat]]]
             if len(links) < 2:
                 continue
             mat_id = m.mat_ids[mat]

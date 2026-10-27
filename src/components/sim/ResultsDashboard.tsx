@@ -8,9 +8,8 @@ import { InventoryOverTime } from "./InventoryOverTime";
 import { CapacityOverTime, type CapacityBinding } from "./CapacityOverTime";
 import { ItemSeriesExplorer } from "./ItemSeriesExplorer";
 import { ReplicationSeedExplorer } from "./ReplicationSeedExplorer";
-import { RecoveryImpactCard } from "./RecoveryImpactCard";
 import type { Replication, SimulationRun } from "@/hooks/useSimulationRun";
-import type { RecoveryConfig, DisruptionEvent } from "@/lib/sim/recoveryScore";
+import type { RecoveryConfig, DisruptionEvent } from "@/lib/sim/recovery";
 import { CredibilityBadge } from "./CredibilityBadge";
 import { RunRetentionLine } from "./RunRetentionLine";
 import { M, MobileChip, MobilePanel, MobileRow } from "@/components/mobile";
@@ -96,8 +95,6 @@ export function ResultsDashboard({
   // / day 10 from `_meta.disruption_count` and score those (a number with no
   // source — T1; audit WP 5 handoff). Its horizon likewise came from a 90-day
   // default; it now needs a real one.
-  const disruptions: DisruptionEvent[] = scenario?.disruption_schedule ?? [];
-  const horizonDays = scenario?.horizon_days ?? meta?.horizon_days ?? null;
   return (
     <div className={cn('flex flex-col', skin ? 'm-cq gap-2' : 'gap-3')}>
       {skin ? (
@@ -159,13 +156,9 @@ export function ResultsDashboard({
         )
       )}
 
-      {header.showAggregates && meta?.recovery && disruptions.length > 0 && horizonDays != null && (
-        <RecoveryImpactCard
-          recovery={meta.recovery}
-          disruptions={disruptions}
-          horizonDays={horizonDays}
-        />
-      )}
+      {/* The "Recovery impact" card stood here: its with/without KPIs were computed
+          from hand-set weights, not by a run (§4 D114). A real comparison is a paired
+          run without the playbook — Compare scenarios. */}
       {!header.showAggregates ? null : (<>
       {/* Inventory over time (G19 / WP 9.1): materials and finished goods,
           in units or value. Plain weekly scalars, so — unlike the per-item
