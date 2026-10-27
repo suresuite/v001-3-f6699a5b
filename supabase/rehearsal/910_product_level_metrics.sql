@@ -25,6 +25,13 @@ DECLARE
   v_row      record;
   r          text;
 BEGIN
+  -- The catalog's rows are data: a base built from the artifact this branch writes
+  -- (`--since HEAD`) has the table without them (as 570, 620, 670). DO NOTHING, so on
+  -- a database the migration ran on, §1 still reads the migration's own row.
+  INSERT INTO public.analysis_kinds (kind, input_scope, fallback_scope, fallback_rule, description) VALUES
+    ('product_metrics', 'process', NULL, NULL, 'rehearsal seed')
+  ON CONFLICT (kind) DO NOTHING;
+
   INSERT INTO public.approved_users (id, email, name, password_hash) VALUES
     (v_user, 'r910@example.invalid', 'R910', 'x'),
     (v_stranger, 'r910s@example.invalid', 'R910 stranger', 'x');

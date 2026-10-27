@@ -24956,6 +24956,10 @@ comparable across the two tables. **Also fixed:** the first D313 commit moved `P
 lines under three sidecars' surface anchors (`projects`, `risk_data`, `analysis_results`); R12 reads the
 COMMITTED file, so the pre-commit `contract:check` passed and the commit itself would have failed it.
 The anchors are re-pointed and `contract:check` was re-run on a commit.
+**And CI's third rehearsal mode** (`--since HEAD`, the base built from the artifact this branch writes)
+failed `rehearsal/910` §1: an artifact carries tables, not the rows a migration seeds, so `analysis_kinds`
+had no `product_metrics`. 910 now seeds the row `ON CONFLICT DO NOTHING`, as 570, 620 and 670 do, so the
+other two modes still test the migration's own declaration (the earlier mutation still fails there).
 
 ## 17. Sequencing
 
