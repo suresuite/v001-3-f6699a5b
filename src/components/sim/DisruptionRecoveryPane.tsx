@@ -16,8 +16,10 @@ import {
   type InboundLane,
   type RecoveryConfig,
   type RecoveryResponseKey,
+  type SafetyStockWindow,
 } from "@/lib/sim/recovery";
 import { BackupSupplierPanel } from "./BackupSupplierPanel";
+import { SafetyStockPanel } from "./SafetyStockPanel";
 import type { Scenario } from "@/hooks/useScenarios";
 import { useRecoveryPlaybooks, type RecoveryPlaybook } from "@/hooks/useRecoveryPlaybooks";
 import { useGlobalProject } from "@/hooks/useGlobalProject";
@@ -108,7 +110,7 @@ const STRATEGY_PARAMS: Partial<Record<RecoveryResponseKey, StrategyParamDef[]>> 
 
 const STRATEGY_DESCRIPTIONS: Record<RecoveryResponseKey, string> = {
   dual_source_activate: "While a supplier is disrupted, reroute its materials' orders to another qualified supplier (P-S.1)",
-  safety_stock_drawdown: "Not simulated yet: the engine has no recovery model for safety stock — the buffer is the /policies safety stock",
+  safety_stock_drawdown: "Hold extra cover for the disrupted supplier's materials between two weeks, its holding cost charged only then (P-P.3)",
   capacity_flex: "Activate overtime shifts when the revenue gain exceeds the overtime cost (P-P.5)",
   allocate_materials: "Revenue-maximising material allocation LP over a rolling planning horizon during a disruption (P-P.9)",
   mode_shift: "Accelerate in-transit shipments when expedite revenue exceeds expedite cost (P-T.2)",
@@ -316,6 +318,9 @@ export function DisruptionRecoveryPane({
   const backupLanes = (Array.isArray(overrides.backup_lanes)
     ? overrides.backup_lanes
     : effective.backup_lanes ?? []) as BackupLane[];
+  const ssWindows = (Array.isArray(overrides.safety_stock_windows)
+    ? overrides.safety_stock_windows
+    : effective.safety_stock_windows ?? []) as SafetyStockWindow[];
 
   const show = (s: Props["sections"]) => sections === "all" || sections === s;
 
@@ -426,8 +431,8 @@ export function DisruptionRecoveryPane({
                         </span>
                         {notSimulated && active && (
                           <span className="text-[11px] text-muted-foreground">
-                            Saved on the scenario; the engine has no recovery model for it, so the run says so and
-                            nothing changes. The buffer the run holds is the safety stock set on /policies.
+                            Saved on the scenario; the engine has no model for it, so the run says so and nothing
+                            changes.
                           </span>
                         )}
                       </div>
@@ -456,6 +461,19 @@ export function DisruptionRecoveryPane({
                             </div>
                           );
                         })}
+                      </div>
+                    )}
+
+                    {/* P-P.3 buffer windows for the disrupted suppliers' materials */}
+                    {active && opt === "safety_stock_drawdown" && (
+                      <div className="border-t border-border/60 px-3 py-3">
+                        <SafetyStockPanel
+                          schedule={scenario.disruption_schedule}
+                          supplierIds={supplierIds ?? []}
+                          inbound={inboundLanes ?? []}
+                          windows={ssWindows}
+                          onChange={(next) => patchOverride("safety_stock_windows", next)}
+                        />
                       </div>
                     )}
 

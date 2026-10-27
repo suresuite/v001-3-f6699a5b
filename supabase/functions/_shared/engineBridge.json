@@ -7,7 +7,8 @@
     "dual_source_activate": "backup_supplier",
     "capacity_flex": "short_term_capacity",
     "early_warning": "early_warning_failover",
-    "allocate_materials": "material_allocation"
+    "allocate_materials": "material_allocation",
+    "safety_stock_drawdown": "safety_stock_materials"
   },
   "inventory_type_to_policy_type": {
     "min_max": "min_max",

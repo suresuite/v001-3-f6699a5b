@@ -36,7 +36,7 @@
       "path": "scsim/scsim/io/project_map.py",
       "symbols": "_build_settings, _map_policies, from_project_data",
       "manual_page": "how-policies-work",
-      "sha256": "0c3ba0c28ceb209ed9ce5d2e0cddd45b9399d89e03282acaed04f28e4c680d1e"
+      "sha256": "056267ab0c0d99eb29c64dab32c1d1d615d4f57285cc2fd62cdc7b3c1812ebed"
     },
     {
       "path": "sim-worker/sim_worker/local.py",
@@ -114,7 +114,7 @@
       "path": "scsim/scsim/policies/strategic/p_p3_safety_stock.py",
       "symbols": "apply",
       "manual_page": "how-policies-work",
-      "sha256": "d060c6ec8675249bdc53d4e128fcd62c944f2e1a5a1b7a46f454c25a6fa01fce"
+      "sha256": "f22d656ccf366fd078f355ac5ce00a7703cc94196b5071c4a99bb1b2bb94dd03"
     }
   ],
   "initial_commit": "7698ac2d541242de35383d488cfa3cc1ab5a31c2"

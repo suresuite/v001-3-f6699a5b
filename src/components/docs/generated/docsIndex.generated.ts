@@ -1136,7 +1136,7 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
     ]
   },
   "recovery-playbooks": {
-    "minutes": 5,
+    "minutes": 4,
     "sections": [
       {
         "id": "what-it-is",
@@ -1723,7 +1723,7 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
     ]
   },
   "engine-versions": {
-    "minutes": 22,
+    "minutes": 23,
     "sections": [
       {
         "id": "how-to-read",

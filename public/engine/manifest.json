@@ -1,9 +1,9 @@
 {
-  "engine_version": "0.8.2",
-  "engine_build": "scsim-0.8.2+8beb4e82fbbb",
+  "engine_version": "0.8.3",
+  "engine_build": "scsim-0.8.3+3a5c01d64236",
   "pyodide_version": "0.26.4",
-  "wheels": ["scsim-0.8.2-py3-none-any.whl", "sim_worker-0.1.0-py3-none-any.whl"],
-  "wheel_sha256": {"scsim-0.8.2-py3-none-any.whl": "8fdb71ead3b7ada4cd6bc557521a8975792b67f27d87d3b66c4cb0c891b597e7", "sim_worker-0.1.0-py3-none-any.whl": "316920718bac00369d758ac62384fa431d2e8084d091cdae7810ff79cb71ab12"},
+  "wheels": ["scsim-0.8.3-py3-none-any.whl", "sim_worker-0.1.0-py3-none-any.whl"],
+  "wheel_sha256": {"scsim-0.8.3-py3-none-any.whl": "460a617cd3e7488c0dcd4fe493ca736e4432de9562ce75c1ef096039d021aa1a", "sim_worker-0.1.0-py3-none-any.whl": "00214acb593ef4451e9853525e83ea79ceae5872b86e0b243f8fc1e22ffc4213"},
   "pyodide_packages": ["numpy", "scipy", "pydantic", "micropip"],
   "micropip_packages": []
 }

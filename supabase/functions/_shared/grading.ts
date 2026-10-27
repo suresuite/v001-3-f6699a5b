@@ -647,7 +647,9 @@ export function activeEnginePolicies(
   const fulfil = (defaults.fulfillment ?? {}) as Row;
   const recovery = (defaults.recovery ?? {}) as Row;
 
-  const responses = Array.isArray(recovery.response)
+  // `enabled: false` switches every recovery response off — the mapper's
+  // `recovery_responses()` since engine 0.8.2 (§4 D315).
+  const responses = recovery.enabled !== false && Array.isArray(recovery.response)
     ? (recovery.response as string[])
     : [];
   for (const r of responses) {

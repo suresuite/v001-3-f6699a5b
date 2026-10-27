@@ -166,8 +166,79 @@ def test_the_engine_bridge_says_what_the_mapper_does():
     recovery_plugins = {"backup_supplier", "expedited_shipments", "short_term_capacity",
                         "early_warning_failover", "material_allocation"}
     for response, plugin in bridge.items():
+        if plugin == "safety_stock_materials":
+            # P-P.3 always runs (the /policies buffer); the response adds its windows.
+            pol = from_project_data(_base({"response": [response], "safety_stock_windows": [WINDOW]})
+                                    ).scenario.policies
+            assert pol[plugin].get("windows"), (response, pol[plugin])
+            continue
         got = set(from_project_data(_base({"response": [response]})).scenario.policies)
         assert got & recovery_plugins == {plugin}, (response, got)
-    for unmapped in ("safety_stock_drawdown", "demand_shaping"):
+    for unmapped in ("demand_shaping",):
         got = set(from_project_data(_base({"response": [unmapped]})).scenario.policies)
         assert not got & recovery_plugins, (unmapped, got)
+
+
+# ── P-P.3 disruption buffer windows (engine 0.8.3): the card's Safety stock ─────
+
+WINDOW = {"material_id": "m1", "days": 28, "start_week": 6, "end_week": 28}
+KW = dict(replications=2, horizon_days=560, warmup_mode="manual", warmup_days=70)
+
+
+def _run(recovery: dict) -> dict:
+    d = _base(recovery, **KW)
+    d.scenario.disruption_schedule = list(OUTAGE)
+    return run_scenario(from_project_data(d).scenario).aggregates
+
+
+def test_a_buffer_window_reaches_p_p3_only_when_safety_stock_is_on():
+    on = from_project_data(_base({"response": ["safety_stock_drawdown"],
+                                  "safety_stock_windows": [WINDOW]})).scenario.policies
+    assert on["safety_stock_materials"]["windows"] == [dict(WINDOW, days=28.0)]
+    for rec in ({"response": [], "safety_stock_windows": [WINDOW]},
+                {"enabled": False, "response": ["safety_stock_drawdown"], "safety_stock_windows": [WINDOW]}):
+        assert "windows" not in from_project_data(_base(rec)).scenario.policies["safety_stock_materials"]
+
+
+def test_safety_stock_on_without_a_window_is_said():
+    res = from_project_data(_base({"response": ["safety_stock_drawdown"]}))
+    assert any(w.field == "safety_stock_windows" and "nothing changes" in w.reason for w in res.warnings)
+    assert not any("no engine model" in w.reason for w in res.warnings)
+
+
+def test_a_malformed_or_foreign_window_is_skipped_with_its_reason():
+    res = from_project_data(_base({"response": ["safety_stock_drawdown"], "safety_stock_windows": [
+        {"material_id": "m1", "days": 14, "start_week": 20, "end_week": 20},   # empty window
+        {"material_id": "zz", "days": 14, "start_week": 5, "end_week": 9},     # unknown material
+    ]}))
+    assert res.scenario.policies["safety_stock_materials"]["windows"] == [
+        {"material_id": "zz", "days": 14.0, "start_week": 5, "end_week": 9}]
+    assert any(w.field == "safety_stock_windows" and "skipped" in w.reason for w in res.warnings)
+    assert any(w.field == "windows" and "does not simulate" in w.reason for w in res.warnings)
+
+
+def test_under_mrp_the_window_is_said_to_change_nothing():
+    d = _base({"response": ["safety_stock_drawdown"], "safety_stock_windows": [WINDOW]})
+    d.policies["default"]["inventory"] = {"type": "mrp"}
+    res = from_project_data(d)
+    assert any(w.field == "windows" and "MRP" in w.reason for w in res.warnings)
+
+
+def test_a_buffer_window_cuts_lost_sales_and_costs_holding_only_inside_it():
+    without = _run({"response": []})
+    with_win = _run({"response": ["safety_stock_drawdown"], "safety_stock_windows": [WINDOW]})
+    assert with_win["lost_sales_value"]["mean"] < without["lost_sales_value"]["mean"]
+    # The extra holding is the window's units at the material's weekly holding rate,
+    # for the window's weeks inside the measured window (warm-up ends at week 10):
+    # 100/wk · 28/7 = 400 units · (2.0 · 20 % / 52) · (28 − 10) weeks.
+    extra = with_win["cost_ss_holding"]["mean"] - without["cost_ss_holding"]["mean"]
+    assert abs(extra - 400 * (2.0 * 0.20 / 52.0) * 18) < 1e-6
+
+
+def test_holding_is_booked_for_the_windows_weeks_and_no_others():
+    # Two weeks, 40–41, after the outage has ended: exactly two weeks of holding.
+    late = _run({"response": ["safety_stock_drawdown"], "safety_stock_windows": [
+        dict(WINDOW, start_week=40, end_week=42)]})
+    without = _run({"response": []})
+    extra = late["cost_ss_holding"]["mean"] - without["cost_ss_holding"]["mean"]
+    assert abs(extra - 400 * (2.0 * 0.20 / 52.0) * 2) < 1e-6

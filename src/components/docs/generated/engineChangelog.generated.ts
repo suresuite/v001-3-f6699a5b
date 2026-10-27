@@ -36,6 +36,28 @@ export type EngineChange = {
 /** Newest first. */
 export const ENGINE_CHANGES: EngineChange[] = [
   {
+    "version": "0.8.3",
+    "date": "2026-10-27",
+    "commit": null,
+    "tier": 2,
+    "adr": null,
+    "summary": "Safety stock is now a real recovery strategy. For the materials a disrupted supplier ships, a scenario can hold extra days of cover between a start week and an end week: the reorder levels rise only in those weeks, so the buffer is built from orders placed at the start and arrives a lead time later, and its holding cost is charged at the material's own holding rate for those weeks only. The /policies safety stock is unchanged, and a scenario that sets no buffer runs exactly as before.",
+    "technical": "P-P.3 `windows` (`SafetyStockWindow`: material_id, days, start_week, end_week exclusive): E[D_m]·days/7 added to s and S at PH-70 while active (never to a stated level); holding h_m·c_m·units booked in `ss_holding` for active weeks. The mapper maps `recovery.safety_stock_windows` under the `safety_stock_drawdown` response (and only while recovery is enabled), skips a malformed window with its reason, and warns for a material the project does not simulate, for an MRP inventory policy (which reads no reorder levels), and for Safety stock ticked with no window. `engineBridge.json` maps the response to `safety_stock_materials`; the pre-run grader honours `enabled: false`.",
+    "policies": [
+      "P-P.3"
+    ],
+    "kpis": [],
+    "goldensMoved": [],
+    "comparable": "changed-for",
+    "comparability": "Results change only for a scenario that ticks Safety stock and sets a buffer window; every other scenario runs exactly as before (every frozen reference run kept its digest).",
+    "refs": [
+      "D315"
+    ],
+    "amendments": [],
+    "backfilled": false,
+    "unrecordedChanges": null
+  },
+  {
     "version": "0.8.2",
     "date": "2026-10-27",
     "commit": null,
