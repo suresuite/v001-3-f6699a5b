@@ -2081,7 +2081,7 @@ export const ANALYSIS_KINDS: AnalysisKind[] = [
   {
     "kind": "network_metrics",
     "computedBy": "calculate-network-science-metrics (migrated in WP 4.3)",
-    "codeVersion": "network_metrics@wp43.1",
+    "codeVersion": "network_metrics@d313.1",
     "entityType": "node",
     "note": null,
     "params": [
@@ -2139,6 +2139,33 @@ export const ANALYSIS_KINDS: AnalysisKind[] = [
     "entityType": "node",
     "note": "For every level-1 node of the process network, the nodes it reaches downstream and upstream, transitively, over `supply_chain_data_multi_tier`. Computed where the data is; the process page reads it instead of walking the graph in the browser on every selection (§4 D239).",
     "params": []
+  },
+  {
+    "kind": "product_metrics",
+    "computedBy": "calculate-network-science-metrics (analysis_kind product_metrics, §4 D313)",
+    "codeVersion": "product_metrics@d313.1",
+    "entityType": "supplier | material | product | customer",
+    "note": "Keyed on the PROCESS level, not the product level: `supply_chain_data` is rebuilt from `bom_multi_level`, which the product-level hash does not cover. Store only — no entity mirror. Read by `get_product_level_metrics`.",
+    "params": [
+      {
+        "name": "graph",
+        "type": "string",
+        "default": "product_level",
+        "meaning": "The graph measured: the Product-level view's four echelons, built by `_shared/productGraph.ts` from `supply_chain_data`'s flat lanes — the function the page draws with, so a node in the table is a node on the canvas."
+      },
+      {
+        "name": "weighted",
+        "type": "string",
+        "default": "flow",
+        "meaning": "Edge weight for the weighted measures: the lane's weekly flow, normalised to the largest edge."
+      },
+      {
+        "name": "exact",
+        "type": "boolean",
+        "default": true,
+        "meaning": "Betweenness from every source and a shifted eigenvector iteration, rather than `network_metrics`' 50-source sample and plain power iteration, which does not converge on this layered (bipartite) graph."
+      }
+    ]
   },
   {
     "kind": "prominence",

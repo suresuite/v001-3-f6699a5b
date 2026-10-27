@@ -172,6 +172,19 @@ export default function NetworkScienceMetrics() {
         </p>
       </Callout>
 
+      <Section id="product-level" title="On the Product-Level Network">
+        <P>
+          The Product-Level Network's analytics table uses the same measures on a different graph:
+          the one that page draws — suppliers, purchased materials, finished products and customers,
+          with the bill of materials collapsed. It lists the purchased materials. Edges are weighted
+          by their weekly flow rather than by revenue, and the table's <strong>Weekly flow</strong>{" "}
+          column is the finished-goods demand propagated down the BOM to each material. Betweenness
+          there counts every shortest path, not a sample. The result is stored with the version of
+          the lanes it was computed on, so a change to a price leaves it current and a change to a
+          bill of materials or a volume marks it out of date.
+        </P>
+      </Section>
+
       <Callout tone="limit" title="What these measures cannot see">
         <p>
           They are computed over the deep-tier graph you supplied, so a firm you have not discovered

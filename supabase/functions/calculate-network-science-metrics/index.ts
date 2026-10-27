@@ -3,10 +3,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.0';
 import {
   applyNodeMetrics, completeRun, failRun, getOrStart,
 } from "../_shared/analysisStore.ts";
+import { calculateCentralities } from "../_shared/centrality.ts";
+import { computeProductMetrics, LANE_COLUMNS } from "../_shared/productMetrics.ts";
 
 /** Part of the store's key. Bump when the metrics change. WP 10.1: the graph read
- *  is now the one the store names (`inputScope`), so the version moves. */
-const CODE_VERSION = 'network_metrics@wp101.1';
+ *  is now the one the store names (`inputScope`), so the version moves. §4 D313:
+ *  the computation moved to `_shared/centrality.ts`; an edge to a node outside the
+ *  node list and a self-loop are no longer folded into the adjacency. */
+const CODE_VERSION = 'network_metrics@d313.1';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -38,7 +42,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { project_id, uploaded_by } = await req.json();
+    const { project_id, uploaded_by, analysis_kind } = await req.json();
 
     if (!project_id) {
       return new Response(
@@ -52,6 +56,27 @@ serve(async (req) => {
       return new Response(JSON.stringify({
         success: false,
         error: 'uploaded_by is required: a tier-3 write must name its actor (invariant audit-actor)',
+      }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // §4 D313 — THE PRODUCT-LEVEL VIEW'S OWN METRICS. `network_metrics` computes on
+    // the firm graph (or the lane graph as a fallback) and writes onto
+    // `network_nodes`; the Product-level page showed materials by joining that
+    // FIRM table to material ids on a bare string (D137), so whenever a deep-tier
+    // network existed its table was empty. `product_metrics` computes on the graph
+    // the page DRAWS and stores into `analysis_results` only — no entity mirror,
+    // because there is no entity table whose rows are this graph's nodes.
+    if (analysis_kind === 'product_metrics') {
+      const result = await computeProductMetrics(supabase, project_id, uploaded_by, (from, to) =>
+        supabase.from('supply_chain_data').select(LANE_COLUMNS)
+          .eq('project_id', project_id).order('id', { ascending: true }).range(from, to));
+      return new Response(JSON.stringify(result.body), {
+        status: result.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (analysis_kind != null && analysis_kind !== 'network_metrics') {
+      return new Response(JSON.stringify({
+        success: false, error: `unknown analysis_kind ${analysis_kind}: network_metrics or product_metrics`,
       }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
@@ -192,7 +217,12 @@ serve(async (req) => {
     }
 
     // Calculate network science metrics for each node using effective graph
-    const metrics = calculateNetworkMetrics(effectiveNodes || [], effectiveEdges || []);
+    // The legacy approximations (sampled betweenness, plain power iteration) are
+    // this kind's numbers; `_shared/centrality.ts` says why they stay.
+    const metrics = calculateCentralities(
+      effectiveNodes,
+      effectiveEdges.map((e) => ({ source: e.src_uid, target: e.dst_uid, weight: e.relative_revenue || 1 })),
+    );
 
     // ── WP 4.3 · THE DUAL-WRITE ──────────────────────────────────────────
     //
@@ -264,10 +294,10 @@ serve(async (req) => {
         edges_processed: effectiveEdges.length,
         nodes_updated: updatedCount,
         metrics_summary: {
-          avg_degree: Object.values(metrics).reduce((sum, m: any) => sum + m.degree_centrality, 0) / Object.keys(metrics).length,
-          avg_eigenvector: Object.values(metrics).reduce((sum, m: any) => sum + m.eigenvector_centrality, 0) / Object.keys(metrics).length,
-          avg_betweenness: Object.values(metrics).reduce((sum, m: any) => sum + m.betweenness_centrality, 0) / Object.keys(metrics).length,
-          avg_closeness: Object.values(metrics).reduce((sum, m: any) => sum + m.closeness_centrality, 0) / Object.keys(metrics).length
+          avg_degree: Object.values(metrics).reduce((sum, m) => sum + m.degree_centrality, 0) / Object.keys(metrics).length,
+          avg_eigenvector: Object.values(metrics).reduce((sum, m) => sum + m.eigenvector_centrality, 0) / Object.keys(metrics).length,
+          avg_betweenness: Object.values(metrics).reduce((sum, m) => sum + m.betweenness_centrality, 0) / Object.keys(metrics).length,
+          avg_closeness: Object.values(metrics).reduce((sum, m) => sum + m.closeness_centrality, 0) / Object.keys(metrics).length
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -282,251 +312,3 @@ serve(async (req) => {
     );
   }
 });
-
-function calculateNetworkMetrics(nodes: Node[], edges: Edge[]) {
-  const nodeMap = new Map(nodes.map(n => [n.uid, n]));
-  const adjacencyList = new Map<string, Map<string, number>>();
-  const nodeMetrics: Record<string, any> = {};
-
-  // Build adjacency list with weights
-  nodes.forEach(node => {
-    adjacencyList.set(node.uid, new Map());
-  });
-
-  edges.forEach(edge => {
-    const weight = edge.relative_revenue || 1;
-    adjacencyList.get(edge.src_uid)?.set(edge.dst_uid, weight);
-    adjacencyList.get(edge.dst_uid)?.set(edge.src_uid, weight); // Undirected graph
-  });
-
-  // Calculate metrics for each node
-  nodes.forEach(node => {
-    const neighbors = adjacencyList.get(node.uid) || new Map();
-    
-    // Degree Centrality
-    const degree = neighbors.size;
-    const maxPossibleDegree = nodes.length - 1;
-    const degree_centrality = maxPossibleDegree > 0 ? degree / maxPossibleDegree : 0;
-
-    // Weighted Degree Centrality
-    const weightedDegree = Array.from(neighbors.values()).reduce((sum, weight) => sum + weight, 0);
-    const maxWeightedDegree = Math.max(...nodes.map(n => {
-      const nNeighbors = adjacencyList.get(n.uid) || new Map();
-      return Array.from(nNeighbors.values()).reduce((sum, weight) => sum + weight, 0);
-    }), 1);
-    const weighted_degree_centrality = weightedDegree / maxWeightedDegree;
-
-    nodeMetrics[node.uid] = {
-      degree_centrality,
-      weighted_degree_centrality,
-      eigenvector_centrality: 0, // Will be calculated separately
-      betweenness_centrality: 0, // Will be calculated separately
-      closeness_centrality: 0 // Will be calculated separately
-    };
-  });
-
-  // Calculate Eigenvector Centrality using power iteration
-  const eigenvectorCentrality = calculateEigenvectorCentrality(nodes, adjacencyList);
-  Object.keys(eigenvectorCentrality).forEach(uid => {
-    if (nodeMetrics[uid]) {
-      nodeMetrics[uid].eigenvector_centrality = eigenvectorCentrality[uid];
-    }
-  });
-
-  // Calculate Betweenness Centrality (simplified approximation for performance)
-  const betweennessCentrality = calculateBetweennessCentrality(nodes, adjacencyList);
-  Object.keys(betweennessCentrality).forEach(uid => {
-    if (nodeMetrics[uid]) {
-      nodeMetrics[uid].betweenness_centrality = betweennessCentrality[uid];
-    }
-  });
-
-  // Calculate Closeness Centrality
-  const closenessCentrality = calculateClosenessCentrality(nodes, adjacencyList);
-  Object.keys(closenessCentrality).forEach(uid => {
-    if (nodeMetrics[uid]) {
-      nodeMetrics[uid].closeness_centrality = closenessCentrality[uid];
-    }
-  });
-
-  // Find max values for normalisation
-  const allMetrics = Object.values(nodeMetrics);
-  const maxBetweenness = Math.max(...allMetrics.map((m: any) => m.betweenness_centrality), 1);
-  const maxCloseness = Math.max(...allMetrics.map((m: any) => m.closeness_centrality), 1);
-
-  // Calculate prominence as weighted composite
-  nodes.forEach(node => {
-    const m = nodeMetrics[node.uid];
-    if (!m) return;
-
-    // Normalise betweenness and closeness to [0,1] range
-    const normBetweenness = m.betweenness_centrality / maxBetweenness;
-    const normCloseness = m.closeness_centrality / maxCloseness;
-
-    // Weighted composite — adjust weights to suit your business logic
-    m.prominence = (
-      0.25 * m.degree_centrality +
-      0.35 * m.eigenvector_centrality +   // highest weight: neighbour influence
-      0.25 * normBetweenness +             // bottleneck risk
-      0.15 * normCloseness                 // reachability
-    );
-  });
-
-  return nodeMetrics;
-}
-
-function calculateEigenvectorCentrality(nodes: Node[], adjacencyList: Map<string, Map<string, number>>) {
-  const centrality: Record<string, number> = {};
-  const nodeIds = nodes.map(n => n.uid);
-  
-  // Initialize centrality scores
-  nodeIds.forEach(uid => centrality[uid] = 1);
-
-  // Power iteration
-  const maxIterations = 100;
-  const tolerance = 1e-6;
-
-  for (let iter = 0; iter < maxIterations; iter++) {
-    const newCentrality: Record<string, number> = {};
-    let norm = 0;
-
-    // Calculate new centrality scores
-    nodeIds.forEach(uid => {
-      newCentrality[uid] = 0;
-      const neighbors = adjacencyList.get(uid) || new Map();
-      neighbors.forEach((weight, neighborUid) => {
-        newCentrality[uid] += weight * centrality[neighborUid];
-      });
-      norm += newCentrality[uid] * newCentrality[uid];
-    });
-
-    // Normalize
-    norm = Math.sqrt(norm);
-    if (norm > 0) {
-      nodeIds.forEach(uid => {
-        newCentrality[uid] /= norm;
-      });
-    }
-
-    // Check convergence
-    let converged = true;
-    nodeIds.forEach(uid => {
-      if (Math.abs(newCentrality[uid] - centrality[uid]) > tolerance) {
-        converged = false;
-      }
-    });
-
-    Object.assign(centrality, newCentrality);
-
-    if (converged) break;
-  }
-
-  return centrality;
-}
-
-function calculateBetweennessCentrality(nodes: Node[], adjacencyList: Map<string, Map<string, number>>) {
-  const centrality: Record<string, number> = {};
-  nodes.forEach(node => centrality[node.uid] = 0);
-
-  // Simplified betweenness calculation (sample-based for performance)
-  const sampleSize = Math.min(50, nodes.length); // Sample nodes for efficiency
-  const sampledNodes = nodes.slice(0, sampleSize);
-
-  sampledNodes.forEach(source => {
-    const distances: Record<string, number> = {};
-    const predecessors: Record<string, string[]> = {};
-    const sigma: Record<string, number> = {};
-    
-    // Initialize
-    nodes.forEach(node => {
-      distances[node.uid] = Infinity;
-      predecessors[node.uid] = [];
-      sigma[node.uid] = 0;
-    });
-    
-    distances[source.uid] = 0;
-    sigma[source.uid] = 1;
-
-    // BFS
-    const queue = [source.uid];
-    while (queue.length > 0) {
-      const current = queue.shift()!;
-      const neighbors = adjacencyList.get(current) || new Map();
-      
-      neighbors.forEach((weight, neighbor) => {
-        if (distances[neighbor] === Infinity) {
-          distances[neighbor] = distances[current] + 1;
-          queue.push(neighbor);
-        }
-        
-        if (distances[neighbor] === distances[current] + 1) {
-          sigma[neighbor] += sigma[current];
-          predecessors[neighbor].push(current);
-        }
-      });
-    }
-
-    // Accumulate betweenness
-    const dependency: Record<string, number> = {};
-    nodes.forEach(node => dependency[node.uid] = 0);
-
-    const sortedNodes = nodes
-      .filter(n => distances[n.uid] < Infinity)
-      .sort((a, b) => distances[b.uid] - distances[a.uid]);
-
-    sortedNodes.forEach(node => {
-      predecessors[node.uid].forEach(pred => {
-        dependency[pred] += (sigma[pred] / sigma[node.uid]) * (1 + dependency[node.uid]);
-      });
-      
-      if (node.uid !== source.uid) {
-        centrality[node.uid] += dependency[node.uid];
-      }
-    });
-  });
-
-  // Normalize
-  const n = nodes.length;
-  const normFactor = n > 2 ? 2 / ((n - 1) * (n - 2)) : 1;
-  Object.keys(centrality).forEach(uid => {
-    centrality[uid] *= normFactor;
-  });
-
-  return centrality;
-}
-
-function calculateClosenessCentrality(nodes: Node[], adjacencyList: Map<string, Map<string, number>>) {
-  const centrality: Record<string, number> = {};
-
-  nodes.forEach(source => {
-    const distances: Record<string, number> = {};
-    nodes.forEach(node => distances[node.uid] = Infinity);
-    distances[source.uid] = 0;
-
-    // BFS for shortest paths
-    const queue = [source.uid];
-    while (queue.length > 0) {
-      const current = queue.shift()!;
-      const neighbors = adjacencyList.get(current) || new Map();
-      
-      neighbors.forEach((weight, neighbor) => {
-        if (distances[neighbor] === Infinity) {
-          distances[neighbor] = distances[current] + 1;
-          queue.push(neighbor);
-        }
-      });
-    }
-
-    // Calculate closeness
-    const reachableNodes = Object.values(distances).filter(d => d < Infinity && d > 0);
-    if (reachableNodes.length > 0) {
-      const totalDistance = reachableNodes.reduce((sum, d) => sum + d, 0);
-      centrality[source.uid] = reachableNodes.length / totalDistance;
-    } else {
-      centrality[source.uid] = 0;
-    }
-  });
-
-  return centrality;
-}
-
