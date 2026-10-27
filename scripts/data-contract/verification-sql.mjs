@@ -5560,6 +5560,20 @@ async function tronV2Readiness() {
       order by 1, 4`),
     (rows) => { out("**(6) what the stress battery needs** — it runs on the project's ACTIVE Validated Model:"); out(...table(rows)); });
 
+  report("(6b) the active Validated Model's policy version", await tryQ(`
+      select coalesce(m.name, '') || ' v' || coalesce(m.version_no::text, '?') as model, m.status, m.verdict,
+             m.validated_at, coalesce(v.version_code, v.label) as policy_version, v.policy_hash,
+             (select string_agg(k, ',') from jsonb_object_keys(v.snapshot) k) as snapshot_keys,
+             coalesce(v.snapshot #>> '{defaults,inventory,safety_stock_days}', v.snapshot #>> '{inventory,safety_stock_days}') as safety_stock_days,
+             coalesce(v.snapshot #>> '{defaults,inventory,type}', v.snapshot #>> '{inventory,type}') as inventory_type,
+             coalesce(v.snapshot #>> '{defaults,inventory,coverage_weeks}', v.snapshot #>> '{inventory,coverage_weeks}') as coverage_weeks,
+             coalesce(v.snapshot #>> '{defaults,fulfillment,backorder_allowed}', v.snapshot #>> '{fulfillment,backorder_allowed}') as backorder_allowed,
+             coalesce(v.snapshot #>> '{defaults,recovery,response}', v.snapshot #>> '{recovery,response}') as recovery_response
+        from public.model_validations m
+        left join public.policy_versions v on v.id = m.policy_version_id
+       where m.project_id = ${P} order by m.created_at`),
+    (rows) => { out("**(6b) each Validated Model's policy version** — the study's baseline is safety stock 0 days, min_max, coverage 8, backorder false, no recovery response:"); out(...table(rows)); });
+
   report("(7) upload runs", await tryQ(`
       select (select string_agg(k, ',') from jsonb_object_keys(coalesce(r.rows_fetched, '{}'::jsonb)) k) as target,
              r.status, count(*)::int as runs, max(r.created_at) as latest
