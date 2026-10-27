@@ -5502,6 +5502,71 @@ async function d278AccountRoleGaps() {
     (rows) => { out("**(3) totals:**"); out(...table(rows)); });
 }
 
+async function tronV2Readiness() {
+  // Owner request 2026-10-27: the anonymised Tronico files were uploaded into a new project
+  // (§16 · D314). Is it complete, typed and ready for the Nexus stress battery, which runs
+  // only on the project's active Validated Model? One project by name, read-only.
+  section("TRON v2 readiness — Project TRON - version 2 (§16 · D314)");
+  const P = `(select id from public.projects where name = 'Project TRON - version 2')`;
+
+  report("(1) the project row", await tryQ(`
+      select p.id::text, p.name, p.organization, p.plant_name, p.bom_level, p.completed, p.created_at
+        from public.projects p where p.name ilike 'Project TRON%' order by p.created_at`),
+    (rows) => { out("**(1) projects named like TRON (the probe reads the exact name `Project TRON - version 2`):**"); out(...table(rows)); });
+
+  report("(2) rows per table", await tryQ(`
+      select 'suppliers' as tbl, count(*)::int as n from public.suppliers where project_id = ${P}
+      union all select 'materials', count(*)::int from public.materials where project_id = ${P}
+      union all select 'products', count(*)::int from public.products where project_id = ${P}
+      union all select 'customers', count(*)::int from public.customers where project_id = ${P}
+      union all select 'bom_single_level', count(*)::int from public.bom_single_level where project_id = ${P}
+      union all select 'inbound_logistics', count(*)::int from public.inbound_logistics where project_id = ${P}
+      union all select 'outbound_logistics', count(*)::int from public.outbound_logistics where project_id = ${P}
+      union all select 'supply_chain_data', count(*)::int from public.supply_chain_data where project_id = ${P}
+      union all select 'supply_chain_data_multi_tier', count(*)::int from public.supply_chain_data_multi_tier where project_id = ${P}
+      union all select 'node_list', count(*)::int from public.node_list where project_id = ${P}`),
+    (rows) => { out("**(2) rows per table** — expected 61 / 560 / 17 / 1 / 599 / 635 / 17 from the seven CSVs:"); out(...table(rows)); });
+
+  report("(3) node types", await tryQ(`
+      select coalesce(echelon, '(null)') as echelon, count(*)::int as nodes
+        from public.node_list where project_id = ${P} group by 1 order by 2 desc`),
+    (rows) => { out("**(3) `node_list.echelon`** — a NULL is a node the refresh never typed:"); out(...table(rows)); });
+
+  report("(4) supply consistency", await tryQ(`
+      select (select count(*)::int from public.bom_single_level b where b.project_id = ${P}
+                and not exists (select 1 from public.materials m where m.project_id = b.project_id and m.material_id = b.material_id)) as bom_material_not_in_master,
+             (select count(*)::int from public.inbound_logistics i where i.project_id = ${P}
+                and not exists (select 1 from public.suppliers s where s.project_id = i.project_id and s.supplier_id = i.supplier_id)) as lane_supplier_not_in_master,
+             (select count(distinct b.material_id)::int from public.bom_single_level b where b.project_id = ${P}
+                and not exists (select 1 from public.inbound_logistics i where i.project_id = b.project_id and i.material_id = b.material_id)) as bom_material_with_no_supplier,
+             (select count(*)::int from public.outbound_logistics o where o.project_id = ${P}
+                and not exists (select 1 from public.products pr where pr.project_id = o.project_id and pr.product_id = o.product_id)) as outbound_product_not_in_master`),
+    (rows) => { out("**(4) cross-table consistency** — every value should be 0:"); out(...table(rows)); });
+
+  report("(5) policy defaults", await tryQ(`
+      select fulfillment_strategy, inventory::text, fulfillment::text, sourcing::text, recovery::text, updated_at
+        from public.policy_defaults where project_id = ${P}`),
+    (rows) => { out("**(5) `policy_defaults`** — the study's baseline is min_max · coverage 8 weeks · safety stock 0 days · backorder off · single sourcing · recovery off:"); out(...table(rows)); });
+
+  report("(6) policy versions, Validated Models, scenarios", await tryQ(`
+      select 'policy_version' as kind, coalesce(v.version_code, v.label) as name, null::text as status, v.created_at
+        from public.policy_versions v where v.project_id = ${P}
+      union all
+      select 'validated_model', coalesce(m.name, '') || ' v' || coalesce(m.version_no::text, '?'), m.status || ' · ' || coalesce(m.verdict, ''), m.created_at
+        from public.model_validations m where m.project_id = ${P}
+      union all
+      select 'scenario', s.name, coalesce(s.role, ''), s.created_at
+        from public.scenarios s where s.project_id = ${P}
+      order by 1, 4`),
+    (rows) => { out("**(6) what the stress battery needs** — it runs on the project's ACTIVE Validated Model:"); out(...table(rows)); });
+
+  report("(7) upload runs", await tryQ(`
+      select (select string_agg(k, ',') from jsonb_object_keys(coalesce(r.rows_fetched, '{}'::jsonb)) k) as target,
+             r.status, count(*)::int as runs, max(r.created_at) as latest
+        from public.ingest_runs r where r.project_id = ${P} group by 1, 2 order by 1, 2`),
+    (rows) => { out("**(7) `ingest_runs`** — the inbound run that timed out is the one left `staged`:"); out(...table(rows)); });
+}
+
 async function main() {
   out(`# PLAN.md §15 — verification SQL, executed`);
   out("");
@@ -5520,6 +5585,7 @@ async function main() {
   await phase12Library();
   await phase15EngineLedger();
   await d278AccountRoleGaps();
+  await tronV2Readiness();
 
   await schemaProbe();
   await viewSecurity();
