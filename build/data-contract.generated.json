@@ -379,7 +379,7 @@
           "page": "ProductLevelNetwork.tsx",
           "via": "rpc get_product_level_metrics (kind product_metrics, PLAN.md §4 D313)",
           "grain": "table",
-          "evidence": "src/pages/ProductLevelNetwork.tsx:287",
+          "evidence": "src/pages/ProductLevelNetwork.tsx:289",
           "confirmed": true
         }
       ],
@@ -30543,7 +30543,7 @@
           "page": "ProductLevelNetwork.tsx",
           "via": "rpc list_projects",
           "grain": "table",
-          "evidence": "src/pages/ProductLevelNetwork.tsx:255",
+          "evidence": "src/pages/ProductLevelNetwork.tsx:259",
           "confirmed": true
         },
         {
@@ -31814,7 +31814,7 @@
           "page": "ProductLevelNetwork.tsx",
           "via": "table read",
           "grain": "table",
-          "evidence": "src/pages/ProductLevelNetwork.tsx:375",
+          "evidence": "src/pages/ProductLevelNetwork.tsx:385",
           "confirmed": true
         }
       ],
@@ -31964,7 +31964,7 @@
               "page": "ProductLevelNetwork.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/pages/ProductLevelNetwork.tsx:375",
+              "evidence": "src/pages/ProductLevelNetwork.tsx:385",
               "confirmed": true
             }
           ],
@@ -32018,7 +32018,7 @@
               "page": "ProductLevelNetwork.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/pages/ProductLevelNetwork.tsx:375",
+              "evidence": "src/pages/ProductLevelNetwork.tsx:385",
               "confirmed": true
             }
           ],
@@ -45187,5 +45187,5 @@
   },
   "orphans": [],
   "phantom_tables": [],
-  "contract_version": "3bf55906163f"
+  "contract_version": "abe84dd69756"
 }

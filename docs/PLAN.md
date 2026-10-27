@@ -24942,6 +24942,29 @@ baseline; vitest 1 909 of 1 909; `audit:ui` and `check:docs` pass; eslint 282 er
 type-checked with its two remote imports stubbed; Deno itself was not available in the session.
 Deploys on merge; the first live computation happens when the page is opened on a project after that.
 
+### D313 follow-up — a supplier table beside the material table · 2026-10-27 · no migration
+
+Owner request on [suresuite/v001-3-f6699a5b#412](https://github.com/suresuite/v001-3-f6699a5b/pull/412): the
+Product-level analytics list suppliers as well as materials. No new computation: `product_metrics`
+already stores every echelon of the graph, and `get_product_level_metrics` already returns them. The
+page now keeps the run's supplier rows too, and `NetworkMetricsTable` takes an `echelon` that changes
+its words only ("Nexus Suppliers", "Supplier Name", and a supplier's weekly flow = its deliveries,
+its share of each material's demand). Both tables read one run, so they cannot disagree about
+freshness. `productMetrics.test.ts` adds the supplier flow and the page wiring. **Gap check:** none
+new; the materials' and suppliers' centralities are normalised over the same whole graph, so they are
+comparable across the two tables. **Also fixed:** the first D313 commit moved `ProductLevelNetwork.tsx`'s
+lines under three sidecars' surface anchors (`projects`, `risk_data`, `analysis_results`); R12 reads the
+COMMITTED file, so the pre-commit `contract:check` passed and the commit itself would have failed it.
+The anchors are re-pointed and `contract:check` was re-run on a commit.
+**And CI's third rehearsal mode** (`--since HEAD`, the base built from the artifact this branch writes)
+failed `rehearsal/910` §1: an artifact carries tables, not the rows a migration seeds, so `analysis_kinds`
+had no `product_metrics`. 910 now seeds the row `ON CONFLICT DO NOTHING`, as 570, 620 and 670 do, so the
+other two modes still test the migration's own declaration (the earlier mutation still fails there).
+**Rows per page** (owner request): both tables show 10 rows by default with a 10 / 20 / 50 / All
+selector, replacing the single "show more" toggle; the sentence above each table names the column
+the shown rows are ranked by, which had read "by betweenness centrality" whatever the sort.
+`networkMetricsTable.test.tsx`.
+
 ## 17. Sequencing
 
 | Phase | WPs | Focus | Blocks | Status |

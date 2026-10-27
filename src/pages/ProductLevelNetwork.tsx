@@ -202,6 +202,8 @@ export default function NetworkVisualization({ isCollapsed, setIsCollapsed }: Ne
     run_id?: string | null;
     computed_at?: string | null;
   }>>([]);
+  // §4 D313 — the same run's supplier rows, in a table of their own.
+  const [supplierNetworkMetrics, setSupplierNetworkMetrics] = useState<typeof networkMetrics>([]);
   const [networkMetricsLoading, setNetworkMetricsLoading] = useState(false);
   const [metricsOutcome, setMetricsOutcome] = useState<MetricsOutcome>(null);
   const [metricsStatus, setMetricsStatus] = useState<{ projectId: string; state: NetworkAnalysisState } | null>(null);
@@ -289,7 +291,8 @@ export default function NetworkVisualization({ isCollapsed, setIsCollapsed }: Ne
         p_user_id: user.id,
       });
       if (error) throw error;
-      return ((data ?? []) as typeof networkMetrics).filter((r) => r.echelon === 'material');
+      // Every echelon of one run; the page shows the materials and the suppliers.
+      return (data ?? []) as typeof networkMetrics;
     };
 
     setNetworkMetricsLoading(true);
@@ -318,7 +321,8 @@ export default function NetworkVisualization({ isCollapsed, setIsCollapsed }: Ne
         }
       }
 
-      setNetworkMetrics(rows);
+      setNetworkMetrics(rows.filter((r) => r.echelon === 'material'));
+      setSupplierNetworkMetrics(rows.filter((r) => r.echelon === 'supplier'));
       setMetricsStatus({ projectId, state: outcome === 'in progress' && decision.state !== 'current' ? 'in progress' : decision.state });
       setMetricsOutcome(outcome);
       setMetricsMetadata({
@@ -1143,6 +1147,11 @@ export default function NetworkVisualization({ isCollapsed, setIsCollapsed }: Ne
               </div>
               <NetworkMetricsTable
                 metrics={networkMetrics}
+                loading={networkMetricsLoading}
+              />
+              <NetworkMetricsTable
+                echelon="supplier"
+                metrics={supplierNetworkMetrics}
                 loading={networkMetricsLoading}
               />
               {metricsMetadata && (

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { rowFreshnessLabel } from '@/lib/network/storedMetrics';
 
@@ -10,9 +11,10 @@ interface NetworkMetric {
   uid: string;
   name: string;
   /**
-   * §4 D313 — the weekly flow through this material on the Product-level graph: the
-   * finished-goods demand propagated down the BOM to it. A material has no revenue,
-   * and the column that stood here read a FIRM's.
+   * §4 D313 — the weekly flow through this node on the Product-level graph: for a
+   * material, the finished-goods demand propagated down the BOM to it; for a
+   * supplier, its deliveries (its share of each material's demand). Neither has a
+   * revenue, and the column that stood here read a FIRM's.
    */
   flow: number | null;
   degree_centrality: number | null;
@@ -94,20 +96,62 @@ function provenanceSummary(metrics: NetworkMetric[]): string | null {
   return out;
 }
 
+/** Which echelon of the Product-level graph the table lists — the words differ, the measures do not. */
+type TableEchelon = 'material' | 'supplier';
+
+const WORDS: Record<TableEchelon, {
+  title: string; plural: string; nameHeader: string; flow: string; empty: string;
+}> = {
+  material: {
+    title: 'Nexus Materials',
+    plural: 'purchased materials',
+    nameHeader: 'Material Name',
+    flow: 'Demand propagated to the material',
+    empty: 'No purchased material',
+  },
+  supplier: {
+    title: 'Nexus Suppliers',
+    plural: 'suppliers',
+    nameHeader: 'Supplier Name',
+    flow: "The supplier's share of its materials' demand",
+    empty: 'No supplier',
+  },
+};
+
 interface NetworkMetricsTableProps {
   metrics: NetworkMetric[];
   loading?: boolean;
+  /** Defaults to `material`, the table this page always had. */
+  echelon?: TableEchelon;
 }
 
 type SortField = keyof NetworkMetric;
+
+/** Rows a table shows at once; `all` shows every row. Default 10. */
+export const PAGE_SIZES = ['10', '20', '50', 'all'] as const;
+type PageSize = (typeof PAGE_SIZES)[number];
+
+/** How each sortable column is named in the sentence above the table. */
+const SORT_LABEL: Partial<Record<SortField, string>> = {
+  name: 'name',
+  connection_count: 'connections',
+  flow: 'weekly flow',
+  degree_centrality: 'degree',
+  weighted_degree_centrality: 'weighted degree',
+  eigenvector_centrality: 'eigenvector centrality',
+  betweenness_centrality: 'betweenness centrality',
+  closeness_centrality: 'closeness centrality',
+  prominence: 'prominence',
+};
 type SortDirection = 'asc' | 'desc' | null;
 
-export function NetworkMetricsTable({ metrics, loading = false }: NetworkMetricsTableProps) {
+export function NetworkMetricsTable({ metrics, loading = false, echelon = 'material' }: NetworkMetricsTableProps) {
+  const words = WORDS[echelon];
   const [sortField, setSortField] = useState<SortField>('betweenness_centrality');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
-  const [showAll, setShowAll] = useState(false);
+  const [pageSize, setPageSize] = useState<PageSize>('10');
   
-  const displayLimit = 10;
+  const displayLimit = pageSize === 'all' ? Infinity : Number(pageSize);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -119,7 +163,7 @@ export function NetworkMetricsTable({ metrics, loading = false }: NetworkMetrics
   };
 
   const sortedMetrics = React.useMemo(() => {
-    if (!sortField || !sortDirection) return showAll ? metrics : metrics.slice(0, displayLimit);
+    if (!sortField || !sortDirection) return metrics.slice(0, displayLimit);
 
     const sorted = [...metrics].sort((a, b) => {
       const aVal = a[sortField];
@@ -134,8 +178,8 @@ export function NetworkMetricsTable({ metrics, loading = false }: NetworkMetrics
       return sortDirection === 'asc' ? comparison : -comparison;
     });
     
-    return showAll ? sorted : sorted.slice(0, displayLimit);
-  }, [metrics, sortField, sortDirection, showAll, displayLimit]);
+    return sorted.slice(0, displayLimit);
+  }, [metrics, sortField, sortDirection, displayLimit]);
 
   const formatNumber = (value: number | null, decimals = 3) => {
     if (value === null) return '-';
@@ -167,7 +211,7 @@ export function NetworkMetricsTable({ metrics, loading = false }: NetworkMetrics
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Network Science Metrics</CardTitle>
+          <CardTitle>Network Science Metrics - {words.title}</CardTitle>
           <CardDescription>Computing network centrality on the product-level graph…</CardDescription>
         </CardHeader>
         <CardContent>
@@ -183,12 +227,12 @@ export function NetworkMetricsTable({ metrics, loading = false }: NetworkMetrics
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Network Science Metrics</CardTitle>
-          <CardDescription>No network metrics are stored for this graph's materials.</CardDescription>
+          <CardTitle>Network Science Metrics - {words.title}</CardTitle>
+          <CardDescription>No network metrics are stored for this graph's {words.plural}.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="text-center text-muted-foreground py-8">
-            No purchased material on the product-level graph has computed metrics yet. Use
+            {words.empty} on the product-level graph has computed metrics yet. Use
             Recalculate to compute them; a project whose lanes are empty must be combined first.
           </div>
         </CardContent>
@@ -199,11 +243,14 @@ export function NetworkMetricsTable({ metrics, loading = false }: NetworkMetrics
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Network Science Metrics - Nexus Materials</CardTitle>
+        <CardTitle>Network Science Metrics - {words.title}</CardTitle>
         <CardDescription>
-          {showAll 
-            ? `Network centrality of ${metrics.length} purchased materials on the product-level graph.`
-            : `Top ${Math.min(displayLimit, metrics.length)} of ${metrics.length} purchased materials by betweenness centrality.`
+          {sortedMetrics.length >= metrics.length
+            ? `Network centrality of ${metrics.length} ${words.plural} on the product-level graph.`
+            : `${sortedMetrics.length} of ${metrics.length} ${words.plural}` +
+              (sortField && sortDirection
+                ? `, ${sortDirection === 'desc' ? 'highest' : 'lowest'} ${SORT_LABEL[sortField] ?? String(sortField)} first.`
+                : '.')
           } Computed on the graph drawn above — suppliers, materials, finished products and customers, the BOM collapsed. Higher values indicate more critical positions.
         </CardDescription>
         {/* §4 D88 · T2 — the substitution is visible where the numbers are, not in
@@ -227,7 +274,7 @@ export function NetworkMetricsTable({ metrics, loading = false }: NetworkMetrics
                     className="h-auto p-0 font-semibold text-white hover:bg-transparent hover:text-white"
                     onClick={() => handleSort('name')}
                   >
-                    Material Name
+                    {words.nameHeader}
                     {getSortIcon('name')}
                   </Button>
                 </TableHead>
@@ -364,25 +411,28 @@ export function NetworkMetricsTable({ metrics, loading = false }: NetworkMetrics
           </Table>
         </div>
         
-        {metrics.length > displayLimit && (
-          <div className="flex justify-center mt-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowAll(!showAll)}
+        {metrics.length > Number(PAGE_SIZES[0]) && (
+          <div className="mt-4 flex flex-wrap items-center justify-end gap-2 text-sm text-muted-foreground">
+            <span>Rows</span>
+            <ToggleGroup
+              type="single"
+              value={pageSize}
+              onValueChange={(v) => v && setPageSize(v as PageSize)}
+              aria-label={`Rows of ${words.plural} to show`}
             >
-              {showAll 
-                ? 'Show Less' 
-                : `Show ${metrics.length - displayLimit} More Nodes`
-              }
-            </Button>
+              {PAGE_SIZES.map((size) => (
+                <ToggleGroupItem key={size} value={size} className="h-7 min-h-11 px-2 text-xs md:min-h-0">
+                  {size === 'all' ? `All (${metrics.length})` : size}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
           </div>
         )}
         
         <div className="mt-4 text-sm text-muted-foreground">
           <div className="flex flex-wrap gap-4">
             <span><strong>Degree:</strong> Connection ratio to max possible</span>
-            <span><strong>Weekly flow:</strong> Demand propagated to the material</span>
+            <span><strong>Weekly flow:</strong> {words.flow}</span>
             <span><strong>Wtd. degree:</strong> Flow-weighted connections</span>
             <span><strong>Eigenvector:</strong> Connected to important nodes</span>
             <span><strong>Betweenness:</strong> Bridge between network clusters</span>
