@@ -36,6 +36,8 @@ export interface StressResult {
     warmup_week?: number;
     start_week?: number;
     replications?: number;
+    /** The root seed; replication k draws from (seed, k), so more replications later extend this run. */
+    seed?: number | null;
     window_weeks?: number;
     clean_lost_sales_eur?: { mean: number | null } | null;
   } | null;
@@ -98,17 +100,19 @@ export function baselineLine(r: StressResult): string {
   return `${model} · data ${dv} · policies ${pv} · engine ${r.code_version ?? '—'}`;
 }
 
-/** "Each supplier and material disrupted alone · full outage from week 26 · 2–9 weeks · 10 replications". */
+/** "Each supplier and material disrupted alone · full outage from week 26 · 2–9 weeks · 10 replications · seed 42". */
 export function scenarioLine(r: StressResult): string {
   const d = durationsOf(r);
-  const span = d.length ? `${d[0]}–${d[d.length - 1]} weeks` : '';
+  const span = d.length === 0 ? '' : d.length === 1 ? `${d[0]} weeks` : `${d[0]}–${d[d.length - 1]} weeks`;
   const start = r.summary?.start_week ?? r.scenario?.start_week;
   const reps = r.summary?.replications;
+  const seed = r.summary?.seed;
   return [
     'Each supplier and supplied material disrupted alone',
     start != null ? `full outage from week ${start}` : 'full outage',
     span,
-    reps != null ? `${reps} replications` : '',
+    reps != null ? `${reps} ${reps === 1 ? 'replication' : 'replications'}` : '',
+    seed != null ? `seed ${seed}` : '',
   ].filter(Boolean).join(' · ');
 }
 

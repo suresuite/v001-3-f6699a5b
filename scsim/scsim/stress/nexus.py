@@ -24,6 +24,11 @@ rule 1) and exported to the registry for every other reader.
 * **The order** (rule 5): Average desc, then the 9-week cell desc, then the
   target kind and id — never arbitrary.
 
+A battery may instead run a DECLARED VARIANT of that scenario — another start
+week or another set of durations (``nexus_variant``), owner-requested for a
+single 5-week outage from week 30. Every other rule is the shared one, the
+variant is stored whole beside its own hash, and the default is unchanged.
+
 Sharding: a battery over a subset of targets (``targets=``) gives exactly the
 rows the full battery gives for them, because every cell depends only on the
 clean reference; ``expected_warmup`` / ``expected_clean_digest`` make a shard
@@ -69,13 +74,31 @@ class NexusBatteryError(ValueError):
     """The battery cannot be run as declared — said, never worked around."""
 
 
-def nexus_scenario_hash() -> str:
-    return hashlib.sha256(json.dumps(NEXUS_SCENARIO, sort_keys=True).encode()).hexdigest()
+def nexus_variant(start_week: Optional[int] = None,
+                  durations_weeks: Optional[Iterable[int]] = None) -> dict:
+    """The shared scenario with another start week and/or durations; nothing else
+    can vary. Durations are whole weeks ≥ 1, stored ascending and unique."""
+    spec = dict(NEXUS_SCENARIO)
+    if start_week is not None:
+        if int(start_week) != start_week or int(start_week) < 1:
+            raise NexusBatteryError(f"start week must be a whole week ≥ 1, not {start_week!r}")
+        spec["start_week"] = int(start_week)
+    if durations_weeks is not None:
+        ds = sorted({int(d) for d in durations_weeks})
+        if not ds or ds[0] < 1 or any(int(d) != d for d in durations_weeks):
+            raise NexusBatteryError(f"durations must be whole weeks ≥ 1, not {list(durations_weeks)!r}")
+        spec["durations_weeks"] = ds
+    return spec
 
 
-def start_week_for(warmup_week: int) -> int:
-    """§27.2 rule 1: week 26, or the first week after warm-up when that is later."""
-    return max(int(NEXUS_SCENARIO["start_week"]), int(warmup_week) + 1)
+def nexus_scenario_hash(spec: Optional[dict] = None) -> str:
+    return hashlib.sha256(json.dumps(spec or NEXUS_SCENARIO, sort_keys=True).encode()).hexdigest()
+
+
+def start_week_for(warmup_week: int, spec: Optional[dict] = None) -> int:
+    """§27.2 rule 1: week 26 (the spec's start week), or the first week after
+    warm-up when that is later."""
+    return max(int((spec or NEXUS_SCENARIO)["start_week"]), int(warmup_week) + 1)
 
 
 @dataclass(frozen=True)
@@ -123,13 +146,18 @@ class NexusBattery:
     clean_lost_sales_eur: dict
     clean_fill_rate: dict
     rows: list[NexusRow] = field(default_factory=list)
+    spec: dict = field(default_factory=lambda: dict(NEXUS_SCENARIO))
+    #: the scenario's root seed: replication k draws from (seed, k), so a later
+    #: battery with more replications reproduces this one's exactly.
+    seed: Optional[int] = None
 
     def summary(self) -> dict:
         """What the store keeps on the run (`row_counts`), beside the rows."""
         return {
             "engine_version": self.engine_version,
-            "scenario": NEXUS_SCENARIO,
+            "scenario": self.spec,
             "scenario_hash": self.scenario_hash,
+            "seed": self.seed,
             "warmup_week": self.warmup_week,
             "start_week": self.start_week,
             "window_weeks": self.window_weeks,
@@ -157,11 +185,14 @@ def run_nexus_battery(
     targets: Optional[Iterable[NexusTarget]] = None,
     expected_warmup: Optional[int] = None,
     expected_clean_digest: Optional[str] = None,
+    spec: Optional[dict] = None,
 ) -> NexusBattery:
-    """Run the battery over ``targets`` (default: every supplier and material)."""
+    """Run the battery over ``targets`` (default: every supplier and material),
+    under ``spec`` (default: the shared ``NEXUS_SCENARIO``; see ``nexus_variant``)."""
     from scsim import ENGINE_VERSION
     from scsim.io.snapshots import SnapshotStore
 
+    spec = spec or NEXUS_SCENARIO
     known = set(all_targets(scenario))
     chosen = list(targets) if targets is not None else sorted(known, key=_order_key_target)
     unknown = [t for t in chosen if t not in known]
@@ -185,8 +216,8 @@ def run_nexus_battery(
             f"{expected_warmup} — the shards would not be one battery")
     settings = base.settings
     window_end = min(t_w + settings.analysis_window, settings.horizon)
-    start = start_week_for(t_w)
-    longest = max(NEXUS_SCENARIO["durations_weeks"])
+    start = start_week_for(t_w, spec)
+    longest = max(spec["durations_weeks"])
     if start + longest > window_end:
         raise NexusBatteryError(
             f"a {longest}-week outage from week {start} ends after the KPI window "
@@ -206,7 +237,7 @@ def run_nexus_battery(
         units: dict[int, float] = {}
         backlog: dict[int, float] = {}
         fr_drop: dict[int, float] = {}
-        for d in NEXUS_SCENARIO["durations_weeks"]:
+        for d in spec["durations_weeks"]:
             ev = DisruptionEvent(
                 target_type=TargetType.NODE_SUPPLIER if tgt.kind == "supplier" else TargetType.NODE_MATERIAL,
                 target_id=tgt.id, effect_type=EffectType.LEAD_TIME_EXTENSION,
@@ -227,10 +258,10 @@ def run_nexus_battery(
         avg = _r(float(np.mean([v["mean"] for v in by_d.values()])))
         rows.append(NexusRow(tgt, by_d, avg, units, backlog, fr_drop, _zero_reason(by_d, backlog)))
 
-    rank_rows(rows)
+    rank_rows(rows, spec)
     return NexusBattery(
         engine_version=ENGINE_VERSION,
-        scenario_hash=nexus_scenario_hash(),
+        scenario_hash=nexus_scenario_hash(spec),
         warmup_week=t_w,
         start_week=start,
         window_weeks=int(window_end - t_w),
@@ -239,23 +270,25 @@ def run_nexus_battery(
         clean_lost_sales_eur=_agg_dict(clean, "lost_sales_value"),
         clean_fill_rate=_agg_dict(clean, "fill_rate"),
         rows=rows,
+        spec=dict(spec),
+        seed=getattr(settings, "project_seed", None),
     )
 
 
-def rank_rows(rows: list[NexusRow]) -> None:
-    """§27.2 rule 5, in place: Average desc, 9-week desc, kind, id. Also what
-    merges shards: ranking the concatenation of shards' rows IS the full order."""
-    longest = max(NEXUS_SCENARIO["durations_weeks"])
+def rank_rows(rows: list[NexusRow], spec: Optional[dict] = None) -> None:
+    """§27.2 rule 5, in place: Average desc, longest duration desc, kind, id. Also
+    what merges shards: ranking the concatenation of shards' rows IS the full order."""
+    longest = max((spec or NEXUS_SCENARIO)["durations_weeks"])
     rows.sort(key=lambda r: (-r.average_eur, -r.by_duration[longest]["mean"],
                              r.target.kind, r.target.id))
     for i, r in enumerate(rows, start=1):
         r.rank = i
 
 
-def merge_shards(shard_results: Iterable[list[dict]]) -> list[dict]:
+def merge_shards(shard_results: Iterable[list[dict]], spec: Optional[dict] = None) -> list[dict]:
     """Concatenate shards' `results()` and re-rank them as one battery (rule 5).
     Refuses a target that appears twice — a shard ran twice, or two overlapped."""
-    longest = str(max(NEXUS_SCENARIO["durations_weeks"]))
+    longest = str(max((spec or NEXUS_SCENARIO)["durations_weeks"]))
     rows = [r for shard in shard_results for r in shard]
     seen: set[tuple[str, str]] = set()
     for r in rows:

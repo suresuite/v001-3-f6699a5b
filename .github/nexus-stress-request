@@ -1,0 +1,6 @@
+project_name=Aumovio
+model_code=2026Q4-4
+replications=10
+seed=1
+start_week=30
+durations=5

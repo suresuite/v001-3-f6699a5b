@@ -83,3 +83,38 @@ def test_publish_refuses_a_missing_or_doubled_shard(local_run):
         nexus_job.merge(bundle, [one])
     with pytest.raises(SystemExit):
         nexus_job.merge(bundle, [one, one])
+
+
+def test_durations_parse_as_a_list_a_range_or_blank():
+    assert nexus_job.parse_durations("5") == [5]
+    assert nexus_job.parse_durations("2, 4") == [2, 4]
+    assert nexus_job.parse_durations("2-9") == list(range(2, 10))
+    assert nexus_job.parse_durations("") is None and nexus_job.parse_durations(None) is None
+
+
+def test_a_seed_given_to_the_job_overrides_the_protocol_and_is_recorded():
+    sc = nexus_job.scenario_from_model({"protocol": {"root_seed": 7}}, replications=1, seed=3)
+    assert sc["seed"] == 3 and sc["replications"] == 1
+
+
+def test_one_five_week_outage_from_week_30_on_one_replication(tmp_path):
+    # The owner's request for Aumovio, end to end on the Example project.
+    from scsim.stress.nexus import nexus_scenario_hash, nexus_variant
+
+    assert nexus_job.main(["prepare", "--local-dataset", str(DATASET), "--horizon-days", "728",
+                           "--shards", "1", "--replications", "1", "--seed", "1",
+                           "--start-week", "30", "--durations", "5",
+                           "--out", str(tmp_path / "bundle.json")]) == 0
+    bundle = json.loads((tmp_path / "bundle.json").read_text())
+    spec = nexus_variant(start_week=30, durations_weeks=[5])
+    assert bundle["nexus_scenario"] == spec and bundle["scenario_hash"] == nexus_scenario_hash(spec)
+    assert bundle["start_week"] == 30 and bundle["scenario"]["seed"] == 1
+    assert nexus_job.main(["shard", "--bundle", str(tmp_path / "bundle.json"), "--index", "0",
+                           "--out", str(tmp_path / "shard-0.json")]) == 0
+    results, summary = nexus_job.merge(bundle, [json.loads((tmp_path / "shard-0.json").read_text())])
+    assert summary["scenario_hash"] == bundle["scenario_hash"]   # what publish checks
+    assert summary["replications"] == 1 and summary["seed"] == 1 and summary["start_week"] == 30
+    assert all(set(r["metrics"]["by_duration"]) == {"5"} for r in results)
+    assert [r["metrics"]["rank"] for r in results] == list(range(1, len(results) + 1))
+    md = nexus_job.report(bundle, results, summary)
+    assert "5 weeks" in md and "seed 1" in md and "| 5 wk |" in md

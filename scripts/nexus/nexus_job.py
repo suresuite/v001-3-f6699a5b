@@ -95,19 +95,24 @@ def uuid_or_null(v: Optional[str]) -> str:
 # ── reading the baseline ─────────────────────────────────────────────────────
 
 def read_baseline(project_name: str, model_id: Optional[str], dataset_version_id: Optional[str],
-                  actor_email: Optional[str]) -> dict:
+                  actor_email: Optional[str], model_code: Optional[str] = None) -> dict:
     rows = sql(f"SELECT id, supply_chain_model, modeler_id FROM public.projects WHERE name = {lit(project_name)}")
     if len(rows) != 1:
         raise SystemExit(f"{len(rows)} projects are named {project_name!r}; name exactly one")
     project = rows[0]
     pid = project["id"]
+    # A model is named by its id, or by the code the Lab shows ("2026Q4-4"), or
+    # defaults to the project's active one. A named model must still be active.
     model_filter = (f"id = {uuid_or_null(model_id)}" if model_id else
+                    f"model_code = {lit(model_code)}" if model_code else
                     "status = 'active' AND revoked_at IS NULL")
     models = sql(f"""SELECT id, name, model_code, status, revoked_at, policy_version_id, dataset_version_id,
                             protocol, adopted_warmup_days, warmup_method
                        FROM public.model_validations
                       WHERE project_id = '{pid}' AND {model_filter}
                       ORDER BY validated_at DESC NULLS LAST, created_at DESC LIMIT 1""")
+    if not models and (model_id or model_code):
+        raise SystemExit(f"{project_name!r} has no Validated Model {model_id or model_code!r}")
     if not models:
         raise SystemExit(f"{project_name!r} has no active Validated Model — validate a baseline first "
                          "(PLAN.md §27 WP 17.7: the battery runs only on one)")
@@ -140,16 +145,21 @@ def _json(v: Any) -> Any:
     return json.loads(v) if isinstance(v, str) else v
 
 
-def scenario_from_model(model: dict, replications: int) -> dict:
+def scenario_from_model(model: dict, replications: int, seed: Optional[int] = None) -> dict:
     """The battery's run settings, from the Validated Model's own protocol: its
     horizon, seed, CRN, confidence level and ADOPTED warm-up (manual, so every
-    shard and every rerun uses the same one). Replications are the battery's."""
+    shard and every rerun uses the same one). Replications are the battery's,
+    and so is the seed when one is given (it is recorded on the run either way).
+
+    Replication k draws from (seed, k) alone, so a battery with N replications
+    contains a battery with fewer EXACTLY: run 1 now and 10 later on the same
+    seed, and the first replication of the second is the first run."""
     p = _json(model.get("protocol")) or {}
     ci = p.get("ci_level", 0.95)
     sc = {
         "name": "nexus battery",
         "horizon_days": int(p.get("horizon_weeks", 156)) * 7,
-        "seed": int(p.get("root_seed", 42)),
+        "seed": int(seed) if seed is not None else int(p.get("root_seed", 42)),
         "crn": bool(p.get("crn", True)),
         "ci_level": int(round(ci * 100)) if ci <= 1 else int(ci),
         "replications": int(replications),
@@ -177,7 +187,7 @@ def shard_targets(targets: list, n: int) -> list[list]:
 
 
 def prepare(args) -> dict:
-    from scsim.stress.nexus import NEXUS_SCENARIO, all_targets, nexus_scenario_hash, run_nexus_battery
+    from scsim.stress.nexus import all_targets, nexus_scenario_hash, nexus_variant, run_nexus_battery
     from sim_worker.build import code_version
 
     if args.local_dataset:
@@ -188,24 +198,26 @@ def prepare(args) -> dict:
                 "dataset": json.loads(Path(args.local_dataset).read_text()),
                 "policy_snapshot": json.loads(Path(args.local_policy).read_text()) if args.local_policy else {}}
     else:
-        base = read_baseline(args.project_name, args.model_id, args.dataset_version_id, args.actor_email)
-    bundle = {**base, "scenario": scenario_from_model(base["model"], args.replications)}
+        base = read_baseline(args.project_name, args.model_id, args.dataset_version_id, args.actor_email,
+                             args.model_code)
+    bundle = {**base, "scenario": scenario_from_model(base["model"], args.replications, args.seed)}
+    spec = nexus_variant(args.start_week, parse_durations(args.durations))
     if args.horizon_days:
         bundle["scenario"]["horizon_days"] = int(args.horizon_days)
 
     mapping = mapped_scenario(bundle)
     scen = mapping.scenario
     t0 = time.perf_counter()
-    clean = run_nexus_battery(scen, targets=[])          # the clean reference alone
+    clean = run_nexus_battery(scen, targets=[], spec=spec)   # the clean reference alone
     t_clean = time.perf_counter() - t0
     targets = [{"kind": t.kind, "id": t.id} for t in all_targets(scen)]
-    cells = len(targets) * len(NEXUS_SCENARIO["durations_weeks"])
+    cells = len(targets) * len(spec["durations_weeks"])
     est = cells * max(t_clean, 0.05) * 1.5
     n = int(args.shards) if args.shards else max(1, min(MAX_SHARDS, math.ceil(est / SHARD_TARGET_SECONDS)))
     n = min(n, max(1, len(targets)))
     bundle.update({
         "code_version": code_version(),
-        "nexus_scenario": NEXUS_SCENARIO, "scenario_hash": nexus_scenario_hash(),
+        "nexus_scenario": spec, "scenario_hash": nexus_scenario_hash(spec),
         "warmup_week": clean.warmup_week, "start_week": clean.start_week,
         "clean_digest": clean.clean_digest,
         "shards": shard_targets(targets, n),
@@ -214,7 +226,7 @@ def prepare(args) -> dict:
         "mapping_warnings": mapping.warning_dicts[:200],
     })
     if not args.local_dataset:
-        params = {"scenario": NEXUS_SCENARIO, "scenario_hash": nexus_scenario_hash(),
+        params = {"scenario": spec, "scenario_hash": nexus_scenario_hash(spec),
                   "replications": int(args.replications), "run_settings": bundle["scenario"]}
         res = sql(f"""SELECT public.analysis_start_nexus_stress(
                         '{bundle['project_id']}'::uuid, {uuid_or_null(bundle['model']['id'])},
@@ -231,7 +243,7 @@ def shard(bundle: dict, index: int) -> dict:
     targets = [NexusTarget(t["kind"], t["id"]) for t in bundle["shards"][index]]
     t0 = time.perf_counter()
     b = run_nexus_battery(scen, targets=targets, expected_warmup=bundle["warmup_week"],
-                          expected_clean_digest=bundle["clean_digest"])
+                          expected_clean_digest=bundle["clean_digest"], spec=bundle["nexus_scenario"])
     return {"index": index, "seconds": round(time.perf_counter() - t0, 1),
             "summary": b.summary(), "results": b.results()}
 
@@ -242,7 +254,7 @@ def merge(bundle: dict, shard_outputs: list[dict]) -> tuple[list[dict], dict]:
     got = sorted(o["index"] for o in shard_outputs)
     if got != list(range(len(bundle["shards"]))):
         raise SystemExit(f"shards {got} came back; the battery has {len(bundle['shards'])}")
-    results = merge_shards([o["results"] for o in shard_outputs])
+    results = merge_shards([o["results"] for o in shard_outputs], bundle["nexus_scenario"])
     expected = {(t["kind"], t["id"]) for s in bundle["shards"] for t in s}
     if {(r["entity_type"], r["entity_id"]) for r in results} != expected:
         raise SystemExit("the merged rows are not the battery's targets")
@@ -259,25 +271,44 @@ def merge(bundle: dict, shard_outputs: list[dict]) -> tuple[list[dict], dict]:
 def report(bundle: dict, results: list[dict], summary: dict) -> str:
     """Markdown for the job summary — the reading WP 17.4's §16 entry quotes."""
     eur = lambda x: f"€{x:,.0f}"
+    ds = [str(d) for d in bundle["nexus_scenario"]["durations_weeks"]]
+    span = f"{ds[0]}–{ds[-1]} weeks" if len(ds) > 1 else f"{ds[0]} weeks"
     lines = [f"## Nexus battery — {bundle['project_name']}", "",
              f"- Validated Model: **{bundle['model'].get('name')}** ({bundle['model'].get('model_code') or bundle['model']['id']})",
              f"- Data version: v{bundle['dataset_version'].get('version_no')} · policy version: v{bundle['policy_version'].get('version_no')}",
              f"- Engine: `{bundle['code_version']}`",
-             f"- Warm-up week {summary['warmup_week']} → outage from week {summary['start_week']}, 2–9 weeks, "
-             f"{summary['replications']} replications, KPI window {summary['window_weeks']} weeks",
+             f"- Warm-up week {summary['warmup_week']} → outage from week {summary['start_week']}, {span}, "
+             f"{summary['replications']} replication(s) on seed {bundle['scenario']['seed']}, "
+             f"KPI window {summary['window_weeks']} weeks",
              f"- Clean reference: lost sales {eur(summary['clean_lost_sales_eur']['mean'] or 0)}",
              f"- {summary['materials']} materials, {summary['suppliers']} suppliers, {summary['shards']} shard(s), "
              f"shard seconds {summary['shard_seconds']}", ""]
     for kind in ("material", "supplier"):
         rows = [r for r in results if r["entity_type"] == kind][:10]
-        lines += [f"### Top {len(rows)} {kind}s by Average", "", "| # | id | 2 wk | 5 wk | 9 wk | Average |",
-                  "|---|---|---|---|---|---|"]
+        cols = sorted({ds[0], ds[len(ds) // 2], ds[-1]}, key=int)
+        lines += [f"### Top {len(rows)} {kind}s by Average", "",
+                  "| # | id | " + " | ".join(f"{d} wk" for d in cols) + " | Average |",
+                  "|---|---|" + "---|" * len(cols) + "---|"]
         for r in rows:
             m = r["metrics"]; bd = m["by_duration"]
-            lines.append(f"| {m['rank']} | {r['entity_id']} | {eur(bd['2']['mean'])} | {eur(bd['5']['mean'])} | "
-                         f"{eur(bd['9']['mean'])} | {eur(m['average_eur'])} |")
+            lines.append(f"| {m['rank']} | {r['entity_id']} | "
+                         + " | ".join(eur(bd[d]['mean']) for d in cols) + f" | {eur(m['average_eur'])} |")
         lines.append("")
     return "\n".join(lines)
+
+
+def parse_durations(text: Optional[str]) -> Optional[list[int]]:
+    """"5" or "2,3,4" or "2-9" → weeks; blank → the shared scenario's."""
+    if not text or not str(text).strip():
+        return None
+    out: list[int] = []
+    for part in str(text).replace(" ", "").split(","):
+        if "-" in part:
+            lo, hi = part.split("-", 1)
+            out += list(range(int(lo), int(hi) + 1))
+        elif part:
+            out.append(int(part))
+    return out
 
 
 def main(argv=None) -> int:
@@ -286,6 +317,10 @@ def main(argv=None) -> int:
     p = sub.add_parser("prepare")
     p.add_argument("--project-name")
     p.add_argument("--model-id")
+    p.add_argument("--model-code", help='the code the Lab shows, e.g. "2026Q4-4"')
+    p.add_argument("--seed", type=int, help="root seed (default: the model protocol's)")
+    p.add_argument("--start-week", type=int, help="outage start week (default: the shared scenario's, 26)")
+    p.add_argument("--durations", help='outage durations in weeks: "5", "2,4" or "2-9" (default 2-9)')
     p.add_argument("--dataset-version-id")
     p.add_argument("--actor-email")
     p.add_argument("--replications", type=int, default=DEFAULT_REPLICATIONS)

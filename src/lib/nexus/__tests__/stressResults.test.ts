@@ -58,6 +58,13 @@ describe('the stored battery, read for the Nexus card (§27 WP 17.5)', () => {
       'Each supplier and supplied material disrupted alone · full outage from week 31 · 2–9 weeks · 10 replications');
   });
 
+  it('a single-duration, single-replication battery names its seed', () => {
+    const one = { ...result, scenario: { durations_weeks: [5], start_week: 30 },
+                  summary: { ...result.summary, start_week: 30, replications: 1, seed: 7 } };
+    expect(scenarioLine(one)).toBe(
+      'Each supplier and supplied material disrupted alone · full outage from week 30 · 5 weeks · 1 replication · seed 7');
+  });
+
   it('says why a row lost nothing, and when the result is stale', () => {
     expect(zeroReasonText('absorbed')).toMatch(/covered/);
     expect(zeroReasonText('backordered')).toMatch(/backorder/);
