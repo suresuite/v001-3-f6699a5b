@@ -93,7 +93,10 @@ export function engineChangeSummary(
   if (!a || !b || a === b) return null;
   const between = changesBetween(a, b);
   if (between.length === 0) return null;
-  const changing = between.filter((e) => e.comparable !== "identical" || e.amendments.length > 0);
+  // An amendment cannot move a result: a moved reference run forces a version
+  // bump (CHANGELOG.yaml gate rule 2), and rule 8 checks `identical` against the
+  // release report of the amended build. So the entry's own `comparable` decides.
+  const changing = between.filter((e) => e.comparable !== "identical");
   const kpis = [...new Set(changing.flatMap((e) => e.kpis))];
   const n = between.length;
   if (changing.length === 0) {
@@ -104,4 +107,23 @@ export function engineChangeSummary(
     `${changing.map((e) => e.version).join(", ")} change${changing.length === 1 ? "s" : ""} results for some projects` +
     (kpis.length ? ` (${kpis.join(", ")})` : "")
   );
+}
+
+/**
+ * True when two runs ran different scsim VERSIONS and the change record says no
+ * version between them changes results (`comparable: identical` on every entry)
+ * — the docs' "Results unchanged": a result of one can be set beside the other.
+ * False for one version (a build difference is `engineDifference`'s), for an
+ * unparseable or non-scsim engine, and for a span the record does not cover.
+ */
+export function resultsUnchangedBetween(
+  fromCodeVersion: string | null | undefined,
+  toCodeVersion: string | null | undefined,
+): boolean {
+  const a = parseCodeVersion(fromCodeVersion);
+  const b = parseCodeVersion(toCodeVersion);
+  if (!a?.version || !b?.version || a.slug !== "scsim" || b.slug !== "scsim" || a.version === b.version) return false;
+  if (!changeFor(a.version) || !changeFor(b.version)) return false;
+  const between = changesBetween(a.version, b.version);
+  return between.length > 0 && between.every((e) => e.comparable === "identical");
 }

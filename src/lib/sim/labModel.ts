@@ -176,6 +176,26 @@ export function compareScope(
   };
 }
 
+/**
+ * run id → the model whose EVIDENCE it is. One run can be the evidence of
+ * several models: a model saved again from the same run (a new name or period)
+ * supersedes the old card and keeps its evidence. The run belongs to `chosenId`
+ * when that is one of them, else to the NEWEST — `cards` arrive newest first,
+ * and a last-wins map over them used to hand the run to the OLDEST, labelling
+ * the chosen model's own validation baseline "different model".
+ */
+export function evidenceOwners(
+  cards: { id: string; evidence_run_id: string | null }[],
+  chosenId: string | null,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const c of cards) {
+    if (!c.evidence_run_id) continue;
+    if (out[c.evidence_run_id] === undefined || c.id === chosenId) out[c.evidence_run_id] = c.id;
+  }
+  return out;
+}
+
 // ── what the plan leaves (WP 10.7 · §4 D247) ─────────────────────────────────
 
 /** `get_my_capacity`'s answer: the organization's pool and the member's role

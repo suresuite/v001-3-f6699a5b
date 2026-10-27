@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { comparabilityFailures, differingComponents, type ComparableSide } from "../comparability";
+import {
+  comparabilityFailures,
+  comparabilityNotes,
+  differingComponents,
+  type ComparableSide,
+} from "../comparability";
 
 const ev = { target: "supplier:S1", target_type: "node", start_day: 140, duration_days: 28, magnitude_pct: 100 };
 const side = (o: Partial<ComparableSide["run"]> = {}, sched: unknown[] = []): ComparableSide => ({
@@ -34,5 +39,38 @@ describe("§9.3 comparability knows disruptions are a component (§4 D221)", () 
     const a = side();
     const b = side({ seed: 7, disruption_schedule: [ev] });
     expect(comparabilityFailures(a, b).join(" ")).toMatch(/seed spec differs \(42 vs 7\)/);
+  });
+});
+
+describe("engine versions the change record says give the same results compare", () => {
+  const stress = (cv: string) => side({ code_version: cv, disruption_schedule: [ev] }, [ev]);
+  it("0.8.0 vs 0.8.1 (comparable: identical) is a valid pair, with a note saying so", () => {
+    const base = side({ code_version: "scsim-0.8.0" });
+    const b = stress("scsim-0.8.1+6483d4e3f6f6");
+    expect(comparabilityFailures(base, b)).toEqual([]);
+    expect(comparabilityNotes(base, b).join(" ")).toMatch(
+      /engine versions differ \(0\.8\.0 vs 0\.8\.1\) — 1 version between them, none of which changes results/,
+    );
+  });
+  it("a span with a version that changes results is still refused", () => {
+    const f = comparabilityFailures(side({ code_version: "scsim-0.7.0" }), stress("scsim-0.8.1+6483d4e3f6f6"));
+    expect(f.join(" ")).toMatch(/0\.8\.0 changes results for some projects.*re-run one side/);
+  });
+});
+
+describe("a world difference names the fields the runs recorded", () => {
+  const spec = (horizon_days: number) => ({
+    scenario: { horizon_days, time_step: "week", demand_model: { kind: "poisson" } },
+  });
+  it("horizon in weeks, from the RunKey spec", () => {
+    const f = comparabilityFailures(
+      side({ run_spec: spec(364) }),
+      side({ scenario_hash: "w2", run_spec: spec(525), disruption_schedule: [ev] }, [ev]),
+    );
+    expect(f.join(" ")).toMatch(/world AND events differ \(world: horizon 52 wk vs 75 wk\)/);
+  });
+  it("says nothing extra for a run without a spec", () => {
+    const f = comparabilityFailures(side(), side({ scenario_hash: "w2", disruption_schedule: [ev] }, [ev]));
+    expect(f.join(" ")).toMatch(/world AND events differ — isolate/);
   });
 });

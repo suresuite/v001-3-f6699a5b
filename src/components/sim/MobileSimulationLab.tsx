@@ -204,6 +204,8 @@ export interface MobileSimulationLabProps {
   runsByScenario: Record<string, SimulationRun>;
   /** WP 10.5 — compare defaults to this model's runs (null = every run). */
   compareModelId?: string | null;
+  /** run id → the model whose evidence it is (the desktop's map, the same rule). */
+  compareEvidenceModelOf?: Record<string, string>;
 
   /* WP 10.5 — the Model and Engine steps (the same node the desktop renders) */
   modelStep?: React.ReactNode;
@@ -251,6 +253,7 @@ export function MobileSimulationLab(props: MobileSimulationLabProps) {
     runEstimate,
     trainingSet = null,
     compareModelId,
+    compareEvidenceModelOf,
     runGate,
     capacity,
     readOnlyReason = null,
@@ -890,6 +893,7 @@ export function MobileSimulationLab(props: MobileSimulationLabProps) {
                     scenarios={scenarios}
                     runsByScenario={runsByScenario}
                     modelId={compareModelId ?? null}
+                    evidenceModelOf={compareEvidenceModelOf}
                     skin
                   />
                 </MobileGroup>

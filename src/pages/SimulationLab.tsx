@@ -61,7 +61,7 @@ import {
 import { BASELINE_READONLY_REASON, isValidationBaseline } from "@/lib/sim/validationBaseline";
 import { runGateState } from "@/lib/sim/runGate";
 import { reuseConfirmRequest } from "@/lib/sim/dispatch";
-import { modelRunOffer } from "@/lib/sim/labModel";
+import { evidenceOwners, modelRunOffer } from "@/lib/sim/labModel";
 import { useConfirm } from "@/components/shared/confirm/useConfirm";
 import { MobileSimulationLab } from "@/components/sim/MobileSimulationLab";
 import { versionDisplayName } from "@/components/policies/PolicyVersionSheets";
@@ -686,11 +686,8 @@ export default function SimulationLab({ isCollapsed, setIsCollapsed }: Props) {
       : { reason: null, action: null, validateLink: false };
   const settingsLockReason = settingsLock.reason;
   const evidenceModelOf = useMemo(
-    () =>
-      Object.fromEntries(
-        cred.allCards.filter((c) => c.evidence_run_id).map((c) => [c.evidence_run_id as string, c.id]),
-      ),
-    [cred.allCards],
+    () => evidenceOwners(cred.allCards, chosenModel?.id ?? null),
+    [cred.allCards, chosenModel?.id],
   );
   const modelStep = projectId ? (
     <LabModelStep
@@ -851,6 +848,7 @@ export default function SimulationLab({ isCollapsed, setIsCollapsed }: Props) {
           onAddReps={handleAddReps}
           runsByScenario={runsByScenario}
           compareModelId={usingModel ? chosenModel?.id ?? null : null}
+          compareEvidenceModelOf={evidenceModelOf}
           settingsLockReason={settingsLockReason}
           settingsLockAction={settingsLock.action}
           settingsValidateLink={settingsLock.validateLink}

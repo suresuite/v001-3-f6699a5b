@@ -6,6 +6,7 @@ import {
   capacityVerdict,
   type CapacityState,
   compareScope,
+  evidenceOwners,
   defaultModel,
   formatBytes,
   modelChoices,
@@ -116,6 +117,22 @@ describe("a comparison defaults to the same model; an exploratory run is never t
     expect(s.labelOf(cands[2])).toBe("different model");
     expect(s.labelOf(cands[3])).toBe("exploratory");
     expect(s.labelOf(cands[0])).toBeNull();
+  });
+});
+
+describe("a run that is several models' evidence belongs to the chosen one", () => {
+  // newest first, as model_validations is read
+  const cards = [
+    { id: "m2", evidence_run_id: "r1" },
+    { id: "m1", evidence_run_id: "r1" },
+    { id: "m0", evidence_run_id: null },
+  ];
+  it("the chosen model owns its evidence run even when an older model shares it", () => {
+    expect(evidenceOwners(cards, "m2")).toEqual({ r1: "m2" });
+    expect(evidenceOwners(cards, "m1")).toEqual({ r1: "m1" });
+  });
+  it("with no model chosen, the newest owner wins", () => {
+    expect(evidenceOwners(cards, null)).toEqual({ r1: "m2" });
   });
 });
 
