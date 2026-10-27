@@ -14,13 +14,18 @@
  */
 import { describe, expect, it } from "vitest";
 import bridge from "../../../../supabase/functions/_shared/engineBridge.json";
+import { activeEnginePolicies } from "../../../../supabase/functions/_shared/grading";
 import {
   NOT_SIMULATED,
   OFFERED_STRATEGIES,
   RESPONSE_LABELS,
   backupLaneProblem,
   backupsForSupplier,
+  defaultWindow,
   disruptedSuppliers,
+  leadTimeWeeks,
+  outageWeeks,
+  windowProblem,
   type InboundLane,
 } from "../recovery";
 
@@ -82,5 +87,48 @@ describe("backup suppliers for a disrupted supplier", () => {
     expect(backupLaneProblem({ material_id: "M2", supplier_id: "X", lead_time_weeks: 3, unit_price: 0 }, LANES)).toMatch(/above 0/);
     expect(backupLaneProblem({ material_id: "M1", supplier_id: "S2", lead_time_weeks: 3, unit_price: 1 }, LANES)).toMatch(/uploaded lane/);
     expect(backupLaneProblem({ material_id: "M2", supplier_id: "X", lead_time_weeks: 3, unit_price: 1 }, LANES)).toBeNull();
+  });
+});
+
+describe("safety-stock windows for a disrupted supplier's materials (P-P.3, engine 0.8.3)", () => {
+  it("Safety stock now reaches P-P.3", () => {
+    expect(MAPS.safety_stock_drawdown).toBe("safety_stock_materials");
+    expect(NOT_SIMULATED.has("safety_stock_drawdown")).toBe(false);
+  });
+
+  it("reads a lane's lead time in weeks only when its unit says how", () => {
+    expect(leadTimeWeeks({ lead_time: 4, lead_time_unit: "weeks" })).toBe(4);
+    expect(leadTimeWeeks({ lead_time: 14, lead_time_unit: "days" })).toBe(2);
+    expect(leadTimeWeeks({ lead_time: 1, lead_time_unit: "month" })).toBeNull();
+    expect(leadTimeWeeks({ lead_time: null, lead_time_unit: "weeks" })).toBeNull();
+  });
+
+  it("reads a supplier's outage in the engine's weeks (start_day / 7, rounded)", () => {
+    const sched = [{ target: "supplier:S1", start_day: 182, duration_days: 28 }];
+    expect(outageWeeks(sched, "S1", ["S1"])).toEqual({ start: 26, end: 30 });
+    expect(outageWeeks(sched, "S2", ["S1", "S2"])).toBeNull();
+  });
+
+  it("suggests a window built one lead time before the outage, held to its end", () => {
+    expect(defaultWindow({ start: 26, end: 30 }, 4)).toEqual({ start_week: 22, end_week: 30 });
+    expect(defaultWindow({ start: 2, end: 6 }, 5.5)).toEqual({ start_week: 0, end_week: 6 });
+    expect(defaultWindow({ start: 26, end: 30 }, null)).toEqual({ start_week: 26, end_week: 30 });
+  });
+
+  it("refuses a window the engine would skip", () => {
+    expect(windowProblem({ days: 0, start_week: 1, end_week: 2 })).toMatch(/above 0/);
+    expect(windowProblem({ days: 90, start_week: 1, end_week: 2 })).toMatch(/84/);
+    expect(windowProblem({ days: 7, start_week: 5, end_week: 5 })).toMatch(/after/);
+    expect(windowProblem({ days: 7, start_week: 0, end_week: 4 })).toBeNull();
+  });
+});
+
+describe("the pre-run grader reads the playbook as the mapper does", () => {
+  const b = bridge as unknown as Parameters<typeof activeEnginePolicies>[2];
+  it("counts a ticked response's policy only while recovery is enabled", () => {
+    const on = activeEnginePolicies({ recovery: { response: ["capacity_flex"] } }, 1, b);
+    const off = activeEnginePolicies({ recovery: { enabled: false, response: ["capacity_flex"] } }, 1, b);
+    expect(on).toContain("short_term_capacity");
+    expect(off).not.toContain("short_term_capacity");
   });
 });

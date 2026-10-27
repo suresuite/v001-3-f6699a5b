@@ -19,13 +19,21 @@ A level the planner STATED on a /policies row is the level the run uses, so
 no buffer is added to it (P-P.1 publishes which at compile); an (R,Q)
 material with a lot keeps S = R + Q, so its S moves with its s. κ in Eq. 21
 is the material's own κ when its row states one.
+
+Disruption buffer windows (engine 0.8.3, the recovery card's Safety stock): an
+EXTRA buffer of `days` of expected cover for one material, held only while
+``start_week ≤ week < end_week``. It raises s and S by E[D_m]·days/7 in those
+weeks (never a stated level), so orders to build it are released at
+``start_week`` and arrive a lead time later; its holding cost h_m · c_m · units
+flows into C^res as ``ss_holding`` for those weeks only. The permanent
+buffer above is unchanged.
 """
 from __future__ import annotations
 
 from typing import ClassVar, Literal
 
 import numpy as np
-from pydantic import Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from scipy import stats as sps
 
 from scsim.core.context import SimContext
@@ -46,6 +54,27 @@ DEFAULT_Z_MATRIX: dict[str, float] = {
     "BX": 98.0, "BY": 95.0, "BZ": 90.0,
     "CX": 95.0, "CY": 90.0, "CZ": 80.0,
 }
+
+
+class SafetyStockWindow(BaseModel):
+    """One material's extra buffer, held over a window of simulated weeks."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    material_id: str
+    days: float = Field(..., gt=0.0, le=84.0,
+                        json_schema_extra={"unit": "days", "notes": "Extra cover: E[D_m]·days/7 units."})
+    start_week: int = Field(..., ge=0, json_schema_extra={"unit": "week",
+                            "notes": "First week the buffer is held — the disruption schedule's week."})
+    end_week: int = Field(..., ge=1, json_schema_extra={"unit": "week",
+                          "notes": "First week it is no longer held (exclusive)."})
+
+    @model_validator(mode="after")
+    def _order(self) -> "SafetyStockWindow":
+        if self.end_week <= self.start_week:
+            raise ValueError(f"safety-stock window for {self.material_id!r}: end_week "
+                             f"{self.end_week} must be after start_week {self.start_week}")
+        return self
 
 
 class SafetyStockParams(PolicyParams):
@@ -82,6 +111,15 @@ class SafetyStockParams(PolicyParams):
             "notes": "Per-material fixed-days cover (the /policies Supplier stage's "
                      "safety-stock days). A listed material's buffer is E[D_m]·days/7 "
                      "whatever the classification; unlisted materials follow it.",
+        },
+    )
+    windows: list[SafetyStockWindow] = Field(
+        default_factory=list,
+        json_schema_extra={
+            "unit": "list", "scope": "M",
+            "notes": "Disruption buffer windows (the recovery card's Safety stock): an extra "
+                     "E[D_m]·days/7 held only for start_week ≤ week < end_week, its holding "
+                     "cost booked for those weeks only. Empty = none.",
         },
     )
 
@@ -181,8 +219,23 @@ class SafetyStockMaterials(PolicyPlugin):
         if stated_s is not None:
             add_s = np.where(stated_s, 0.0, add_s)
             add_S = np.where(lot_S, add_s, np.where(stated_S, 0.0, add_S))
-        ctx.policy_state[self.id] = {"ss_s": add_s, "ss_S": add_S,
-                                     "stated_S": stated_S}
+        # Disruption buffer windows: per material, the units added and when.
+        win_mat, win_units, win_start, win_end = [], [], [], []
+        for wdw in p.windows:
+            i = m.mat_index.get(wdw.material_id)
+            if i is None:
+                continue
+            win_mat.append(i)
+            win_units.append(float(exp_d[i]) * wdw.days / 7.0)
+            win_start.append(wdw.start_week)
+            win_end.append(wdw.end_week)
+        ctx.policy_state[self.id] = {
+            "ss_s": add_s, "ss_S": add_S, "stated_S": stated_S,
+            "stated_s": stated_s,
+            "win_mat": np.array(win_mat, dtype=int), "win_units": np.array(win_units),
+            "win_start": np.array(win_start, dtype=int), "win_end": np.array(win_end, dtype=int),
+            "win_extra": np.zeros(m.n_mats),
+        }
         # WP 14.5 — the same buffer as DAYS of cover per material, published at
         # setup for MRP (design doc §3.4: SS = days/7 × average weekly need over
         # the horizon). One buffer, counted once: MRP does not read the levels
@@ -226,6 +279,15 @@ class SafetyStockMaterials(PolicyPlugin):
         state = ctx.policy_state[self.id]
         s = ctx.level_s + state["ss_s"]
         S = ctx.level_S + state["ss_S"]
+        if state["win_mat"].size:
+            active = (state["win_start"] <= ctx.week) & (ctx.week < state["win_end"])
+            extra = np.zeros(ctx.model.n_mats)
+            np.add.at(extra, state["win_mat"][active], state["win_units"][active])
+            if state["stated_s"] is not None:   # a stated level is never raised
+                extra = np.where(state["stated_s"] | state["stated_S"], 0.0, extra)
+            state["win_extra"] = extra
+            s = s + extra
+            S = S + extra
         # A stated S is never raised: a buffered formula s above it is lowered.
         if state["stated_S"] is not None and state["stated_S"].any():
             s = np.where(state["stated_S"], np.minimum(s, S), s)
@@ -235,5 +297,7 @@ class SafetyStockMaterials(PolicyPlugin):
         # Incremental holding on the planned reorder-point buffer (weekly).
         state = ctx.policy_state[self.id]
         cb = CostBreakdown()
-        cb.add("ss_holding", float((ctx.model.mat_holding_weekly * state["ss_s"]).sum()))
+        # A buffer window's holding is safety-stock holding too, booked only in its weeks.
+        held = state["ss_s"] + state["win_extra"]
+        cb.add("ss_holding", float((ctx.model.mat_holding_weekly * held).sum()))
         return cb

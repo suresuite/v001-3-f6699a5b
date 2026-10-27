@@ -190,7 +190,7 @@
       "lane"
     ]
   },
-  "engine_version": "0.8.2",
+  "engine_version": "0.8.3",
   "entities": {
     "bom_line": {
       "description": "r_{p,m} \u2014 \u00a73.2. ALL listed materials are required (hard constraint, Eq. 8).",
@@ -2451,6 +2451,48 @@
       "id": "safety_stock_materials",
       "milestone": null,
       "params_schema": {
+        "$defs": {
+          "SafetyStockWindow": {
+            "additionalProperties": false,
+            "description": "One material's extra buffer, held over a window of simulated weeks.",
+            "properties": {
+              "days": {
+                "exclusiveMinimum": 0.0,
+                "maximum": 84.0,
+                "notes": "Extra cover: E[D_m]\u00b7days/7 units.",
+                "title": "Days",
+                "type": "number",
+                "unit": "days"
+              },
+              "end_week": {
+                "minimum": 1,
+                "notes": "First week it is no longer held (exclusive).",
+                "title": "End Week",
+                "type": "integer",
+                "unit": "week"
+              },
+              "material_id": {
+                "title": "Material Id",
+                "type": "string"
+              },
+              "start_week": {
+                "minimum": 0,
+                "notes": "First week the buffer is held \u2014 the disruption schedule's week.",
+                "title": "Start Week",
+                "type": "integer",
+                "unit": "week"
+              }
+            },
+            "required": [
+              "material_id",
+              "days",
+              "start_week",
+              "end_week"
+            ],
+            "title": "SafetyStockWindow",
+            "type": "object"
+          }
+        },
         "additionalProperties": false,
         "properties": {
           "abc_breakpoints": {
@@ -2518,6 +2560,16 @@
             "title": "Uniform Service Level",
             "type": "number",
             "unit": "%"
+          },
+          "windows": {
+            "items": {
+              "$ref": "#/$defs/SafetyStockWindow"
+            },
+            "notes": "Disruption buffer windows (the recovery card's Safety stock): an extra E[D_m]\u00b7days/7 held only for start_week \u2264 week < end_week, its holding cost booked for those weeks only. Empty = none.",
+            "scope": "M",
+            "title": "Windows",
+            "type": "array",
+            "unit": "list"
           },
           "xyz_cv_breakpoints": {
             "default": [

@@ -1824,6 +1824,34 @@ def _scenario_backup_links(
     return out, new_sups
 
 
+def _safety_stock_windows(raw: Any, w: list[MappingWarning]) -> list[dict]:
+    """The recovery card's safety-stock windows → P-P.3 `windows` (engine 0.8.3).
+
+    Each entry is ``{material_id, days, start_week, end_week}``: extra cover for one
+    material, held for ``start_week ≤ week < end_week`` (the disruption schedule's
+    weeks). An entry the plugin would refuse is skipped here, with the reason.
+    """
+    out: list[dict] = []
+    for i, e in enumerate(raw or []):
+        ent = f"scenario:safety_stock_windows[{i}]"
+        try:
+            mat = str(e.get("material_id") or "").strip()
+            days = float(e.get("days"))
+            start, end = int(e.get("start_week")), int(e.get("end_week"))
+        except (AttributeError, TypeError, ValueError):
+            mat, days, start, end = "", 0.0, 0, 0
+        if not mat or not days > 0 or start < 0 or end <= start:
+            w.append(MappingWarning(
+                "warn", ent, "safety_stock_windows",
+                "a buffer window needs a material, days above 0 and a start week before its "
+                "end week — skipped"))
+            continue
+        out.append({"material_id": mat,
+                    "days": _clamp(days, 0.0, 84.0, w=w, entity=ent, field="days", unit=" d"),
+                    "start_week": start, "end_week": end})
+    return out
+
+
 def _composite_target(key_body: str, targets: set[str]) -> Optional[str]:
     """The target id inside a composite ``<owner>::<target>`` key, or None.
 
@@ -2963,6 +2991,15 @@ def from_project_data(data: ProjectData) -> MappingResult:
                              row_masters={c.id: {"priority_weight": c.priority_weight,
                                                  "sla_fill_floor_pct": c.sla_fill_floor_pct}
                                           for c in data.customer_rows if c.id})
+    # A buffer window for a material this project does not simulate holds nothing.
+    sim_mats = {m.id for m in network.materials}
+    ss_windows = (policies.get("safety_stock_materials") or {}).get("windows") or []
+    unknown_win = sorted({wd["material_id"] for wd in ss_windows} - sim_mats)
+    if unknown_win:
+        w.append(MappingWarning(
+            "warn", "policy:safety_stock_materials", "windows",
+            f"{len(unknown_win)} buffer window(s) name a material this project does not "
+            f"simulate, so they hold nothing: {unknown_win[:5]}"))
 
     # Every override the user typed should reach SOME entity. A key whose
     # components name no supplier, material, product or customer joins
@@ -3725,12 +3762,29 @@ def _map_policies(
         if ot is not None:
             out["short_term_capacity"]["overtime_premium_pct_of_price"] = ot
     # A response with no engine model is said, not silently dropped (§4 D114).
-    unmodelled = sorted(responses & {"safety_stock_drawdown", "demand_shaping"})
-    if unmodelled:
+    if "demand_shaping" in responses:
         w.append(MappingWarning(
             "warn", "policy:recovery", "response",
-            f"recovery response(s) {unmodelled} have no engine model and change nothing in "
+            "recovery response(s) ['demand_shaping'] have no engine model and change nothing in "
             "this run — material reallocation is `allocate_materials` (P-P.9)"))
+    # P-P.3 disruption buffer windows (engine 0.8.3): the card's Safety stock.
+    if "safety_stock_drawdown" in responses:
+        wins = _safety_stock_windows(recovery.get("safety_stock_windows"), w)
+        if wins:
+            out.setdefault("safety_stock_materials", {})["windows"] = wins
+            w.append(MappingWarning(
+                "info", "policy:safety_stock_materials", "windows",
+                f"{len(wins)} disruption buffer window(s): extra cover held only inside each "
+                "window, its holding cost booked for those weeks"))
+            if str(inv.get("type", "min_max")) == "mrp":
+                w.append(MappingWarning(
+                    "warn", "policy:safety_stock_materials", "windows",
+                    "the inventory policy is MRP, which plans from the BOM and does not read "
+                    "reorder levels — the buffer windows change nothing in this run"))
+        else:
+            w.append(MappingWarning(
+                "warn", "policy:recovery", "safety_stock_windows",
+                "Safety stock is on but no material has a buffer window — nothing changes"))
 
     # P-S.4 early warning — recovery.detection_lag_days finally reaches the
     # engine, compressing how fast every reactive policy engages.

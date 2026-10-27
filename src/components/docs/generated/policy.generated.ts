@@ -3744,7 +3744,7 @@ export const RECOVERY_LEVERS: RecoveryLevers = {
     {
       "key": "safety_stock_drawdown",
       "label": "Safety stock",
-      "description": "Not simulated yet: the engine has no recovery model for safety stock — the buffer is the /policies safety stock",
+      "description": "Hold extra cover for the disrupted supplier's materials between two weeks, its holding cost charged only then (P-P.3)",
       "plugin": null,
       "inGrid": false,
       "params": []
@@ -3805,13 +3805,7 @@ export const RECOVERY_LEVERS: RecoveryLevers = {
       ]
     }
   ],
-  "engineOnly": [
-    {
-      "key": "early_warning",
-      "plugin": "early_warning_failover",
-      "inGrid": false
-    }
-  ]
+  "engineOnly": []
 };
 
 /**

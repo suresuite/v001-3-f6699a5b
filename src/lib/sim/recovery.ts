@@ -4,8 +4,9 @@
 // §4 D114. Every strategy offered here reaches an engine plugin through
 // `scsim/scsim/io/project_map.py` (`_map_policies`), and `engineBridge.json` names
 // which — `recoveryStrategies.test.ts` fails if the card offers one the bridge does
-// not map. The exception is said on the card rather than hidden: Safety stock has no
-// recovery model in the engine yet (the buffer itself is the /policies safety stock).
+// not map. Safety stock is P-P.3's disruption buffer windows (engine 0.8.3): an extra
+// buffer per material of the disrupted supplier, held between two weeks, its holding
+// cost booked only for those weeks.
 //
 // This module replaced `recoveryScore.ts`, whose "with vs without recovery" KPIs were
 // computed from hand-set weights (a fill rate of 0.94, revenue of €1,000,000) and
@@ -34,8 +35,9 @@ export const OFFERED_STRATEGIES = [
   "mode_shift",
 ] as const satisfies readonly RecoveryResponseKey[];
 
-/** Offered, saved, and not yet modelled by the engine — said on the card. */
-export const NOT_SIMULATED: ReadonlySet<RecoveryResponseKey> = new Set(["safety_stock_drawdown"]);
+/** Offered, saved, and not yet modelled by the engine — said on the card. Empty since
+ *  engine 0.8.3; kept so a future strategy is marked rather than offered silently. */
+export const NOT_SIMULATED: ReadonlySet<RecoveryResponseKey> = new Set<RecoveryResponseKey>();
 
 export const RESPONSE_LABELS: Record<RecoveryResponseKey, string> = {
   dual_source_activate: "Backup supplier",
@@ -60,6 +62,17 @@ export interface BackupLane {
   capacity_per_week?: number | null;
 }
 
+/** An extra safety-stock buffer for one material, held for start_week ≤ week <
+ *  end_week (the disruption schedule's weeks) — P-P.3 `windows`, engine 0.8.3. */
+export interface SafetyStockWindow {
+  material_id: string;
+  /** Extra cover: expected weekly demand × days / 7 units. */
+  days: number;
+  start_week: number;
+  /** Exclusive: the first week it is no longer held. */
+  end_week: number;
+}
+
 export interface RecoveryConfig {
   enabled: boolean;
   response: RecoveryResponseKey[];
@@ -81,6 +94,7 @@ export interface RecoveryConfig {
   /** P-T.2 premium_pct_of_cost. */
   expedite_cost_pct?: number;
   backup_lanes?: BackupLane[];
+  safety_stock_windows?: SafetyStockWindow[];
 }
 
 export interface DisruptionEvent {
@@ -178,5 +192,51 @@ export function backupLaneProblem(
   if (inbound.some((l) => l.supplier_id === sup && l.material_id === lane.material_id)) {
     return `${sup} already supplies this material through an uploaded lane — it is listed above.`;
   }
+  return null;
+}
+
+/** A lane's lead time in weeks, when its unit says how to read it. */
+export function leadTimeWeeks(lane: Pick<InboundLane, "lead_time" | "lead_time_unit">): number | null {
+  if (lane.lead_time == null || !Number.isFinite(Number(lane.lead_time))) return null;
+  const u = String(lane.lead_time_unit ?? "weeks").toLowerCase();
+  if (u.startsWith("week") || u === "") return Number(lane.lead_time);
+  if (u.startsWith("day")) return Number(lane.lead_time) / 7;
+  return null;
+}
+
+/** The weeks a schedule disrupts a supplier: [start, end) in the engine's weeks
+ *  (the mapper reads `start_day / 7`, rounded). The earliest event wins. */
+export function outageWeeks(
+  schedule: readonly { target: string; start_day?: number; duration_days?: number }[] | null | undefined,
+  supplierId: string,
+  supplierIds: readonly string[],
+): { start: number; end: number } | null {
+  let best: { start: number; end: number } | null = null;
+  for (const e of schedule ?? []) {
+    const t = judgeTarget(e.target, supplierIds).target;
+    if (t.kind !== "supplier" || t.id !== supplierId) continue;
+    const start = Math.round(Number(e.start_day ?? 0) / 7);
+    const end = start + Math.max(1, Math.round(Number(e.duration_days ?? 7) / 7));
+    if (!best || start < best.start) best = { start, end };
+  }
+  return best;
+}
+
+/** The window a material's buffer is suggested with: built one lead time before the
+ *  outage (orders released at the start arrive a lead time later), held to its end. */
+export function defaultWindow(
+  outage: { start: number; end: number },
+  leadWeeks: number | null,
+): { start_week: number; end_week: number } {
+  const lead = leadWeeks == null ? 0 : Math.ceil(leadWeeks);
+  return { start_week: Math.max(0, outage.start - lead), end_week: outage.end };
+}
+
+/** Why a window would be skipped by the engine, or null — `_safety_stock_windows`'s rules. */
+export function windowProblem(w: Partial<SafetyStockWindow>): string | null {
+  if (!(Number(w.days) > 0)) return "Days of cover must be above 0.";
+  if (Number(w.days) > 84) return "At most 84 days of cover.";
+  if (!(Number(w.start_week) >= 0)) return "Start week must be 0 or later.";
+  if (!(Number(w.end_week) > Number(w.start_week))) return "End week must be after the start week.";
   return null;
 }

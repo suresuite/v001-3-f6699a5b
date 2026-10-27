@@ -1,5 +1,5 @@
 {
- "engine_version": "0.8.2",
+ "engine_version": "0.8.3",
  "engine_build": "scsim-0.0.0+000000000000",
  "scenario": {
   "name": "scenario",
@@ -2218,6 +2218,19 @@
      "label": "Fixed days by material",
      "unit": "days",
      "notes": "Per-material fixed-days cover (the /policies Supplier stage's safety-stock days). A listed material's buffer is E[D_m]·days/7 whatever the classification; unlisted materials follow it.",
+     "set_by_mapping": false
+    },
+    {
+     "path": [
+      "windows"
+     ],
+     "display": [
+      "Windows"
+     ],
+     "value": [],
+     "label": "Windows",
+     "unit": "list",
+     "notes": "Disruption buffer windows (the recovery card's Safety stock): an extra E[D_m]·days/7 held only for start_week ≤ week < end_week, its holding cost booked for those weeks only. Empty = none.",
      "set_by_mapping": false
     }
    ]
