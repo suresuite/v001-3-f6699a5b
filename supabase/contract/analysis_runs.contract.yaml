@@ -48,13 +48,40 @@ natural_key_intended: [project_id, analysis_kind, input_hash, params_hash, code_
 analysis_kinds:
   network_metrics:
     computed_by: "calculate-network-science-metrics (migrated in WP 4.3)"
-    code_version: "network_metrics@wp43.1"
+    code_version: "network_metrics@d313.1"
     entity_type: node
     params:
       weighted:
         type: boolean
         default: true
         meaning: "Weight edges by `relative_revenue` rather than treating the graph as unweighted."
+  product_metrics:
+    computed_by: "calculate-network-science-metrics (analysis_kind product_metrics, §4 D313)"
+    code_version: "product_metrics@d313.1"
+    entity_type: "supplier | material | product | customer"
+    params:
+      graph:
+        type: string
+        default: "product_level"
+        meaning: >-
+          The graph measured: the Product-level view's four echelons, built by
+          `_shared/productGraph.ts` from `supply_chain_data`'s flat lanes — the
+          function the page draws with, so a node in the table is a node on the canvas.
+      weighted:
+        type: string
+        default: "flow"
+        meaning: "Edge weight for the weighted measures: the lane's weekly flow, normalised to the largest edge."
+      exact:
+        type: boolean
+        default: true
+        meaning: >-
+          Betweenness from every source and a shifted eigenvector iteration, rather
+          than `network_metrics`' 50-source sample and plain power iteration, which
+          does not converge on this layered (bipartite) graph.
+    note: >-
+      Keyed on the PROCESS level, not the product level: `supply_chain_data` is
+      rebuilt from `bom_multi_level`, which the product-level hash does not cover.
+      Store only — no entity mirror. Read by `get_product_level_metrics`.
   prominence:
     computed_by: "calculate-node-prominence (migrated in WP 4.3)"
     code_version: "prominence@wp43.1"

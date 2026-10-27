@@ -59,6 +59,7 @@ Read follows the parent run's project reachability. No write policy and no user-
 | `FirmLevelNetwork.tsx` | rpc get_nexus_stress_results (MLPrediction, PLAN.md §27 WP 17.5) | `src/components/MLPrediction.tsx:77` | yes |
 | `ProcessLevelNetwork.tsx` | rpc get_nexus_stress_results (MLPrediction, PLAN.md §27 WP 17.5) | `src/components/MLPrediction.tsx:77` | yes |
 | `ProductLevelNetwork.tsx` | rpc get_nexus_stress_results (MLPrediction, PLAN.md §27 WP 17.5) | `src/components/MLPrediction.tsx:77` | yes |
+| `ProductLevelNetwork.tsx` | rpc get_product_level_metrics (kind product_metrics, PLAN.md §4 D313) | `src/pages/ProductLevelNetwork.tsx:287` | yes |
 
 Each row says the page READS the table by that path, at that line. It does
 not say every column below is displayed there — a column carries its own
@@ -175,6 +176,6 @@ Row insert time, maintained by the database.
 
 ---
 
-*Generated from data contract `cc0268e99d85`, engine `0.8.1`,
+*Generated from data contract `3bf55906163f`, engine `0.8.1`,
 sidecar `supabase/contract/analysis_results.contract.yaml`, table created by `20260917000006_analysis_store.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

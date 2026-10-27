@@ -186,7 +186,9 @@ export default function NetworkVisualization({ isCollapsed, setIsCollapsed }: Ne
     id: string;
     uid: string;
     name: string;
-    revenue: number | null;
+    echelon?: string | null;
+    /** Weekly flow through the node on this graph — the propagated demand (§4 D313). */
+    flow: number | null;
     degree_centrality: number | null;
     weighted_degree_centrality: number | null;
     eigenvector_centrality: number | null;
@@ -276,14 +278,18 @@ export default function NetworkVisualization({ isCollapsed, setIsCollapsed }: Ne
   const fetchNetworkMetrics = async (projectId: string, forceRecalculate = false) => {
     if (!user?.id || !user?.email) return;
 
+    // §4 D313 — the metrics of THIS page's graph. `get_network_metrics_for_materials`
+    // joined the FIRM table to material ids on a bare string (D137), so a project
+    // with a deep-tier network showed an empty table. `product_metrics` is computed
+    // on the four-echelon graph drawn above, by the same `buildProductLevelGraph`,
+    // and stored; the table lists its purchased materials.
     const readStored = async () => {
-      const { data, error } = await supabase.rpc('get_network_metrics_for_materials', {
+      const { data, error } = await supabase.rpc('get_product_level_metrics', {
         p_project_id: projectId,
         p_user_id: user.id,
-        p_user_email: user.email
       });
       if (error) throw error;
-      return (data ?? []) as typeof networkMetrics;
+      return ((data ?? []) as typeof networkMetrics).filter((r) => r.echelon === 'material');
     };
 
     setNetworkMetricsLoading(true);
@@ -297,7 +303,7 @@ export default function NetworkVisualization({ isCollapsed, setIsCollapsed }: Ne
         // WP 4.3 · the analyzer writes tier 3 through an RPC that takes the
         // actor, so the actor travels with the request (invariant audit-actor).
         const { data: calc, error: calcError } = await supabase.functions.invoke('calculate-network-science-metrics', {
-          body: { project_id: projectId, uploaded_by: user?.id }
+          body: { project_id: projectId, uploaded_by: user?.id, analysis_kind: 'product_metrics' }
         });
         if (calcError) {
           console.error('Error calculating network metrics:', calcError);

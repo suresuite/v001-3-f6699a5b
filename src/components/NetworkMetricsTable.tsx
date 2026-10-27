@@ -3,14 +3,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
-import { formatMoneyCompact } from '@/lib/sim/money';
 import { rowFreshnessLabel } from '@/lib/network/storedMetrics';
 
 interface NetworkMetric {
   id: string;
   uid: string;
   name: string;
-  revenue: number | null;
+  /**
+   * §4 D313 — the weekly flow through this material on the Product-level graph: the
+   * finished-goods demand propagated down the BOM to it. A material has no revenue,
+   * and the column that stood here read a FIRM's.
+   */
+  flow: number | null;
   degree_centrality: number | null;
   weighted_degree_centrality: number | null;
   eigenvector_centrality: number | null;
@@ -28,8 +32,9 @@ interface NetworkMetric {
    *            nothing can say which data produced it.
    * `none`   — neither half has a number. NOT zero (§4 D17).
    *
-   * These arrive from `get_network_metrics_for_materials`, which does the
-   * preference in ONE place so no screen has to. Optional on the type because the
+   * These arrive from `get_product_level_metrics` (§4 D313), which reads the
+   * store only, so `column` no longer occurs on this page; the type keeps it
+   * because the sentence below accounts for every value it could be. Optional on the type because the
    * page renders before the columns land and a partial dataset must not crash a
    * table; absent is treated exactly as `none` would be — unknown, said out loud.
    */
@@ -137,9 +142,10 @@ export function NetworkMetricsTable({ metrics, loading = false }: NetworkMetrics
     return value.toFixed(decimals);
   };
 
-  const formatRevenue = (value: number | null) => {
+  const formatFlow = (value: number | null) => {
     if (value === null) return '-';
-    return formatMoneyCompact(value);
+    if (value > 0 && value < 1) return '<1';
+    return Math.round(value).toLocaleString('en-US');
   };
 
   const getSortIcon = (field: SortField) => {
@@ -162,7 +168,7 @@ export function NetworkMetricsTable({ metrics, loading = false }: NetworkMetrics
       <Card>
         <CardHeader>
           <CardTitle>Network Science Metrics</CardTitle>
-          <CardDescription>Analyzing network centrality for nexus materials...</CardDescription>
+          <CardDescription>Computing network centrality on the product-level graph…</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center h-32">
@@ -178,11 +184,12 @@ export function NetworkMetricsTable({ metrics, loading = false }: NetworkMetrics
       <Card>
         <CardHeader>
           <CardTitle>Network Science Metrics</CardTitle>
-          <CardDescription>No network metrics available for material nodes.</CardDescription>
+          <CardDescription>No network metrics are stored for this graph's materials.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="text-center text-muted-foreground py-8">
-            No material nodes with calculated network metrics found.
+            No purchased material on the product-level graph has computed metrics yet. Use
+            Recalculate to compute them; a project whose lanes are empty must be combined first.
           </div>
         </CardContent>
       </Card>
@@ -195,9 +202,9 @@ export function NetworkMetricsTable({ metrics, loading = false }: NetworkMetrics
         <CardTitle>Network Science Metrics - Nexus Materials</CardTitle>
         <CardDescription>
           {showAll 
-            ? `Network centrality analysis for ${metrics.length} material nodes.`
-            : `Top ${Math.min(displayLimit, metrics.length)} of ${metrics.length} material nodes by betweenness centrality.`
-          } Higher values indicate more critical positions in the supply network.
+            ? `Network centrality of ${metrics.length} purchased materials on the product-level graph.`
+            : `Top ${Math.min(displayLimit, metrics.length)} of ${metrics.length} purchased materials by betweenness centrality.`
+          } Computed on the graph drawn above — suppliers, materials, finished products and customers, the BOM collapsed. Higher values indicate more critical positions.
         </CardDescription>
         {/* §4 D88 · T2 — the substitution is visible where the numbers are, not in
             a log. `provenanceSummary` returns null only when the table is empty,
@@ -240,10 +247,10 @@ export function NetworkMetricsTable({ metrics, loading = false }: NetworkMetrics
                     variant="ghost"
                     size="sm"
                     className="h-auto p-0 font-semibold text-white hover:bg-transparent hover:text-white"
-                    onClick={() => handleSort('revenue')}
+                    onClick={() => handleSort('flow')}
                   >
-                    Revenue
-                    {getSortIcon('revenue')}
+                    Weekly flow
+                    {getSortIcon('flow')}
                   </Button>
                 </TableHead>
                 <TableHead className="text-right">
@@ -331,7 +338,7 @@ export function NetworkMetricsTable({ metrics, loading = false }: NetworkMetrics
                     {metric.connection_count}
                   </TableCell>
                   <TableCell className="text-right">
-                    {formatRevenue(metric.revenue)}
+                    {formatFlow(metric.flow)}
                   </TableCell>
                   <TableCell className="text-right font-mono text-sm">
                     {formatNumber(metric.degree_centrality)}
@@ -375,10 +382,11 @@ export function NetworkMetricsTable({ metrics, loading = false }: NetworkMetrics
         <div className="mt-4 text-sm text-muted-foreground">
           <div className="flex flex-wrap gap-4">
             <span><strong>Degree:</strong> Connection ratio to max possible</span>
-            <span><strong>Weighted:</strong> Revenue-weighted connections</span>
+            <span><strong>Weekly flow:</strong> Demand propagated to the material</span>
+            <span><strong>Wtd. degree:</strong> Flow-weighted connections</span>
             <span><strong>Eigenvector:</strong> Connected to important nodes</span>
             <span><strong>Betweenness:</strong> Bridge between network clusters</span>
-            <span><strong>Closeness:</strong> Average distance to all nodes</span>
+            <span><strong>Closeness:</strong> Reachable nodes over total distance to them</span>
             <span><strong>Prominence:</strong> Overall network importance</span>
           </div>
         </div>

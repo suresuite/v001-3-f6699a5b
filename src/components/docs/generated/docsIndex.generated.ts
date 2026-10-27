@@ -1332,7 +1332,7 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
     ]
   },
   "network-science-metrics": {
-    "minutes": 8,
+    "minutes": 9,
     "sections": [
       {
         "id": "what-they-are",
@@ -1349,6 +1349,10 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
       {
         "id": "the-analyses",
         "title": "The analyses that produce them"
+      },
+      {
+        "id": "product-level",
+        "title": "On the Product-Level Network"
       },
       {
         "id": "related",
