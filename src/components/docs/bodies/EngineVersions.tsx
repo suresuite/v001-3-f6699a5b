@@ -245,7 +245,8 @@ export default function EngineVersions() {
                 <>
                   Whether a result from the previous version can be set beside one from this version. “Results
                   unchanged” means every reference run gave the same numbers. “Changed for some projects” names who.
-                  “Not comparable” means a result must be re-run before it is compared.
+                  “Not comparable” means a result must be re-run before it can be a paired experiment; Compare
+                  still shows such a pair, marked not like-for-like.
                 </>
               ),
             },

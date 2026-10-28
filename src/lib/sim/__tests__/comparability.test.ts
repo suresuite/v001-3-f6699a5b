@@ -2,14 +2,19 @@ import { describe, expect, it } from "vitest";
 import {
   comparabilityFailures,
   comparabilityNotes,
+  dataDifference,
   differingComponents,
+  runVersions,
   type ComparableSide,
 } from "../comparability";
 
 const ev = { target: "supplier:S1", target_type: "node", start_day: 140, duration_days: 28, magnitude_pct: 100 };
 const side = (o: Partial<ComparableSide["run"]> = {}, sched: unknown[] = []): ComparableSide => ({
   scenario: { crn: true, seed: 42, disruption_schedule: sched },
-  run: { policy_version_id: "v1", scenario_hash: "w1", code_version: "0.2.8", seed: 42, disruption_schedule: sched, ...o },
+  run: {
+    policy_version_id: "v1", scenario_hash: "w1", code_version: "0.2.8", seed: 42,
+    disruption_schedule: sched, hash_simulation: "d1", ...o,
+  },
 });
 
 describe("§9.3 comparability knows disruptions are a component (§4 D221)", () => {
@@ -20,13 +25,13 @@ describe("§9.3 comparability knows disruptions are a component (§4 D221)", () 
     expect(comparabilityFailures(base, stress)).toEqual([]);
   });
 
-  it("identical runs have nothing to compare", () => {
+  it("identical inputs say so (still shown, as a descriptive comparison)", () => {
     expect(comparabilityFailures(side(), side())[0]).toMatch(/nothing to compare/);
   });
 
   it("policies and disruptions both differing is refused", () => {
     const f = comparabilityFailures(side(), side({ policy_version_id: "v2", disruption_schedule: [ev] }, [ev]));
-    expect(f.join(" ")).toMatch(/policies AND events differ/);
+    expect(f.join(" ")).toMatch(/policies AND events differ — the difference cannot be attributed/);
   });
 
   it("schedule order and key order do not make a difference", () => {
@@ -71,6 +76,49 @@ describe("a world difference names the fields the runs recorded", () => {
   });
   it("says nothing extra for a run without a spec", () => {
     const f = comparabilityFailures(side(), side({ scenario_hash: "w2", disruption_schedule: [ev] }, [ev]));
-    expect(f.join(" ")).toMatch(/world AND events differ — isolate/);
+    expect(f.join(" ")).toMatch(/world AND events differ — the difference cannot be attributed/);
+  });
+});
+
+// §4 D316 — data is the fourth component, and a missing binding is unknown, not "same".
+describe("data is a component, read from what the run recorded (§4 D316)", () => {
+  it("different data alone is a paired experiment (network redesign, §9.3)", () => {
+    const b = side({ hash_simulation: "d2" });
+    expect(differingComponents(side(), b)).toEqual(["data"]);
+    expect(comparabilityFailures(side(), b)).toEqual([]);
+  });
+
+  it("different data AND policies is named, not hidden inside a policy comparison", () => {
+    const f = comparabilityFailures(side(), side({ hash_simulation: "d2", policy_version_id: "v2" }));
+    expect(f.join(" ")).toMatch(/data AND policies differ/);
+  });
+
+  it("falls back to the dataset version, then the RunKey's graph hash", () => {
+    const dv = (id: string) => side({ hash_simulation: null, dataset_version_id: id });
+    expect(dataDifference(dv("x"), dv("y"))).toBe("differs");
+    const gh = (h: string) => side({ hash_simulation: null, run_spec: { graph_hash: h } });
+    expect(dataDifference(gh("g"), gh("g"))).toBe("same");
+  });
+
+  it("a run with no data binding is unknown — never assumed the same", () => {
+    const old = side({ hash_simulation: null, policy_version_id: "v2" });
+    expect(dataDifference(side(), old)).toBe("unknown");
+    expect(comparabilityFailures(side(), old).join(" ")).toMatch(/same data is unknown/);
+  });
+});
+
+describe("a missing engine version is unknown, not the same engine (§4 D316)", () => {
+  it("names it", () => {
+    const f = comparabilityFailures(side(), side({ code_version: null, policy_version_id: "v2" }));
+    expect(f.join(" ")).toMatch(/no engine version/);
+  });
+});
+
+describe("runVersions labels what each run used", () => {
+  it("short labels, and says when nothing was recorded", () => {
+    const v = runVersions({ ...side().run, hash_simulation: "abcdef0123456789", code_version: "scsim-0.8.3+6483d4e3f6f6" });
+    expect(v).toEqual({ data: "data abcdef01", policies: "version v1", engine: "0.8.3", seed: "42" });
+    const none = runVersions({ policy_version_id: null });
+    expect(none).toEqual({ data: "not recorded", policies: "not recorded", engine: "not recorded", seed: "not recorded" });
   });
 });

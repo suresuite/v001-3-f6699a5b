@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pairedDifference } from "@/lib/sim/pairedCompare";
+import { compareRows, independentDifference, pairedDifference } from "@/lib/sim/pairedCompare";
 import { pairedT } from "@/lib/sim/stats";
 
 const reps = (vals: number[], key = "fill_rate", seedBase = 0) =>
@@ -65,7 +65,6 @@ describe("paired per-replication difference", () => {
   });
 });
 
-import { compareRows } from "@/lib/sim/pairedCompare";
 
 describe("the Compare table reads the paired test, not the overlap", () => {
   const common = [0.70, 0.95, 0.60, 0.99, 0.75, 0.85, 0.65, 0.90];
@@ -92,5 +91,32 @@ describe("the Compare table reads the paired test, not the overlap", () => {
     const [r] = compareRows(aggA, aggB, ci, ci, A, B2);
     expect(r.better).toBeNull();
     expect(r.overlap).toBe(true);
+  });
+});
+
+// §4 D316 — a pair that is not a paired experiment is compared on INDEPENDENT means.
+describe("independent difference for a pair that is not like-for-like", () => {
+  const common = [0.70, 0.95, 0.60, 0.99, 0.75, 0.85, 0.65, 0.90];
+  const A = reps(common);
+  const B = reps(common.map((v) => v + 0.01));
+
+  it("does not claim the cancellation pairing would: +0.01 under a large swing is not separated", () => {
+    const d = independentDifference(A, B, "fill_rate")!;
+    expect(d.mean).toBeCloseTo(0.01, 12);
+    expect(d.separated).toBe(false);
+    expect(pairedDifference(A, B, "fill_rate")!.separated).toBe(true);
+  });
+
+  it("a large shift is separated", () => {
+    const d = independentDifference(A, reps(common.map((v) => v + 1)), "fill_rate")!;
+    expect(d.separated).toBe(true);
+  });
+
+  it("compareRows(…, paired = false) says independent and never uses the pairing", () => {
+    const k = (x: number[]) => ({ fill_rate: x.reduce((a, b) => a + b, 0) / x.length });
+    const rows = compareRows(k(common), k(common.map((v) => v + 0.01)), {}, {}, A, B, false);
+    expect(rows[0].basis).toBe("independent");
+    expect(rows[0].better).toBeNull();
+    expect(compareRows(k(common), k(common), {}, {}, A, B)[0].basis).toBe("paired");
   });
 });

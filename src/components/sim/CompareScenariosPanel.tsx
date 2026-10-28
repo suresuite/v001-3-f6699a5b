@@ -1,23 +1,29 @@
 // Compare — §9.3 comparison semantics, one baseline against many scenarios.
 //
-// Two runs are comparable iff they are CRN-paired (same seed spec) and their
-// RunKeys differ in EXACTLY ONE component: policies, world, or disruptions
-// (the rule lives in lib/sim/comparability.ts — §4 D221). This panel enforces
-// that before it shows a single number — a paired experiment, never a chart of
-// two arbitrary runs.
+// Two runs are a PAIRED EXPERIMENT iff they are CRN-paired (same seed spec),
+// ran engines whose results agree, and their RunKeys differ in EXACTLY ONE
+// component: data, policies, world, or disruptions (the rule lives in
+// lib/sim/comparability.ts — §4 D221, D316). Such a pair gets the CRN-paired
+// delta and may be marked "best".
+//
+// Any other pair is still compared (§4 D316 — a user may compare across engine,
+// data and policy versions), but as a DESCRIPTIVE comparison: labelled "not
+// like-for-like" at the point of display, with every reason listed, its delta
+// the independent (Welch) difference of the two runs' means, and never "best".
+// "What each run used" shows the versions behind every column.
 //
 // It used to hold ONE pair (an A picker and a B picker), so comparing five
 // stress scenarios against the baseline was five round trips through two
 // selects. It now holds a BASELINE and every other scenario at once: each one
 // is tested against the baseline on its own (§9.3 is a pairwise rule, and that
 // does not change — nothing is compared challenger-to-challenger), the
-// comparable ones become columns of one matrix of paired deltas, and the rest
-// are listed with the reason instead of a column. Clicking a column opens the
-// full paired table for that pair, which is the old panel's table unchanged.
+// scenarios become columns of one matrix of deltas, and the ones that are not
+// like-for-like are also listed with their reasons. Clicking a column opens the
+// full table for that pair.
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { compareRows } from "@/lib/sim/pairedCompare";
-import { comparabilityFailures, comparabilityNotes } from "@/lib/sim/comparability";
+import { comparabilityFailures, comparabilityNotes, runVersions } from "@/lib/sim/comparability";
 import { isValidationBaseline } from "@/lib/sim/validationBaseline";
 import { compareScope, type CompareCandidate } from "@/lib/sim/labModel";
 import { kpiDisplay } from "@/lib/sim/kpiDisplay";
@@ -42,7 +48,7 @@ interface Props {
    * Wear the mobile skin (v2 §4C). The panel is mounted by both platforms, so
    * the skin arrives as a prop: false everywhere desktop renders. What changes
    * is the chrome — the matrix becomes a list of scenarios with their tallies,
-   * and the reasons a scenario is not comparable become the skin's caveat. The
+   * and the reasons a scenario is not like-for-like become the skin's caveat. The
    * comparison itself, and every number in it, is the same.
    */
   skin?: boolean;
@@ -59,7 +65,7 @@ interface Props {
   evidenceModelOf?: Record<string, string>;
 }
 
-// §2.4: with no comparable scenarios a select has no options and collapses to
+// §2.4: with no scenarios a select has no options and collapses to
 // its 38px chrome — under the touch floor on the one state where the user most
 // needs to reach it. `min-w-11` floors the width below `md`; `md:` hands back
 // the intrinsic width the desktop panel has always had.
@@ -84,6 +90,8 @@ interface Challenger {
   id: string;
   scenario: Scenario;
   run: SimulationRun;
+  /** Why this pair is not a paired experiment — empty for one. A non-empty list
+   *  makes it a descriptive comparison, never a refusal (§4 D316). */
   failures: string[];
   /** Said beside a valid pair, never a reason to refuse it (two engine versions
    *  the change record says give the same results). */
@@ -164,9 +172,9 @@ export function CompareScenariosPanel({
         };
       });
   }, [a, runA, withResults, runsByScenario]);
-  const comparable = evaluated.filter((c) => c.failures.length === 0);
-  const notComparable = evaluated.filter((c) => c.failures.length > 0);
-  const included = comparable.filter((c) => !excluded.has(c.id));
+  const paired = evaluated.filter((c) => c.failures.length === 0);
+  const descriptive = evaluated.filter((c) => c.failures.length > 0);
+  const included = evaluated.filter((c) => !excluded.has(c.id));
 
   // Replication rows, so every delta is the CRN-PAIRED difference (audit F-14).
   // One request per run — a single `.in()` over many runs would meet PostgREST's
@@ -203,6 +211,7 @@ export function CompareScenariosPanel({
         runA.aggregate_kpis ?? {}, c.run.aggregate_kpis ?? {},
         runA.ci_half_widths ?? {}, c.run.ci_half_widths ?? {},
         repsByRun[runA.id] ?? [], repsByRun[c.run.id] ?? [],
+        c.failures.length === 0,
       );
       return { ...c, rows, tally: tally(rows) };
     });
@@ -216,13 +225,11 @@ export function CompareScenariosPanel({
         ? a.primary_kpi
         : null;
   const ranked = useMemo(() => rankChallengers(challengers, rankKpi), [challengers, rankKpi]);
-  const best = useMemo(() => bestPerKpi(challengers), [challengers]);
+  // "Best" only among paired experiments: a descriptive column's difference may
+  // be the data or the engine, not the change it is named after.
+  const best = useMemo(() => bestPerKpi(challengers.filter((c) => c.failures.length === 0)), [challengers]);
 
-  const focus =
-    ranked.find((c) => c.id === focusId) ??
-    notComparable.find((c) => c.id === focusId) ??
-    ranked[0] ??
-    null;
+  const focus = ranked.find((c) => c.id === focusId) ?? ranked[0] ?? null;
   const focusRows = ranked.find((c) => c.id === focus?.id)?.rows ?? null;
 
   // The body states, shared by both chromes so a message can never differ
@@ -232,9 +239,7 @@ export function CompareScenariosPanel({
       ? `Needs 2 scenarios with results (${withResults.length} of ${scenarios.length})`
       : !a
         ? "No baseline: every scenario with results ran exploratory, and an exploratory run is never a comparison baseline. Run a Validated Model (Policies › Run & Validate) to compare against."
-        : comparable.length === 0
-          ? `None of the other ${evaluated.length} scenarios is comparable with this baseline`
-          : included.length === 0
+        : included.length === 0
             ? "Pick at least one scenario to compare"
             : loading
               ? "Loading replications…"
@@ -264,7 +269,7 @@ export function CompareScenariosPanel({
       <>
         <MobilePanel
           label="Scenario comparison"
-          counter={a ? `${comparable.length} of ${evaluated.length} comparable` : `${withResults.length} with results`}
+          counter={a ? `${paired.length} of ${evaluated.length} like-for-like` : `${withResults.length} with results`}
         >
           <MobileRow
             chevron={false}
@@ -325,21 +330,12 @@ export function CompareScenariosPanel({
                 key={c.id}
                 dot={focus?.id === c.id ? M.ink : undefined}
                 label={`${rankKpi ? `${i + 1}. ` : ""}${withTag(c.scenario)}`}
-                sub={tallyLine(c.tally)}
+                sub={c.failures.length ? `not like-for-like · ${tallyLine(c.tally)}` : tallyLine(c.tally)}
                 value={r ? <span style={{ color: deltaColor(r) }}>{r.delta}</span> : undefined}
                 onClick={() => setFocusId(c.id)}
               />
             );
           })}
-          {notComparable.map((c) => (
-            <MobileRow
-              key={c.id}
-              dot={M.firm}
-              label={withTag(c.scenario)}
-              sub="not comparable with the baseline"
-              onClick={() => setFocusId(c.id)}
-            />
-          ))}
         </MobilePanel>
 
         {focus && focusRows && !shortfall ? (
@@ -353,10 +349,11 @@ export function CompareScenariosPanel({
         ) : null}
 
         {/* One caveat per screen (§13.6): the reasons for the scenario in hand
-            when it is not comparable, otherwise what many tests at once mean. */}
+            when it is not like-for-like, otherwise what many tests at once mean. */}
         {focus && focus.failures.length > 0 ? (
           <MobileNote tone="caveat">
-            {nameOf(focus.scenario)}: {focus.failures.join(" · ")}
+            {nameOf(focus.scenario)} is not like-for-like: {focus.failures.join(" · ")}. Its delta is the
+            independent difference of the two runs' means.
           </MobileNote>
         ) : focus && focus.notes.length > 0 && !shortfall ? (
           <MobileNote tone="caveat">
@@ -426,10 +423,10 @@ export function CompareScenariosPanel({
           </span>
         }
       >
-        {comparable.length > 0 ? (
+        {evaluated.length > 0 ? (
           <div className="flex flex-wrap items-center gap-[6px] border-b border-[--sim-divider] px-3 py-2">
             <span className="mr-1 text-[11.5px] text-[#52525b]">Compare against the baseline</span>
-            {comparable.map((c) => {
+            {evaluated.map((c) => {
               const on = !excluded.has(c.id);
               const tag = tagOf(c.id);
               return (
@@ -453,6 +450,9 @@ export function CompareScenariosPanel({
                   />
                   <span className="min-w-0 max-w-[200px] truncate">{nameOf(c.scenario)}</span>
                   {tag ? <span className="text-[10.5px] text-[--zinc-quiet]">{tag}</span> : null}
+                  {c.failures.length ? (
+                    <span className="text-[10.5px] text-[#b45309]">not like-for-like</span>
+                  ) : null}
                 </button>
               );
             })}
@@ -469,7 +469,7 @@ export function CompareScenariosPanel({
                 type="button"
                 className={linkBtn}
                 disabled={included.length === 0}
-                onClick={() => setExcluded(new Set(comparable.map((c) => c.id)))}
+                onClick={() => setExcluded(new Set(evaluated.map((c) => c.id)))}
               >
                 none
               </button>
@@ -506,7 +506,7 @@ export function CompareScenariosPanel({
                             type="button"
                             onClick={() => setFocusId(c.id)}
                             aria-pressed={on}
-                            title={`${withTag(c.scenario)} — open the full paired table`}
+                            title={`${withTag(c.scenario)} — open the full table`}
                             className="flex min-h-11 w-full flex-col items-end gap-0.5 px-3 py-1.5 text-right normal-case tracking-normal md:min-h-0"
                             style={on ? { boxShadow: "inset 0 -3px 0 #ffffff" } : undefined}
                           >
@@ -515,6 +515,9 @@ export function CompareScenariosPanel({
                               {nameOf(c.scenario)}
                             </span>
                             {tag ? <span className="text-[10px] font-normal text-white/75">{tag}</span> : null}
+                            {c.failures.length ? (
+                              <span className="text-[10px] font-semibold text-[#fcd34d]">not like-for-like</span>
+                            ) : null}
                             <span className="whitespace-nowrap text-[10px] font-normal text-white/75">
                               {tallyLine(c.tally)}
                             </span>
@@ -567,9 +570,9 @@ export function CompareScenariosPanel({
                                     title={
                                       r.basis === "unpaired"
                                         ? "unpaired — no replication rows"
-                                        : r.overlap
-                                          ? "not separated: the paired interval contains 0"
-                                          : "separated: the paired interval excludes 0"
+                                        : `${r.basis === "independent" ? "independent" : "paired"} interval ${
+                                            r.overlap ? "contains 0: not separated" : "excludes 0: separated"
+                                          }`
                                     }
                                   >
                                     {isBest ? (
@@ -597,9 +600,11 @@ export function CompareScenariosPanel({
             </div>
             <div className="flex flex-col gap-0.5 px-3 py-2 text-[11px] leading-snug text-[--zinc-quiet]">
               <span>
-                Each cell is scenario − baseline: the CRN-paired difference over replications ± its
-                95% interval, with the scenario's own mean beneath. Coloured only when the interval
-                excludes 0. Click a scenario for its full paired table.
+                Each cell is scenario − baseline ± its 95% interval, with the scenario's own mean
+                beneath: the CRN-paired difference over replications for a like-for-like pair, the
+                independent difference of the two means for one marked not like-for-like. Coloured
+                only when the interval excludes 0; "best" only among like-for-like pairs. Click a
+                scenario for its full table.
               </span>
               {multiple ? <span>{multiple}</span> : null}
               {ranked
@@ -614,10 +619,14 @@ export function CompareScenariosPanel({
         )}
       </TableBlock>
 
-      {notComparable.length > 0 ? (
-        <TableBlock name="Not comparable with the baseline" count={notComparable.length}>
+      {descriptive.length > 0 ? (
+        <TableBlock
+          name="Not like-for-like with the baseline"
+          count={descriptive.length}
+          meta="compared above, but the difference cannot be read as the effect of one change"
+        >
           <div className="flex flex-col divide-y divide-[--sim-divider]">
-            {notComparable.map((c) => (
+            {descriptive.map((c) => (
               <div key={c.id} className="flex flex-col gap-[3px] px-3 py-2">
                 <span className="text-[12.5px] text-[#18181b]">{withTag(c.scenario)}</span>
                 {c.failures.map((f) => (
@@ -632,10 +641,59 @@ export function CompareScenariosPanel({
         </TableBlock>
       ) : null}
 
+      {a && runA && included.length > 0 ? (
+        <TableBlock name="What each run used" meta="the versions behind every column">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr>
+                  {["Scenario", "Data", "Policies", "Engine", "Seed"].map((h) => (
+                    <th key={h} className={cn(TH, "text-left")}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {[{ id: a.id, scenario: a, run: runA, base: true }, ...ranked.map((c) => ({ ...c, base: false }))].map(
+                  (r) => {
+                    const v = runVersions(r.run);
+                    const base = runVersions(runA);
+                    const cell = (k: keyof typeof v) => (
+                      <td
+                        className={cn(TD, "whitespace-nowrap text-[12px] tabular-nums")}
+                        style={{ color: !r.base && v[k] !== base[k] ? "#b45309" : "#52525b" }}
+                      >
+                        {v[k]}
+                      </td>
+                    );
+                    return (
+                      <tr key={r.id}>
+                        <td className={cn(TD, "whitespace-nowrap text-[12.5px] text-[#18181b]")}>
+                          {r.base ? `Baseline — ${nameOf(r.scenario)}` : nameOf(r.scenario)}
+                        </td>
+                        {cell("data")}
+                        {cell("policies")}
+                        {cell("engine")}
+                        {cell("seed")}
+                      </tr>
+                    );
+                  },
+                )}
+              </tbody>
+            </table>
+          </div>
+        </TableBlock>
+      ) : null}
+
       {focus && focusRows && !shortfall && a ? (
         <TableBlock
           name={`${nameOf(a)} vs ${nameOf(focus.scenario)}`}
-          meta="the full paired comparison for one scenario"
+          meta={
+            focus.failures.length
+              ? "the full comparison for one scenario — not like-for-like, independent intervals"
+              : "the full paired comparison for one scenario"
+          }
         >
           <CompareTable rows={focusRows} />
         </TableBlock>
