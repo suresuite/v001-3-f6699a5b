@@ -95,7 +95,7 @@ export default function Guide() { return <>
       { kicker: "Run 3", title: "With buffer", detail: "same event + 28-day stock" },
     ]}
   />
-  <P>In <strong>Compare</strong>, pick the baseline, then the Board disruption column. Only the disruption should differ. Read fill rate and lost sales together with the weekly trace. If the comparison refuses the pair, read its reason — a seed mismatch, common random numbers off, an engine mismatch, or more than one change.</P>
+  <P>In <strong>Compare</strong>, pick the baseline, then the Board disruption column. Only the disruption should differ. Read fill rate and lost sales together with the weekly trace. If the column is marked <strong>not like-for-like</strong>, read its reason — a seed mismatch, common random numbers off, a different engine or data version, or more than one change — and do not read its difference as the disruption's effect.</P>
   <P>To test a response, save a second policy version with 28 days of material safety stock and run the same disruption under it. Extra stock has a cost; don't call better service a net win until you've checked it.</P>
 </Section>
 

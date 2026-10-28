@@ -127,8 +127,10 @@ export interface CompareRow {
   better: boolean | null;
   /** the paired interval contains 0 (or there is no paired test) */
   overlap: boolean;
-  /** whether the delta is the CRN-paired per-replication difference */
-  basis: "paired" | "unpaired";
+  /** how the delta was computed: the CRN-paired per-replication difference; the
+   *  difference of two independent means (Welch — a pair that is not a paired
+   *  experiment); or the run means alone, with no interval (no replication rows) */
+  basis: "paired" | "independent" | "unpaired";
 }
 
 export function CompareTable({ rows }: { rows: CompareRow[] }) {
@@ -142,8 +144,8 @@ export function CompareTable({ rows }: { rows: CompareRow[] }) {
           <th className={cn(TH, "text-left pl-1")}>± 95% CI</th>
           <th className={cn(TH, "text-right")}>B mean</th>
           <th className={cn(TH, "text-left pl-1")}>± 95% CI</th>
-          <th className={cn(TH, "text-right")}>B − A (paired, ± 95%)</th>
-          <th className={cn(TH, "text-left")}>Paired test</th>
+          <th className={cn(TH, "text-right")}>B − A (± 95%)</th>
+          <th className={cn(TH, "text-left")}>Test</th>
         </tr>
       </thead>
       <tbody>
@@ -194,9 +196,7 @@ export function CompareTable({ rows }: { rows: CompareRow[] }) {
                   >
                     {r.basis === "unpaired"
                       ? "unpaired — no replication rows"
-                      : r.overlap
-                        ? "not separated"
-                        : "separated"}
+                      : `${r.basis === "independent" ? "independent · " : "paired · "}${r.overlap ? "not separated" : "separated"}`}
                   </span>
                 </span>
               </td>

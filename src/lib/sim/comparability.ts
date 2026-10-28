@@ -16,6 +16,20 @@
  *
  * Seed and schedule are read from the RUN (stamped at dispatch since audit
  * WP 8); the live scenario row is the fallback only for runs older than that.
+ *
+ * A FOURTH component, data (§4 D316): §9.3 names "different graphs under the
+ * same policies" as a valid experiment, and the rule never read the graph — so
+ * a run on last month's upload and a run on this month's read "same world", and
+ * a data change rode inside a policy or disruption comparison unseen. Read from
+ * what the run RECORDED: the simulation-scope hash, else the dataset version,
+ * else the RunKey's composite graph hash; unknown when neither side has the same
+ * kind of binding.
+ *
+ * WHAT A FAILURE MEANS since §4 D316: not "refused". A pair that fails is still
+ * compared — the user may compare across engine, data and policy versions — but
+ * as a DESCRIPTIVE comparison: an independent interval rather than a paired one
+ * (`compareRows(…, paired = false)`), no "best" mark, and every reason here shown
+ * beside it, so a difference that cannot be attributed to one change says so.
  */
 
 import { engineDifference } from "./engineBuild";
@@ -26,6 +40,10 @@ export interface ComparableSide {
   run: {
     policy_version_id: string | null;
     scenario_hash?: string | null;
+    /** What data the run read (§4 D316): the simulation scope's hash (WP 11.2),
+     *  the frozen dataset version (WP 13.2), the RunKey spec's `graph_hash`. */
+    hash_simulation?: string | null;
+    dataset_version_id?: string | null;
     code_version?: string | null;
     seed?: number | null;
     disruption_schedule?: unknown[] | null;
@@ -34,7 +52,25 @@ export interface ComparableSide {
   };
 }
 
-export type Component = "policies" | "world" | "events";
+export type Component = "data" | "policies" | "world" | "events";
+
+const specGraphHash = (x: ComparableSide): string | null => {
+  const g = (x.run.run_spec as { graph_hash?: unknown } | null | undefined)?.graph_hash;
+  return typeof g === "string" && g ? g : null;
+};
+
+/** Whether the two runs read the same data, from the strongest binding BOTH
+ *  recorded. "unknown" when they share no kind of binding (a run that predates
+ *  them) — never assumed the same. */
+export function dataDifference(a: ComparableSide, b: ComparableSide): "same" | "differs" | "unknown" {
+  const pairs: [string | null | undefined, string | null | undefined][] = [
+    [a.run.hash_simulation, b.run.hash_simulation],
+    [a.run.dataset_version_id, b.run.dataset_version_id],
+    [specGraphHash(a), specGraphHash(b)],
+  ];
+  for (const [x, y] of pairs) if (x && y) return x === y ? "same" : "differs";
+  return "unknown";
+}
 
 /** Order-independent, key-order-independent text of a schedule. */
 export function canonicalSchedule(schedule: unknown[] | null | undefined): string {
@@ -55,6 +91,7 @@ export function differingComponents(a: ComparableSide, b: ComparableSide): Compo
   const events = (x: ComparableSide) =>
     canonicalSchedule(x.run.disruption_schedule ?? x.scenario.disruption_schedule ?? []);
   return [
+    dataDifference(a, b) === "differs" && "data",
     a.run.policy_version_id !== b.run.policy_version_id && "policies",
     (a.run.scenario_hash ?? null) !== (b.run.scenario_hash ?? null) && "world",
     events(a) !== events(b) && "events",
@@ -71,14 +108,17 @@ export function comparabilityFailures(a: ComparableSide, b: ComparableSide): str
     failures.push(`seed spec differs (${seedA} vs ${seedB}) — the runs are not CRN-paired`);
   }
 
+  if (dataDifference(a, b) === "unknown") {
+    failures.push("one run records no data binding, so whether the two read the same data is unknown");
+  }
   const differing = differingComponents(a, b);
   if (differing.length === 0) {
-    failures.push("both runs share the same policies, world and disruptions — nothing to compare");
+    failures.push("both runs share the same data, policies, world and disruptions — nothing to compare");
   } else if (differing.length > 1) {
     const world = differing.includes("world") ? worldDifference(a, b) : null;
     failures.push(
       `${differing.join(" AND ")} differ${world ? ` (world: ${world})` : ""} — ` +
-        "isolate one component to get a valid paired experiment",
+        "the difference cannot be attributed to one of them; isolate one component for a paired experiment",
     );
   }
 
@@ -89,9 +129,31 @@ export function comparabilityFailures(a: ComparableSide, b: ComparableSide): str
   const engines = engineDifference(a.run.code_version, b.run.code_version);
   if (engines && !resultsUnchangedBetween(a.run.code_version, b.run.code_version)) {
     const between = engineChangeSummary(a.run.code_version, b.run.code_version);
-    failures.push(`${engines}${between ? ` — ${between}` : ""} — re-run one side`);
+    failures.push(`${engines}${between ? ` — ${between}` : ""} — re-run one side for a paired experiment`);
+  } else if (!a.run.code_version || !b.run.code_version) {
+    // engineDifference reads a missing version as "no difference"; it is unknown.
+    failures.push("one run records no engine version, so whether the same engine ran both is unknown");
   }
   return failures;
+}
+
+/** Short labels for what one run used — the "what each run used" table, so the
+ *  reason a pair is or is not like-for-like is visible rather than inferred. */
+export function runVersions(run: ComparableSide["run"]): { data: string; policies: string; engine: string; seed: string } {
+  const short = (v: string | null | undefined) => (v ? v.slice(0, 8) : null);
+  const g = (run.run_spec as { graph_hash?: unknown } | null | undefined)?.graph_hash;
+  const data =
+    (run.hash_simulation && `data ${short(run.hash_simulation)}`) ||
+    (run.dataset_version_id && `version ${short(run.dataset_version_id)}`) ||
+    (typeof g === "string" && g && `graph ${short(g)}`) ||
+    "not recorded";
+  const engine = run.code_version ? run.code_version.replace(/^scsim-/, "").replace(/\+.*/, "") : "not recorded";
+  return {
+    data,
+    policies: run.policy_version_id ? `version ${short(run.policy_version_id)}` : "not recorded",
+    engine,
+    seed: run.seed == null ? "not recorded" : String(run.seed),
+  };
 }
 
 /** What a reader of a VALID pair should still be told: two engine versions the

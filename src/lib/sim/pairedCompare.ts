@@ -66,24 +66,57 @@ export function pairedDifference(a: RepLike[], b: RepLike[], kpi: string): Paire
 }
 
 /**
+ * The difference of two INDEPENDENT means, per KPI — Welch's t-interval over each
+ * run's own replications. For a pair that is not a paired experiment (the seeds,
+ * the engine, or more than one component differ): there replication i of A and of
+ * B did not see the same world, so pairing them by key would claim a cancellation
+ * that never happened. Welch is the honest interval there, and conservative when
+ * the runs share seeds anyway (a positive correlation only narrows the truth).
+ */
+export function independentDifference(a: RepLike[], b: RepLike[], kpi: string): PairedDifference | null {
+  const vals = (rs: RepLike[]) =>
+    rs
+      .filter((r) => r.status === "done")
+      .map((r) => r.kpis?.[kpi])
+      .filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+  const xa = vals(a);
+  const xb = vals(b);
+  if (xa.length < 2 || xb.length < 2) return null;
+  const va = std(xa) ** 2 / xa.length;
+  const vb = std(xb) ** 2 / xb.length;
+  const se = Math.sqrt(va + vb);
+  const m = mean(xb) - mean(xa);
+  if (se === 0) return { mean: m, sd: 0, halfWidth: 0, n: Math.min(xa.length, xb.length), separated: m !== 0 };
+  // Welch–Satterthwaite degrees of freedom, floored (the conservative side).
+  const df = Math.floor((va + vb) ** 2 / (va ** 2 / (xa.length - 1) + vb ** 2 / (xb.length - 1)));
+  const halfWidth = tCritical95(Math.max(1, df)) * se;
+  return { mean: m, sd: se, halfWidth, n: Math.min(xa.length, xb.length), separated: Math.abs(m) > halfWidth };
+}
+
+/**
  * The Compare table's rows. The delta and the direction come from the PAIRED
  * difference when both runs' replication rows are present; otherwise the row
  * says `unpaired` and draws no direction at all, because a run-level mean
  * difference with overlapping error bars cannot say which run was better.
  * `better` is non-null only when the paired interval excludes 0 — the old
  * `|delta| > 1e-9` drew a winner out of noise.
+ *
+ * `paired` false is a pair that is not a paired experiment (`comparabilityFailures`
+ * names why): the delta is then the INDEPENDENT difference of the two runs'
+ * replication means (basis `independent`), never the paired one.
  */
 export function compareRows(
   kA: Record<string, unknown>, kB: Record<string, unknown>,
   ciA: Record<string, number>, ciB: Record<string, number>,
   repsA: RepLike[], repsB: RepLike[],
+  paired = true,
 ): CompareRow[] {
   return Object.keys(kA)
     .filter((key) => typeof kA[key] === "number" && typeof kB[key] === "number")
     .map((key) => {
       const d = kpiDisplay(key);
       const va = kA[key] as number, vb = kB[key] as number;
-      const p = pairedDifference(repsA, repsB, key);
+      const p = paired ? pairedDifference(repsA, repsB, key) : independentDifference(repsA, repsB, key);
       const delta = p ? p.mean : vb - va;
       const separated = p?.separated ?? false;
       return {
@@ -95,7 +128,7 @@ export function compareRows(
         bci: `± ${d.format(ciB[key] ?? 0)}`,
         delta: p ? `${signedDelta(delta, d.format)} ± ${d.format(p.halfWidth)}` : signedDelta(delta, d.format),
         deltaValue: delta,
-        basis: p ? "paired" : "unpaired",
+        basis: p ? (paired ? "paired" : "independent") : "unpaired",
         better:
           !separated || d.higherIsBetter === null ? null : d.higherIsBetter ? delta > 0 : delta < 0,
         overlap: !separated,

@@ -794,6 +794,17 @@ Two runs are *comparable* iff they are CRN-paired (same seed spec) and their Run
 > pure rules are `src/lib/sim/multiCompare.ts`. Unchanged: an exploratory run is never the
 > baseline (WP 10.5) — a project whose runs are all exploratory now gets that reason in place of
 > an empty picker.
+>
+> **Across versions (2026-10-28, PLAN.md §4 D316).** Owner direction: a user may compare runs of
+> different engine, data and policy versions. The predicate above now decides HOW a pair is
+> compared rather than WHETHER: a pair that meets it is a paired experiment (CRN-paired delta,
+> eligible for "best"); any other pair is a *descriptive* comparison — labelled "not like-for-like"
+> at the point of display with every reason, its delta the independent (Welch) difference of the
+> two runs' means, never "best". The data component this section always named is now read — the
+> run's simulation-scope hash, else its dataset version, else its RunKey graph hash — and a run with
+> no data or engine binding is "unknown", never "same". A "What each run used" table shows data,
+> policies, engine and seed beside the numbers. A7 stays a product guarantee for the paired path;
+> the descriptive path is what T2 asks for when that guarantee does not hold.
 
 ### 9.4 Worker orchestration
 
