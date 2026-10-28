@@ -1,0 +1,5 @@
+project_name=Project TRON - version 2
+start_weeks=14,26,38,50
+seed=1
+replications=10
+durations=4

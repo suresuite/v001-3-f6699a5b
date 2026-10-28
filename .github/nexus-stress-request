@@ -1,6 +1,5 @@
-project_name=Aumovio
-model_code=2026Q4-4
-replications=10
+project_name=Project TRON - version 2
+replications=3
 seed=1
-start_week=30
-durations=5
+start_week=26
+durations=4
