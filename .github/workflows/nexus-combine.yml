@@ -1,0 +1,113 @@
+name: Nexus combine over start weeks
+
+# PLAN.md §4 D317 — combine published nexus batteries that differ ONLY in the
+# outage start week into one ranked workbook (score, ± 95%, rank range, P(top 10),
+# per-week columns). Reads the database, runs no engine, writes nothing to it.
+#
+# The workbook is published to the `nexus-results` branch (one folder per
+# project) so it is downloadable from GitHub and readable by a session, and kept
+# as a run artifact for 30 days.
+#
+# TRIGGER: push `.github/nexus-combine-request` (key=value lines: project_name=,
+# start_weeks= (e.g. 14,26,38,50), seed=, replications=, durations=, model_code=)
+# — works from any branch — or run it by hand (default branch). Run each start
+# week with nexus-stress.yml first; a missing one fails naming it.
+
+on:
+  push:
+    paths:
+      - ".github/nexus-combine-request"
+  workflow_dispatch:
+    inputs:
+      project_name:
+        description: "The project's exact name"
+        required: true
+      start_weeks:
+        description: "Start weeks to combine, e.g. 14,26,38,50"
+        required: true
+      seed:
+        description: "Root seed the batteries ran on (blank = any)"
+        default: ""
+      replications:
+        description: "Replications per battery (blank = any)"
+        default: ""
+      durations:
+        description: "Outage durations, e.g. 4 or 2-9 (blank = any)"
+        default: ""
+      model_code:
+        description: "Validated Model code, e.g. 2026Q4-3 (blank = any)"
+        default: ""
+
+concurrency:
+  group: nexus-combine
+  cancel-in-progress: false
+
+jobs:
+  combine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write   # publish the workbook to the nexus-results branch
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the committed engine build (numpy, scipy) and openpyxl
+        run: pip install public/engine/*.whl openpyxl
+      - name: Resolve parameters
+        id: params
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            get() { grep -oP "^$1=\K.+" .github/nexus-combine-request | tail -1 || true; }
+            for k in project_name start_weeks seed replications durations model_code; do
+              echo "$k=$(get $k)" >> "$GITHUB_OUTPUT"
+            done
+          else
+            echo "project_name=${{ inputs.project_name }}" >> "$GITHUB_OUTPUT"
+            echo "start_weeks=${{ inputs.start_weeks }}" >> "$GITHUB_OUTPUT"
+            echo "seed=${{ inputs.seed }}" >> "$GITHUB_OUTPUT"
+            echo "replications=${{ inputs.replications }}" >> "$GITHUB_OUTPUT"
+            echo "durations=${{ inputs.durations }}" >> "$GITHUB_OUTPUT"
+            echo "model_code=${{ inputs.model_code }}" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Combine
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_NAME: ${{ steps.params.outputs.project_name }}
+          START_WEEKS: ${{ steps.params.outputs.start_weeks }}
+          SEED: ${{ steps.params.outputs.seed }}
+          REPS: ${{ steps.params.outputs.replications }}
+          DURATIONS: ${{ steps.params.outputs.durations }}
+          MODEL_CODE: ${{ steps.params.outputs.model_code }}
+        run: |
+          ARGS=(--project-name "$PROJECT_NAME" --start-weeks "$START_WEEKS" --out out --summary-md "$GITHUB_STEP_SUMMARY")
+          [ -n "$SEED" ] && ARGS+=(--seed "$SEED")
+          [ -n "$REPS" ] && ARGS+=(--replications "$REPS")
+          [ -n "$DURATIONS" ] && ARGS+=(--durations "$DURATIONS")
+          [ -n "$MODEL_CODE" ] && ARGS+=(--model-code "$MODEL_CODE")
+          python scripts/nexus/nexus_combine.py "${ARGS[@]}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexus-combined
+          path: out/
+          retention-days: 30
+      - name: Publish to the nexus-results branch
+        env:
+          PROJECT_NAME: ${{ steps.params.outputs.project_name }}
+        run: |
+          slug=$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-|-$//g')
+          if git ls-remote --exit-code --heads origin nexus-results >/dev/null; then
+            git fetch --depth 1 origin nexus-results
+            git worktree add pub FETCH_HEAD
+          else
+            git worktree add --detach pub
+            (cd pub && git checkout -q --orphan nexus-results-new && git rm -rfq .)
+          fi
+          mkdir -p "pub/$slug"
+          cp out/* "pub/$slug/"
+          cd pub
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "nexus combined: $PROJECT_NAME (run ${{ github.run_id }})" || { echo "nothing new"; exit 0; }
+          git push origin HEAD:nexus-results
