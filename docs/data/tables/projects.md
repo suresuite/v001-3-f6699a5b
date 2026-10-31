@@ -317,7 +317,7 @@ First day of the horizon the project simulates.
 each of these names this column in an explicit `select` list, so the claim
 is about the column and not only about the table.
 
-> NOT TRACED into `scsim` from this column: the engine reads run weeks only, and the worker takes the horizon from the run request. Since WP 18.1 (§4 D318) it is RUN WEEK 0 — the anchor through which a disruption start entered as an ISO week or a date becomes the run week that is stored (`start_day`), with what was entered kept beside it (`scenarios.disruption_schedule[].start_anchor`). Every new run records it (`simulation_runs.calendar_start`), so a later edit here never re-dates a past run. With `simulation_end` it is the project window, the one authored run length: a new scenario with no validated or baseline world takes its horizon from it, and a scenario that runs another length says so. The engine's demand calendar is a second anchor (the earliest `demand_forecasts.period_start`); the Lab says when the two differ.
+> NOT TRACED into `scsim` from this column: the engine reads run weeks only, and the worker takes the horizon from the run request. Since WP 18.1 (§4 D318) it is RUN WEEK 0 — the anchor through which a disruption start entered as an ISO week or a date becomes the run week that is stored (`start_day`), with what was entered kept beside it (`scenarios.disruption_schedule[].start_anchor`). Every new run records it (`simulation_runs.calendar_start`), so a later edit here never re-dates a past run. With `simulation_end` it is the project window, the one authored run length: a new scenario with no validated or baseline world takes its horizon from it, and a scenario that runs another length says so. The engine's demand calendar is a second anchor (the earliest `demand_forecasts.period_start`); the Lab says when the two differ. Until WP 18.1 the form stored a picked date through `toISOString()`, a day early east of UTC; `20261101000002` (WP 18.3) moved every window carrying that signature (`YYYY-12-31 → (YYYY+1)-12-30`) to the days picked. Runs backfilled before it keep the 31 December they recorded.
 
 ### `simulation_end`
 
@@ -445,6 +445,6 @@ The owning organization by uuid. This is what the public /v1 API authorizes on (
 
 ---
 
-*Generated from data contract `23066b5e2f0e`, engine `0.8.3`,
+*Generated from data contract `984857e696e8`, engine `0.8.3`,
 sidecar `supabase/contract/projects.contract.yaml`, table created by `20250820145734_c21e4e5b-37de-4359-9ebd-46271b89a375.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

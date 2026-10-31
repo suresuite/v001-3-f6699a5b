@@ -167,6 +167,9 @@ jobs:
       - name: Install worker deps + scsim (bridge)
         run: |
           pip install -r sim-worker/requirements.txt pytest
+          # §16 · WP 18.2 — `tests/test_nexus_combine.py` writes the combined workbook
+          # (scripts/nexus/nexus_combine.py); red on main since #419 without it.
+          pip install openpyxl
           pip install ./scsim
           # PLAN.md §25 · WP 15.5 — the release report reads scsim/CHANGELOG.yaml.
           pip install pyyaml
