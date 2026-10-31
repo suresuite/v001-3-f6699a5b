@@ -18,6 +18,9 @@ export function useValidatedBaseline(args: {
   /** The live policy hash (usePolicies.currentHash) — cards are matched by
    *  content, not by version id (WP 10.2, §4 D242). */
   policyHash: string | null | undefined;
+  /** The project window's length as `horizon_days` (PLAN.md §4 D318) — the
+   *  horizon a scenario with no validated or baseline world starts with. */
+  windowHorizonDays?: number | null;
 }): {
   baseline: Scenario | null;
   /** the card whose world new scenarios take, or null */
@@ -25,7 +28,7 @@ export function useValidatedBaseline(args: {
   world: SeedWorld;
   credibility: Credibility;
 } {
-  const { scenarios, cred, policyHash } = args;
+  const { scenarios, cred, policyHash, windowHorizonDays } = args;
   const baseline = useMemo(() => findValidationBaseline(scenarios), [scenarios]);
 
   const card = useMemo(() => {
@@ -37,7 +40,10 @@ export function useValidatedBaseline(args: {
     return validated.find((c) => !!policyHash && c.policy_hash === policyHash) ?? validated[0] ?? null;
   }, [cred.cards, policyHash]);
 
-  const world = useMemo(() => worldOf(baseline, card?.scenario_fingerprint), [baseline, card]);
+  const world = useMemo(
+    () => worldOf(baseline, card?.scenario_fingerprint, windowHorizonDays),
+    [baseline, card, windowHorizonDays],
+  );
   const credibility = cred.resolveScenario(policyHash, baseline);
 
   return { baseline, card, world, credibility };

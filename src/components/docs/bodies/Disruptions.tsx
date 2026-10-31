@@ -82,6 +82,23 @@ export default function Disruptions() {
           arrives at with a schedule already written for them. Read it before you write one by hand.
         </P>
         <P>
+          <strong>A start can be entered three ways</strong> — a run week, an ISO 8601 calendar
+          week (weeks start Monday; some years have a week 53) or a date — and all three go through
+          the project&apos;s simulation start, which is run week 0: run week <em>t</em> is the seven
+          days from the start plus 7·<em>t</em>. The engine runs whole weeks, so a date lands in the
+          run week that contains it, and the line under the field always states all three readings.
+          What you typed is kept beside the run week; if the project start later changes, the event
+          says so and offers to keep its run week or move to what you entered — it never moves by
+          itself. Without a simulation start only the run week can be entered. The engine has a
+          second calendar for demand — the earliest forecast period — and the editor says when the
+          two differ.
+        </P>
+        <P>
+          A run records the date of its week 0 when it is dispatched, so later edits to the project
+          start never re-date it. Runs made before that record existed were given the project start
+          as it stood on 31 Oct 2026, and every place that shows it says it was filled in afterwards.
+        </P>
+        <P>
           It is a column on the scenario rather than a table of its own, which is why it has no
           reference block here.
         </P>

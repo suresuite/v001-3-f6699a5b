@@ -148,6 +148,11 @@ export interface ReproducibilityRecordInput {
   /** `run_spec.run_key_version`: 2 = dispatched under the simulation scope (WP 11.2),
    *  for which the level bindings are REQUIRED; earlier runs could not carry them. */
   runKeyVersion?: number | null;
+  // ── WP 18.1 · §4 D318 — the calendar a run's weeks are dated against.
+  /** `simulation_runs.calendar_start` — run week 0 as the run recorded it. */
+  calendarStart?: string | null;
+  /** `simulation_runs.calendar_start_source`: 'dispatch' or 'backfill'. */
+  calendarStartSource?: string | null;
   /** Every analysis whose output this project's screens display. */
   analyses: AnalysisBinding[];
   /** The Trust Report's own limits, verbatim — T3 rather than a second list. */
@@ -320,6 +325,17 @@ export function bindingsOf(input: ReproducibilityRecordInput): Binding[] {
       input.scenarioSeedReason ??
         "the disruptions this run simulated are unrecorded, so its figures cannot be " +
           "attributed to a schedule",
+    ),
+    bind(
+      "scenario.calendar_start",
+      "Calendar (run week 0)",
+      input.calendarStart ?? null,
+      input.calendarStartSource === "backfill"
+        ? "simulation_runs.calendar_start — filled after the run (20261101000001) from the project start as of that day; the run itself recorded none"
+        : "simulation_runs.calendar_start (stamped at dispatch)",
+      "recommended",
+      "the project had no simulation start when this run was recorded, so its weeks carry no calendar date " +
+        "— the engine reads weeks only, so the figures are unaffected",
     ),
     bind(
       "scenario.hash",

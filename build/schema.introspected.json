@@ -1,15 +1,15 @@
 {
   "$generator": "scripts/data-contract/introspect.mjs",
   "$doc": "EFFECTIVE schema replayed from supabase/migrations/*.sql in filename order. Generated — do not edit; `npm run contract:introspect -- --check` fails on drift.",
-  "migrations_found": 412,
-  "migrations_applied": 404,
+  "migrations_found": 413,
+  "migrations_applied": 405,
   "first_migration": "20250815000000_approved_users_base.sql",
-  "last_migration": "20261027000003_recovery_vocabulary_reaches_engine.sql",
+  "last_migration": "20261101000001_run_calendar_start.sql",
   "counts": {
     "tables": 94,
     "views": 8,
     "enums": 4,
-    "functions": 433,
+    "functions": 434,
     "shadowed_definitions": 4,
     "phantom_tables": 0,
     "unparsed_statements": 0,
@@ -22420,6 +22420,30 @@
             "on_delete": "SET NULL"
           },
           "added_by": "20261001000020_simulation_scope.sql"
+        },
+        {
+          "name": "calendar_start",
+          "quoted": false,
+          "type": "date",
+          "type_raw": "date",
+          "nullable": true,
+          "default": null,
+          "primary_key": false,
+          "unique": false,
+          "references": null,
+          "added_by": "20261101000001_run_calendar_start.sql"
+        },
+        {
+          "name": "calendar_start_source",
+          "quoted": false,
+          "type": "text",
+          "type_raw": "text",
+          "nullable": true,
+          "default": null,
+          "primary_key": false,
+          "unique": false,
+          "references": null,
+          "added_by": "20261101000001_run_calendar_start.sql"
         }
       ],
       "constraints": [
@@ -22455,6 +22479,13 @@
           "columns": [],
           "definition": "CHECK ((retention = 'standard' OR series_expires_at IS NULL) AND (series_expired_at IS NULL OR series_object IS NULL))",
           "added_by": "20261001000010_result_tiers.sql"
+        },
+        {
+          "name": "simulation_runs_calendar_start_source_check",
+          "kind": "CHECK",
+          "columns": [],
+          "definition": "CHECK ((calendar_start IS NULL) = (calendar_start_source IS NULL) AND (calendar_start_source IS NULL OR calendar_start_source IN ('dispatch', 'backfill')))",
+          "added_by": "20261101000001_run_calendar_start.sql"
         }
       ],
       "indexes": [
@@ -25440,6 +25471,16 @@
       "volatility": "IMMUTABLE",
       "comment": null,
       "defined_by": "20261001000020_simulation_scope.sql"
+    },
+    {
+      "name": "_simulation_run_calendar",
+      "signature": "_simulation_run_calendar()",
+      "args": [],
+      "returns": "trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path TO",
+      "security_definer": true,
+      "volatility": null,
+      "comment": null,
+      "defined_by": "20261101000001_run_calendar_start.sql"
     },
     {
       "name": "_simulation_run_derive",

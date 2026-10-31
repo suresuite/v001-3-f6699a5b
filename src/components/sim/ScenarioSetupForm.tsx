@@ -5,6 +5,9 @@ import type { Scenario } from "@/hooks/useScenarios";
 import { SCENARIO_ENGINE_DEFAULTS } from "@/hooks/useScenarios";
 import { useTimeUnit, UNIT_LABEL_PLURAL } from "@/hooks/useTimeUnit";
 import { HORIZON_WEEKS, editWeeks, engineWeeks, formatDuration } from "@/lib/sim/planningTime";
+import { useProjectCalendar } from "@/hooks/useProjectCalendar";
+import { horizonMismatch, projectWindow, windowHorizonDays } from "@/lib/sim/projectWindow";
+import { Button } from "@/components/ui/button";
 
 interface Props {
   scenario: Scenario;
@@ -40,6 +43,11 @@ export function ScenarioSetupForm({ scenario, projectId, onSave, section = "all"
   // The planning unit is read, never chosen, here: /policies sets it, and
   // every figure below is converted by planningTime (WP 9.4 slice 1).
   const { unit } = useTimeUnit(projectId);
+  // PLAN.md §4 D318 — the project window is the authored run length; a scenario
+  // that runs another length says so here and is never changed unasked.
+  const calendar = useProjectCalendar(projectId);
+  const projWindow = projectWindow(calendar.projectStart, calendar.projectEnd);
+  const mismatch = horizonMismatch(local.horizon_days, projWindow);
   const unitLabel = UNIT_LABEL_PLURAL[unit];
 
   // Re-sync on server-side updates too (inheritance writes warm-up/replications
@@ -224,12 +232,36 @@ export function ScenarioSetupForm({ scenario, projectId, onSave, section = "all"
       {show("runWindow") || show("precision") ? (
       <div className="grid grid-cols-[minmax(0,1fr)] items-stretch gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.16fr)]">
         {show("runWindow") ? (
+        <div className="flex min-w-0 flex-col gap-2">
         <ParameterCard
           group={runWindow}
           // The engine's window, not `horizon − warm-up` (audit F-02): the rule is
           // exported by the engine and pinned by `runWindow.test.ts`.
           footer={`${formatDuration(local.horizon_days)} horizon · ${runWindowFooter(local)}`}
         />
+        {mismatch && projWindow ? (
+          <div className="flex flex-col gap-1.5 rounded-sm border border-[#e8c48a] bg-[#fdf6ea] px-3 py-2 text-[11.5px] text-[#92400e]">
+            <p>
+              {mismatch}
+              {projWindow.boundReason ? ` ${projWindow.boundReason}` : ""}
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-11 md:h-8"
+                onClick={() => patchNow({ horizon_days: windowHorizonDays(projWindow) })}
+              >
+                Set horizon to {projWindow.engineWeeks} wk
+              </Button>
+              <span>
+                The horizon is part of the scenario&apos;s world: a validated model run on this scenario would need
+                re-validation.
+              </span>
+            </div>
+          </div>
+        ) : null}
+        </div>
         ) : null}
         {show("precision") ? (
         <ParameterCard

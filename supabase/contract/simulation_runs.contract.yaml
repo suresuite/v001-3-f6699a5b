@@ -44,7 +44,7 @@ surfaces:
   - page: "SimulationLab.tsx"
     via: "hook useSimulationRun → select * from simulation_runs"
     grain: table
-    evidence: "src/hooks/useSimulationRun.tsx:105"
+    evidence: "src/hooks/useSimulationRun.tsx:109"
     confirmed: true
   - page: "ProjectPolicies.tsx"
     via: "useVerifiableExports → select * from simulation_runs"
@@ -556,6 +556,37 @@ fields:
       When `sweep_expired_run_series` removed the series (object, JSONB, per-item rows).
       The run row, its aggregates and every replication's KPI row are kept; the screen
       says the series expired and which RunKey reproduces them.
+    grain: metadata
+    engine: {consumed_by: null, transform: null, missing_default: null}
+    substitutions: []
+    ingest: {csv_header: null, required: false, validate: null}
+    surfaces: []
+    resolution: null
+  calendar_start:
+    type: "date"
+    unit: null
+    unit_source: none
+    meaning: >-
+      Run week 0's calendar date — `projects.simulation_start` as it stood when the run was
+      inserted, stamped by the `simulation_runs_calendar_ins` trigger and never changed after
+      (PLAN.md §4 D318). Every date shown for this run's weeks reads it, never the project's
+      current start. NULL when the project had no start. The engine never reads a calendar
+      date, so it is not in `run_spec` and moves no RunKey.
+    grain: metadata
+    engine: {consumed_by: null, transform: null, missing_default: null}
+    substitutions: []
+    ingest: {csv_header: null, required: false, validate: null}
+    surfaces: []
+    resolution: null
+  calendar_start_source:
+    type: "text"
+    unit: null
+    unit_source: none
+    meaning: >-
+      How `calendar_start` was recorded: 'dispatch' (stamped at insert) or 'backfill' (filled by
+      `20261101000001` for a run that predates the column, from the project's start as of that
+      day — the run itself recorded none, and the reproducibility record and Compare say so).
+      NULL exactly when `calendar_start` is (CHECK).
     grain: metadata
     engine: {consumed_by: null, transform: null, missing_default: null}
     substitutions: []

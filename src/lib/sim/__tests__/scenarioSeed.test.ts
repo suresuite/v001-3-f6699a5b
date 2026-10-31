@@ -45,6 +45,15 @@ describe("a new scenario starts in the validated world (§4 D219)", () => {
     });
   });
 
+  it("§4 D318: the project window replaces the engine default, never a validated or baseline world", () => {
+    const b = { horizon_days: 364, time_step: "day" as const, demand_model: { kind: "poisson", lambda: 7 } };
+    const card = { horizon_days: 728, time_step: "day", demand_model: { kind: "poisson", lambda: 3 } };
+    expect(worldOf(null, null, 1092)).toMatchObject({ horizon_days: 1092, source: "project_window" });
+    expect(worldOf(b, null, 1092)).toMatchObject({ horizon_days: 364, source: "baseline" });
+    expect(worldOf(b, card, 1092)).toMatchObject({ horizon_days: 728, source: "validation" });
+    expect(worldOf(null, null, null)).toMatchObject({ source: "defaults" });
+  });
+
   it("shares the baseline's seed and CRN, and is always an experiment", () => {
     const seed = buildScenarioSeed({ name: "S", world: worldOf(null, card), baseline: { seed: 7, crn: true } });
     expect(seed.seed).toBe(7);

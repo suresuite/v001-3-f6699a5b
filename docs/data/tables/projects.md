@@ -66,7 +66,7 @@ Tier G rather than a data tier: `projects` holds no measured quantity. It is the
 
 | Page | Via | Evidence | Confirmed |
 |---|---|---|---|
-| `DataManager.tsx` | rpc list_projects | `src/pages/DataManager.tsx:213` | yes |
+| `DataManager.tsx` | rpc list_projects | `src/pages/DataManager.tsx:215` | yes |
 | `DeveloperApi.tsx` | rpc list_projects | `src/pages/DeveloperApi.tsx:320` | yes |
 | `FirmLevelNetwork.tsx` | rpc list_projects | `src/pages/FirmLevelNetwork.tsx:273` | yes |
 | `InteractiveNetworkSpace.tsx` | rpc list_projects | `src/pages/InteractiveNetworkSpace.tsx:339` | yes |
@@ -311,13 +311,13 @@ First day of the horizon the project simulates.
 | Added by | `20250828000823_c0efd8c6-4b46-444d-bb81-b5b76c988c4f.sql` |
 | Read by the engine | **not traced** |
 | Validated at ingest | — |
-| Rendered at | `[object Object]`, `[object Object]`, `[object Object]` |
+| Rendered at | `[object Object]`, `[object Object]`, `[object Object]`, `[object Object]` |
 
-**Rendered on** `FirmLevelNetwork.tsx` (`src/components/network/NetworkDisruptionDialog.tsx:414`), `ProcessLevelNetwork.tsx` (`src/components/network/NetworkDisruptionDialog.tsx:414`), `ProductLevelNetwork.tsx` (`src/components/network/NetworkDisruptionDialog.tsx:414`) —
+**Rendered on** `FirmLevelNetwork.tsx` (`src/hooks/useProjectCalendar.ts:37`), `ProcessLevelNetwork.tsx` (`src/hooks/useProjectCalendar.ts:37`), `ProductLevelNetwork.tsx` (`src/hooks/useProjectCalendar.ts:37`), `SimulationLab.tsx` (`src/hooks/useProjectCalendar.ts:37`) —
 each of these names this column in an explicit `select` list, so the claim
 is about the column and not only about the table.
 
-> NOT TRACED into `scsim` from this column: the worker takes the horizon from the run request, not from the project row. The two can disagree, and nothing today reconciles them — recorded rather than implied (§5 T1). Since WP 9.4 the network pages' disruption dialog reads it for ONE thing: an approximate calendar date beside a run week, labelled as such and never stored — the event itself is authored in run weeks.
+> NOT TRACED into `scsim` from this column: the engine reads run weeks only, and the worker takes the horizon from the run request. Since WP 18.1 (§4 D318) it is RUN WEEK 0 — the anchor through which a disruption start entered as an ISO week or a date becomes the run week that is stored (`start_day`), with what was entered kept beside it (`scenarios.disruption_schedule[].start_anchor`). Every new run records it (`simulation_runs.calendar_start`), so a later edit here never re-dates a past run. With `simulation_end` it is the project window, the one authored run length: a new scenario with no validated or baseline world takes its horizon from it, and a scenario that runs another length says so. The engine's demand calendar is a second anchor (the earliest `demand_forecasts.period_start`); the Lab says when the two differ.
 
 ### `simulation_end`
 
@@ -331,9 +331,13 @@ Last day of the horizon the project simulates.
 | Added by | `20250828000823_c0efd8c6-4b46-444d-bb81-b5b76c988c4f.sql` |
 | Read by the engine | **not traced** |
 | Validated at ingest | — |
-| Rendered at | *not yet recorded (WP 5.1)* |
+| Rendered at | `[object Object]` |
 
-> As `simulation_start` — the run request is what the engine actually reads. No screen reads it since WP 9.4: the network pages' disruption dialog used it to bound a date picker, and the dialog now authors run weeks (§4 D228).
+**Rendered on** `SimulationLab.tsx` (`src/hooks/useProjectCalendar.ts:37`) —
+each of these names this column in an explicit `select` list, so the claim
+is about the column and not only about the table.
+
+> As `simulation_start` — the run request is what the engine actually reads. Since WP 18.1 (§4 D318) the start and end are the project window, the one authored run length: project settings state it in weeks, refuse a window outside the engine's 52–520 weeks, and the /policies delivery schedule, a new scenario's horizon and the Lab's mismatch note all read it through `src/lib/sim/projectWindow.ts`.
 
 ### `plant_latitude`
 
@@ -441,6 +445,6 @@ The owning organization by uuid. This is what the public /v1 API authorizes on (
 
 ---
 
-*Generated from data contract `3800b7221efd`, engine `0.8.3`,
+*Generated from data contract `23066b5e2f0e`, engine `0.8.3`,
 sidecar `supabase/contract/projects.contract.yaml`, table created by `20250820145734_c21e4e5b-37de-4359-9ebd-46271b89a375.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

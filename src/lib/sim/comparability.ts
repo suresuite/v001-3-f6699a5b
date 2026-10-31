@@ -32,6 +32,8 @@
  * beside it, so a difference that cannot be attributed to one change says so.
  */
 
+import { engineEvent } from "./startAnchor";
+import { isCalendarDate } from "./calendarWeeks";
 import { engineDifference } from "./engineBuild";
 import { engineChangeSummary, resultsUnchangedBetween } from "./engineChanges";
 
@@ -49,6 +51,9 @@ export interface ComparableSide {
     disruption_schedule?: unknown[] | null;
     /** The RunKey's spec; its `scenario` carries the world fields the run read. */
     run_spec?: Record<string, unknown> | null;
+    /** §4 D318 — run week 0's date as the run recorded it, and how it was recorded. */
+    calendar_start?: string | null;
+    calendar_start_source?: string | null;
   };
 }
 
@@ -84,7 +89,12 @@ export function canonicalSchedule(schedule: unknown[] | null | undefined): strin
               .map((k) => [k, canon((v as Record<string, unknown>)[k])]),
           )
         : v;
-  return JSON.stringify(((schedule ?? []) as unknown[]).map(canon).map((e) => JSON.stringify(e)).sort());
+  // `start_anchor` is what the user typed (an ISO week or a date) and the
+  // engine never reads it (PLAN.md §4 D318): two runs whose events differ only
+  // in how their start was entered ran the same events.
+  const engineOnly = (e: unknown) =>
+    e && typeof e === "object" && !Array.isArray(e) ? engineEvent(e as Record<string, unknown>) : e;
+  return JSON.stringify(((schedule ?? []) as unknown[]).map(engineOnly).map(canon).map((e) => JSON.stringify(e)).sort());
 }
 
 export function differingComponents(a: ComparableSide, b: ComparableSide): Component[] {
@@ -139,7 +149,9 @@ export function comparabilityFailures(a: ComparableSide, b: ComparableSide): str
 
 /** Short labels for what one run used — the "what each run used" table, so the
  *  reason a pair is or is not like-for-like is visible rather than inferred. */
-export function runVersions(run: ComparableSide["run"]): { data: string; policies: string; engine: string; seed: string } {
+export function runVersions(
+  run: ComparableSide["run"],
+): { data: string; policies: string; engine: string; seed: string; calendar: string } {
   const short = (v: string | null | undefined) => (v ? v.slice(0, 8) : null);
   const g = (run.run_spec as { graph_hash?: unknown } | null | undefined)?.graph_hash;
   const data =
@@ -153,6 +165,11 @@ export function runVersions(run: ComparableSide["run"]): { data: string; policie
     policies: run.policy_version_id ? `version ${short(run.policy_version_id)}` : "not recorded",
     engine,
     seed: run.seed == null ? "not recorded" : String(run.seed),
+    // The calendar dates a week; it is not an engine input, so it never makes a
+    // pair "not like-for-like" — it is shown so a date is read against the right start.
+    calendar: isCalendarDate(run.calendar_start)
+      ? `week 0 = ${run.calendar_start}${run.calendar_start_source === "backfill" ? " (filled later)" : ""}`
+      : "not recorded",
   };
 }
 

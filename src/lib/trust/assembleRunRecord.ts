@@ -155,6 +155,9 @@ export async function assembleRunRecord({
     runKey: (run as SimulationRun).run_key ?? null,
     protocolOverrides: (run as SimulationRun).protocol_overrides,
     exploratory: (run as SimulationRun).exploratory ?? null,
+    // WP 18.1 · §4 D318 — the calendar the run's weeks are dated against, from the RUN.
+    calendarStart: (run as SimulationRun).calendar_start ?? null,
+    calendarStartSource: (run as SimulationRun).calendar_start_source ?? null,
     // WP 11.3 — which LEVEL the figure came from, read from the run and its snapshot.
     simulationHash: (run as SimulationRun).hash_simulation ?? null,
     simulationVersionNo: (run as SimulationRun).simulation_version_id ? tuple.simulation ?? null : null,

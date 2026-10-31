@@ -9,6 +9,29 @@ import {
   isLeadTimeDelay,
   targetChoices,
 } from "@/lib/sim/disruptionEvents";
+import { Button } from "@/components/ui/button";
+import {
+  isCalendarDate,
+  isoWeeksInYear,
+  isoYearsInHorizon,
+  parseIsoWeek,
+  runWeekRange,
+  runWeekStart,
+  runWeekToIsoWeek,
+} from "@/lib/sim/calendarWeeks";
+import {
+  anchorDrift,
+  calendarReading,
+  keepRunWeek,
+  reanchor,
+  startFromDate,
+  startFromIsoWeek,
+  startModeOf,
+  type AnchoredStart,
+  type ScheduleEvent,
+  type StartAnchor,
+  type StartMode,
+} from "@/lib/sim/startAnchor";
 
 /**
  * The fields every disruption-event surface is built from: the network pages'
@@ -21,10 +44,12 @@ export const FIELD_H = "h-11 md:h-9";
 export const FIELD_BOX =
   "rounded-sm border border-input bg-background text-[13px] text-foreground focus-within:border-foreground";
 
-/** The range a start time may take, said under the field. */
+/** The range a start time may take, said under the field. The engine's weeks
+ *  are 0-based ticks, so a run of H weeks has a last week of H − 1 — a start at
+ *  week H would fall after the run (§4 D318). */
 export function startHint(horizonWeeks?: number): string {
   const min = DISRUPTION_RULE.start_week_min;
-  return horizonWeeks ? `Week ${min}–${horizonWeeks} of the run` : `From week ${min} of the run`;
+  return horizonWeeks ? `Week ${min}–${horizonWeeks - 1} of the run` : `From week ${min} of the run`;
 }
 
 /** Spread a hint into `Field`'s props. */
@@ -327,6 +352,176 @@ export function WeeksStepper({
         if (next !== days) onDays(next);
       }}
     />
+  );
+}
+
+const START_MODES: { value: StartMode; label: string }[] = [
+  { value: "run_week", label: "Run week" },
+  { value: "iso_week", label: "Calendar week" },
+  { value: "date", label: "Date" },
+];
+
+/**
+ * A disruption's start, entered as a run week, an ISO 8601 calendar week or a
+ * date (PLAN.md §4 D318). All three resolve through the project start (run
+ * week 0); the row keeps `start_day`, plus what was entered when it was a
+ * calendar entry. One line under the control states every reading, so the
+ * week the engine runs is visible whichever way it was entered.
+ */
+export function StartTimeControl({
+  id,
+  event,
+  onChange,
+  projectStart,
+  horizonWeeks,
+  ariaLabel = "Disruption event start time",
+}: {
+  id?: string;
+  event: Pick<ScheduleEvent, "start_day" | "start_anchor">;
+  onChange: (startDay: number, anchor?: StartAnchor) => void;
+  projectStart?: string | null;
+  horizonWeeks?: number;
+  ariaLabel?: string;
+}) {
+  const hasStart = isCalendarDate(projectStart);
+  const [mode, setMode] = useState<StartMode>(() => (hasStart ? startModeOf(event) : "run_week"));
+  const [reason, setReason] = useState<string | null>(null);
+  useEffect(() => {
+    if (!hasStart) setMode("run_week");
+  }, [hasStart]);
+  const bounds = { min: DISRUPTION_RULE.start_week_min, horizonWeeks };
+  const t = engineWeeks(event.start_day);
+  const apply = (r: AnchoredStart) => {
+    if ("reason" in r) {
+      setReason(r.reason);
+      return;
+    }
+    setReason(null);
+    onChange(r.startDay, r.anchor);
+  };
+
+  const currentIso = hasStart ? runWeekToIsoWeek(projectStart, t) : null;
+  const shownIso =
+    (event.start_anchor?.kind === "iso_week" && parseIsoWeek(event.start_anchor.value)) || currentIso;
+  const years = hasStart ? isoYearsInHorizon(projectStart, horizonWeeks ?? Math.max(t + 1, 52)) : [];
+  const shownDate =
+    (event.start_anchor?.kind === "date" && event.start_anchor.value) ||
+    (hasStart ? runWeekStart(projectStart, t) : "");
+
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <Segmented<StartMode>
+        className="w-full"
+        ariaLabel={`${ariaLabel}: entered as`}
+        value={mode}
+        onChange={(m) => {
+          setReason(null);
+          setMode(m);
+        }}
+        options={START_MODES.map((o) => ({ ...o, disabled: o.value !== "run_week" && !hasStart }))}
+      />
+      {mode === "run_week" || !hasStart ? (
+        <WeeksStepper
+          id={id}
+          ariaLabel={ariaLabel}
+          kind="point"
+          days={event.start_day}
+          min={DISRUPTION_RULE.start_week_min}
+          max={horizonWeeks !== undefined ? horizonWeeks - 1 : undefined}
+          onDays={(d) => onChange(d)}
+        />
+      ) : mode === "iso_week" && shownIso ? (
+        <div className="flex gap-2">
+          <select
+            aria-label={`${ariaLabel}: ISO year`}
+            className={cn(FIELD_H, FIELD_BOX, "px-2")}
+            value={shownIso.year}
+            onChange={(e) => {
+              const year = Number(e.target.value);
+              apply(startFromIsoWeek(projectStart, { year, week: Math.min(shownIso.week, isoWeeksInYear(year)) }, event.start_day, bounds));
+            }}
+          >
+            {[...new Set([...years, shownIso.year])].sort().map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+          <div className="min-w-0 flex-1">
+            <NumberStepper
+              id={id}
+              value={shownIso.week}
+              min={1}
+              max={isoWeeksInYear(shownIso.year)}
+              prefix="W"
+              ariaLabel={`${ariaLabel}: ISO week`}
+              onCommit={(week) => apply(startFromIsoWeek(projectStart, { year: shownIso.year, week }, event.start_day, bounds))}
+            />
+          </div>
+        </div>
+      ) : (
+        <input
+          id={id}
+          type="date"
+          aria-label={`${ariaLabel}: date`}
+          className={cn(FIELD_H, FIELD_BOX, "w-full px-2")}
+          value={shownDate}
+          min={hasStart ? runWeekStart(projectStart, bounds.min) : undefined}
+          max={hasStart && horizonWeeks !== undefined ? runWeekRange(projectStart, horizonWeeks - 1).last : undefined}
+          onChange={(e) => {
+            if (e.target.value) apply(startFromDate(projectStart as string, e.target.value, event.start_day, bounds));
+          }}
+        />
+      )}
+      <p className="text-[11.5px] leading-4 text-[#52525b]">{calendarReading(projectStart, event.start_day)}</p>
+      {!hasStart ? (
+        <p className="text-[11.5px] leading-4 text-[#71717a]">
+          Calendar week and date need the project’s simulation start — set it in the project settings (Project manager).
+        </p>
+      ) : null}
+      {reason ? <p className="text-[11.5px] leading-4 text-[#b3261e]">{reason}</p> : null}
+    </div>
+  );
+}
+
+/**
+ * The project start moved since this event's start was entered in calendar
+ * time. Nothing moves until the user picks one of the two readings.
+ */
+export function AnchorDriftNote({
+  event,
+  projectStart,
+  horizonWeeks,
+  onChange,
+}: {
+  event: ScheduleEvent;
+  projectStart?: string | null;
+  horizonWeeks?: number;
+  onChange: (next: ScheduleEvent) => void;
+}) {
+  const drift = anchorDrift(event, projectStart);
+  const [reason, setReason] = useState<string | null>(null);
+  if (!drift || !projectStart) return null;
+  return (
+    <div className="flex flex-col gap-1.5 rounded-sm border border-[#e8c48a] bg-[#fdf6ea] px-3 py-2 text-[11.5px] text-[#92400e]">
+      <p>{drift.message}</p>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" className={cn(FIELD_H, "px-3")} onClick={() => onChange(keepRunWeek(event))}>
+          Keep run week {drift.runWeek}
+        </Button>
+        <Button
+          variant="outline"
+          className={cn(FIELD_H, "px-3")}
+          onClick={() => {
+            const r = reanchor(event, projectStart, { min: DISRUPTION_RULE.start_week_min, horizonWeeks });
+            if ("reason" in r) setReason(r.reason);
+            else onChange(r);
+          }}
+        >
+          Move to {drift.entered}
+          {drift.movedRunWeek !== null ? ` (run week ${drift.movedRunWeek})` : ""}
+        </Button>
+      </div>
+      {reason ? <p className="text-[#b3261e]">{reason}</p> : null}
+    </div>
   );
 }
 

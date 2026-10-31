@@ -65,7 +65,7 @@ Tier 4 — the DECISION plane: what a person or an agent CHOSE, as against the d
 
 | Page | Via | Evidence | Confirmed |
 |---|---|---|---|
-| `SimulationLab.tsx` | table read | `src/hooks/useScenarios.tsx:109` | yes |
+| `SimulationLab.tsx` | table read | `src/hooks/useScenarios.tsx:117` | yes |
 | `SimulationLab.tsx` | table read | `src/hooks/useVerifiableExports.tsx:222` | yes |
 
 Each row says the page READS the table by that path, at that line. It does
@@ -93,7 +93,7 @@ that gap is defect D21. A dash means the column has no CSV origin.
 | `seed` | — | `bigint` | — | — | The root seed. With `crn` below, this is what makes two runs of one scenario comparable rather than merely similar. |
 | `crn` | — | `boolean` | — | — | Common random numbers: whether two scenarios draw the same randomness so their difference is the POLICY and not the dice. Default true, and turning it off makes a comparison a different kind of claim. |
 | `demand_model` | — | `jsonb` | — | — | How demand is generated when the project's own data does not supply it — kind plus parameters, as JSON. A DECLARED substitution (T2) rather than a silent default, and the default is a Poisson. |
-| `disruption_schedule` | — | `jsonb` | — | — | THE WHAT-IF ITSELF — the events, their timing and their targets. Copied from a template when one is applied and diverging from that moment. §4 D112's unresolvable targets arrive here. |
+| `disruption_schedule` | — | `jsonb` | — | — | THE WHAT-IF ITSELF — the events, their timing and their targets. Copied from a template when one is applied and diverging from that moment. §4 D112's unresolvable targets arrive here. Timing is `start_day` (days from run week 0) and `duration_days`; an event whose start was entered as an ISO week or a date also carries `start_anchor` {kind: iso_week \| date, value, project_start} — what was typed and the project start it was converted against (§4 D318). The engine never reads `start_anchor` (`scsim/tests/test_start_anchor_ignored.py`); Compare ignores it too. |
 | `recovery_overrides` | — | `jsonb` | — | — | Per-lever changes to the chosen playbook, so a scenario can adjust a strategy without forking the playbook. |
 | `stopping_rule` | — | `jsonb` | — | — | When the run stops — a fixed horizon by default, as JSON so a precision-based rule can be expressed without a migration. |
 | `primary_kpi` | — | `text` | — | — | The objective this scenario is judged on. A KEY, not a label, and it must be one the engine emits: `fill_rate` by default (§4 D113). |
@@ -278,7 +278,7 @@ How demand is generated when the project's own data does not supply it — kind 
 
 ### `disruption_schedule`
 
-THE WHAT-IF ITSELF — the events, their timing and their targets. Copied from a template when one is applied and diverging from that moment. §4 D112's unresolvable targets arrive here.
+THE WHAT-IF ITSELF — the events, their timing and their targets. Copied from a template when one is applied and diverging from that moment. §4 D112's unresolvable targets arrive here. Timing is `start_day` (days from run week 0) and `duration_days`; an event whose start was entered as an ISO week or a date also carries `start_anchor` {kind: iso_week \| date, value, project_start} — what was typed and the project start it was converted against (§4 D318). The engine never reads `start_anchor` (`scsim/tests/test_start_anchor_ignored.py`); Compare ignores it too.
 
 | | |
 |---|---|
@@ -442,6 +442,6 @@ What the scenario is for — `experiment`, a what-if a person set up in the Lab 
 
 ---
 
-*Generated from data contract `3800b7221efd`, engine `0.8.3`,
+*Generated from data contract `23066b5e2f0e`, engine `0.8.3`,
 sidecar `supabase/contract/scenarios.contract.yaml`, table created by `20260607121406_fcbd47e9-93de-4b3b-988f-7f4718159c91.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

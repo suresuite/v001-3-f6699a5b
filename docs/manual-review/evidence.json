@@ -60,7 +60,7 @@
       "path": "src/lib/sim/comparability.ts",
       "symbols": "comparabilityFailures",
       "manual_page": "experiments-and-comparison",
-      "sha256": "3a6ee56e843ee5172d9d04f9a897bc472acf562f162d7c2045910e2475993c0e"
+      "sha256": "9b9452bab8305d3aa2ac2c685028966c82436ce27b13b60907d023e5fcddf96f"
     },
     {
       "path": "supabase/functions/api/index.ts",
@@ -96,7 +96,7 @@
       "path": "src/components/sim/CompareScenariosPanel.tsx",
       "symbols": "CompareScenariosPanel",
       "manual_page": "experiments-and-comparison",
-      "sha256": "03a18ed4c1d3c87174272a0f40b501ed0c50ad6c265decd23eb3e07f1489acc3"
+      "sha256": "82bc169c571ef1c72e296e1e1e98b81e6855e00984e3009f3f702da58bdb2c88"
     },
     {
       "path": "src/lib/sim/multiCompare.ts",

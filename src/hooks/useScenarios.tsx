@@ -21,6 +21,14 @@ export interface Scenario {
     start_day: number;
     duration_days: number;
     magnitude_pct: number;
+    /** What the user entered when the start was set in calendar time, and the
+     *  project start it was converted against. Display only — the engine reads
+     *  `start_day` (PLAN.md §4 D318, `src/lib/sim/startAnchor.ts`). */
+    start_anchor?: {
+      kind: "iso_week" | "date";
+      value: string;
+      project_start: string;
+    };
   }>;
   recovery_overrides: Record<string, unknown>;
   stopping_rule: { kind: "fixed_horizon" | "ci_halfwidth"; epsilon?: number; max_wall_seconds?: number };

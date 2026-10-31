@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+
+// The editor reads the project calendar (§4 D318); no network here.
+vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
 import { EngineTicks } from "@/components/sim/DisruptionScheduleEditor";
 
 // Audit F-22: day-granular disruptions collapse to weeks, and the desktop

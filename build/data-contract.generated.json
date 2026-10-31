@@ -5,9 +5,9 @@
   "sources": {
     "introspected": {
       "generator": "scripts/data-contract/introspect.mjs",
-      "migrations_found": 412,
-      "migrations_applied": 404,
-      "last_migration": "20261027000003_recovery_vocabulary_reaches_engine.sql"
+      "migrations_found": 413,
+      "migrations_applied": 405,
+      "last_migration": "20261101000001_run_calendar_start.sql"
     },
     "sidecars": 77,
     "registry": {
@@ -18,8 +18,8 @@
   "counts": {
     "tables_in_schema": 94,
     "tables_covered": 77,
-    "columns_covered": 1024,
-    "check_constraints": 107,
+    "columns_covered": 1026,
+    "check_constraints": 108,
     "engine_requirements": 7,
     "orphans": 0,
     "phantom_tables": 0
@@ -3230,7 +3230,7 @@
           "page": "DataManager.tsx",
           "via": "rpc get_project_dataset_status",
           "grain": "table",
-          "evidence": "src/pages/DataManager.tsx:434",
+          "evidence": "src/pages/DataManager.tsx:447",
           "confirmed": true
         },
         {
@@ -3859,7 +3859,7 @@
           "page": "DataManager.tsx",
           "via": "rpc get_project_dataset_status",
           "grain": "table",
-          "evidence": "src/pages/DataManager.tsx:434",
+          "evidence": "src/pages/DataManager.tsx:447",
           "confirmed": true
         },
         {
@@ -11199,7 +11199,7 @@
           "page": "DataManager.tsx",
           "via": "rpc get_project_dataset_status",
           "grain": "table",
-          "evidence": "src/pages/DataManager.tsx:434",
+          "evidence": "src/pages/DataManager.tsx:447",
           "confirmed": true
         },
         {
@@ -18650,7 +18650,7 @@
           "page": "DataManager.tsx",
           "via": "rpc delete_project_dataset",
           "grain": "table",
-          "evidence": "src/pages/DataManager.tsx:724",
+          "evidence": "src/pages/DataManager.tsx:737",
           "confirmed": true
         },
         {
@@ -19074,7 +19074,7 @@
           "page": "DataManager.tsx",
           "via": "rpc get_project_dataset_status",
           "grain": "table",
-          "evidence": "src/pages/DataManager.tsx:434",
+          "evidence": "src/pages/DataManager.tsx:447",
           "confirmed": true
         }
       ],
@@ -19671,7 +19671,7 @@
           "page": "DataManager.tsx",
           "via": "rpc get_project_dataset_status",
           "grain": "table",
-          "evidence": "src/pages/DataManager.tsx:434",
+          "evidence": "src/pages/DataManager.tsx:447",
           "confirmed": true
         },
         {
@@ -21329,7 +21329,7 @@
           "page": "DataManager.tsx",
           "via": "rpc get_node_list",
           "grain": "table",
-          "evidence": "src/pages/DataManager.tsx:446",
+          "evidence": "src/pages/DataManager.tsx:459",
           "confirmed": true
         },
         {
@@ -23554,7 +23554,7 @@
           "page": "DataManager.tsx",
           "via": "rpc get_project_dataset_status",
           "grain": "table",
-          "evidence": "src/pages/DataManager.tsx:434",
+          "evidence": "src/pages/DataManager.tsx:447",
           "confirmed": true
         },
         {
@@ -30508,7 +30508,7 @@
           "page": "DataManager.tsx",
           "via": "rpc list_projects",
           "grain": "table",
-          "evidence": "src/pages/DataManager.tsx:213",
+          "evidence": "src/pages/DataManager.tsx:215",
           "confirmed": true
         },
         {
@@ -31081,26 +31081,33 @@
               "page": "FirmLevelNetwork.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/components/network/NetworkDisruptionDialog.tsx:414",
+              "evidence": "src/hooks/useProjectCalendar.ts:37",
               "confirmed": true
             },
             {
               "page": "ProcessLevelNetwork.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/components/network/NetworkDisruptionDialog.tsx:414",
+              "evidence": "src/hooks/useProjectCalendar.ts:37",
               "confirmed": true
             },
             {
               "page": "ProductLevelNetwork.tsx",
               "via": "table read",
               "grain": "column",
-              "evidence": "src/components/network/NetworkDisruptionDialog.tsx:414",
+              "evidence": "src/hooks/useProjectCalendar.ts:37",
+              "confirmed": true
+            },
+            {
+              "page": "SimulationLab.tsx",
+              "via": "table read",
+              "grain": "column",
+              "evidence": "src/hooks/useProjectCalendar.ts:37",
               "confirmed": true
             }
           ],
           "resolution": null,
-          "note": "NOT TRACED into `scsim` from this column: the worker takes the horizon from the run request, not from the project row. The two can disagree, and nothing today reconciles them — recorded rather than implied (§5 T1). Since WP 9.4 the network pages' disruption dialog reads it for ONE thing: an approximate calendar date beside a run week, labelled as such and never stored — the event itself is authored in run weeks.",
+          "note": "NOT TRACED into `scsim` from this column: the engine reads run weeks only, and the worker takes the horizon from the run request. Since WP 18.1 (§4 D318) it is RUN WEEK 0 — the anchor through which a disruption start entered as an ISO week or a date becomes the run week that is stored (`start_day`), with what was entered kept beside it (`scenarios.disruption_schedule[].start_anchor`). Every new run records it (`simulation_runs.calendar_start`), so a later edit here never re-dates a past run. With `simulation_end` it is the project window, the one authored run length: a new scenario with no validated or baseline world takes its horizon from it, and a scenario that runs another length says so. The engine's demand calendar is a second anchor (the earliest `demand_forecasts.period_start`); the Lab says when the two differ.",
           "engine_requirement": null
         },
         {
@@ -31130,9 +31137,17 @@
             "required": false,
             "validate": null
           },
-          "surfaces": [],
+          "surfaces": [
+            {
+              "page": "SimulationLab.tsx",
+              "via": "table read",
+              "grain": "column",
+              "evidence": "src/hooks/useProjectCalendar.ts:37",
+              "confirmed": true
+            }
+          ],
           "resolution": null,
-          "note": "As `simulation_start` — the run request is what the engine actually reads. No screen reads it since WP 9.4: the network pages' disruption dialog used it to bound a date picker, and the dialog now authors run weeks (§4 D228).",
+          "note": "As `simulation_start` — the run request is what the engine actually reads. Since WP 18.1 (§4 D318) the start and end are the project window, the one authored run length: project settings state it in weeks, refuse a window outside the engine's 52–520 weeks, and the /policies delivery schedule, a new scenario's horizon and the Lab's mismatch note all read it through `src/lib/sim/projectWindow.ts`.",
           "engine_requirement": null
         },
         {
@@ -32944,7 +32959,7 @@
           "page": "ProjectPolicies.tsx",
           "via": "hook useSimulationRun → select * from run_replications",
           "grain": "table",
-          "evidence": "src/hooks/useSimulationRun.tsx:115",
+          "evidence": "src/hooks/useSimulationRun.tsx:119",
           "confirmed": true,
           "note": "Both result surfaces reach this table through the SAME hook, so the evidence is the hook's read rather than either page's render. Run & Validate reads every replication of the newest run: the weekly series charts, the financial statement, the per-seed explorer and the inventory chart all render from these rows."
         },
@@ -32952,7 +32967,7 @@
           "page": "SimulationLab.tsx",
           "via": "hook useSimulationRun::loadReps → select * from run_replications",
           "grain": "table",
-          "evidence": "src/hooks/useSimulationRun.tsx:230",
+          "evidence": "src/hooks/useSimulationRun.tsx:234",
           "confirmed": true
         },
         {
@@ -34683,7 +34698,7 @@
           "page": "SimulationLab.tsx",
           "via": "table read",
           "grain": "table",
-          "evidence": "src/hooks/useScenarios.tsx:109",
+          "evidence": "src/hooks/useScenarios.tsx:117",
           "confirmed": true
         },
         {
@@ -35178,7 +35193,7 @@
           "unit_source": "none",
           "unit_column": null,
           "normalize_at_promotion": null,
-          "meaning": "THE WHAT-IF ITSELF — the events, their timing and their targets. Copied from a template when one is applied and diverging from that moment. §4 D112's unresolvable targets arrive here.",
+          "meaning": "THE WHAT-IF ITSELF — the events, their timing and their targets. Copied from a template when one is applied and diverging from that moment. §4 D112's unresolvable targets arrive here. Timing is `start_day` (days from run week 0) and `duration_days`; an event whose start was entered as an ISO week or a date also carries `start_anchor` {kind: iso_week | date, value, project_start} — what was typed and the project start it was converted against (§4 D318). The engine never reads `start_anchor` (`scsim/tests/test_start_anchor_ignored.py`); Compare ignores it too.",
           "grain": "metadata",
           "computed_by": null,
           "engine": {
@@ -39632,7 +39647,7 @@
           "page": "SimulationLab.tsx",
           "via": "hook useSimulationRun → select * from simulation_runs",
           "grain": "table",
-          "evidence": "src/hooks/useSimulationRun.tsx:105",
+          "evidence": "src/hooks/useSimulationRun.tsx:109",
           "confirmed": true
         },
         {
@@ -39713,6 +39728,13 @@
           "columns": [],
           "definition": "CHECK ((retention = 'standard' OR series_expires_at IS NULL) AND (series_expired_at IS NULL OR series_object IS NULL))",
           "added_by": "20261001000010_result_tiers.sql"
+        },
+        {
+          "name": "simulation_runs_calendar_start_source_check",
+          "kind": "CHECK",
+          "columns": [],
+          "definition": "CHECK ((calendar_start IS NULL) = (calendar_start_source IS NULL) AND (calendar_start_source IS NULL OR calendar_start_source IN ('dispatch', 'backfill')))",
+          "added_by": "20261101000001_run_calendar_start.sql"
         }
       ],
       "indexes": [
@@ -41027,6 +41049,70 @@
           "resolution": null,
           "note": null,
           "engine_requirement": null
+        },
+        {
+          "name": "calendar_start",
+          "type": "date",
+          "nullable": true,
+          "default": null,
+          "primary_key": false,
+          "unique": false,
+          "references": null,
+          "added_by": "20261101000001_run_calendar_start.sql",
+          "unit": null,
+          "unit_source": "none",
+          "unit_column": null,
+          "normalize_at_promotion": null,
+          "meaning": "Run week 0's calendar date — `projects.simulation_start` as it stood when the run was inserted, stamped by the `simulation_runs_calendar_ins` trigger and never changed after (PLAN.md §4 D318). Every date shown for this run's weeks reads it, never the project's current start. NULL when the project had no start. The engine never reads a calendar date, so it is not in `run_spec` and moves no RunKey.",
+          "grain": "metadata",
+          "computed_by": null,
+          "engine": {
+            "consumed_by": null,
+            "transform": null,
+            "missing_default": null
+          },
+          "substitutions": [],
+          "ingest": {
+            "csv_header": null,
+            "required": false,
+            "validate": null
+          },
+          "surfaces": [],
+          "resolution": null,
+          "note": null,
+          "engine_requirement": null
+        },
+        {
+          "name": "calendar_start_source",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "primary_key": false,
+          "unique": false,
+          "references": null,
+          "added_by": "20261101000001_run_calendar_start.sql",
+          "unit": null,
+          "unit_source": "none",
+          "unit_column": null,
+          "normalize_at_promotion": null,
+          "meaning": "How `calendar_start` was recorded: 'dispatch' (stamped at insert) or 'backfill' (filled by `20261101000001` for a run that predates the column, from the project's start as of that day — the run itself recorded none, and the reproducibility record and Compare say so). NULL exactly when `calendar_start` is (CHECK).",
+          "grain": "metadata",
+          "computed_by": null,
+          "engine": {
+            "consumed_by": null,
+            "transform": null,
+            "missing_default": null
+          },
+          "substitutions": [],
+          "ingest": {
+            "csv_header": null,
+            "required": false,
+            "validate": null
+          },
+          "surfaces": [],
+          "resolution": null,
+          "note": null,
+          "engine_requirement": null
         }
       ],
       "note": null,
@@ -41619,7 +41705,7 @@
           "page": "DataManager.tsx",
           "via": "rpc combine_project_into_supply_chain",
           "grain": "table",
-          "evidence": "src/pages/DataManager.tsx:661",
+          "evidence": "src/pages/DataManager.tsx:674",
           "confirmed": true
         },
         {
@@ -42562,7 +42648,7 @@
           "page": "DataManager.tsx",
           "via": "rpc combine_project_into_supply_chain",
           "grain": "table",
-          "evidence": "src/pages/DataManager.tsx:661",
+          "evidence": "src/pages/DataManager.tsx:674",
           "confirmed": true
         },
         {
@@ -45187,5 +45273,5 @@
   },
   "orphans": [],
   "phantom_tables": [],
-  "contract_version": "3800b7221efd"
+  "contract_version": "23066b5e2f0e"
 }

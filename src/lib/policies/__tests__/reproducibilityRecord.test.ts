@@ -48,6 +48,8 @@ const COMPLETE: ReproducibilityRecordInput = {
   runKey: "d".repeat(64),
   protocolOverrides: {},
   exploratory: false,
+  calendarStart: "2027-01-04",
+  calendarStartSource: "dispatch",
   // WP 11.3 — the levels a run dispatched under the simulation scope carries.
   runKeyVersion: 2,
   simulationHash: "e".repeat(64),
@@ -117,6 +119,16 @@ describe("A5 · every part is bound or its absence is stated", () => {
     }
     const explor = bindingsOf({ ...COMPLETE, validatedModelId: null, exploratory: true });
     expect(explor.find((b) => b.key === "model.validated_model")!.absentBecause).toMatch(/EXPLORATORY/);
+  });
+
+  it("§4 D318: the run's calendar is bound from the run, and a backfilled one says so", () => {
+    const by = (i: typeof COMPLETE) => bindingsOf(i).find((b) => b.key === "scenario.calendar_start")!;
+    expect(by(COMPLETE)).toMatchObject({ value: "2027-01-04", level: "recommended" });
+    expect(by(COMPLETE).source).toMatch(/stamped at dispatch/);
+    expect(by({ ...COMPLETE, calendarStartSource: "backfill" }).source).toMatch(/filled after the run/);
+    const none = buildReproducibilityRecord({ ...COMPLETE, calendarStart: null, calendarStartSource: null });
+    expect(none.reproducible).toBe(true);
+    expect(none.bindings.find((b) => b.key === "scenario.calendar_start")!.absentBecause).toMatch(/no simulation start/);
   });
 
   it("every binding names WHERE it comes from, present or absent", () => {

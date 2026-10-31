@@ -41,7 +41,9 @@ import {
 import { Toggle } from '@/components/ui/toggle';
 import ProjectDataViewer from '@/components/ProjectDataViewer';
 import ItemMasterEditor from '@/components/ItemMasterEditor';
-import { getDefaultSimulationDateRange, formatDateForDatabase } from '@/utils/dateHelpers';
+import { getDefaultSimulationDateRange, formatDateForDatabase, parseDateFromDatabase } from '@/utils/dateHelpers';
+import { ProjectWindowLength } from '@/components/ProjectWindowLength';
+import { projectWindow } from '@/lib/sim/projectWindow';
 import UploadWizard from '@/components/UploadWizard';
 import { ProjectCard } from '@/components/ProjectCard';
 import { ErpConnectionsPanelForEditors } from '@/components/erp/ErpConnectionsPanel';
@@ -276,6 +278,12 @@ const DataManager = ({ isCollapsed, setIsCollapsed }: DataManagerProps) => {
       toast.error('A project with this name already exists');
       return;
     }
+    // PLAN.md §4 D318 — the window is the run's length; the engine's bounds apply.
+    const windowRefusal = projectWindow(formatDateForDatabase(simulationStart), formatDateForDatabase(simulationEnd))?.boundReason;
+    if (windowRefusal) {
+      toast.error(`Simulation period: ${windowRefusal}`);
+      return;
+    }
 
     try {
       const { data, error } = await supabase.rpc('create_project', {
@@ -396,6 +404,11 @@ const DataManager = ({ isCollapsed, setIsCollapsed }: DataManagerProps) => {
 
   const handleUpdateProject = async () => {
     if (!editingProject || !user?.id || !user.email) return;
+    const windowRefusal = projectWindow(formatDateForDatabase(editSimulationStart), formatDateForDatabase(editSimulationEnd))?.boundReason;
+    if (windowRefusal) {
+      toast.error(`Simulation period: ${windowRefusal}`);
+      return;
+    }
 
     try {
       const { error } = await supabase.rpc('update_project', {
@@ -406,8 +419,8 @@ const DataManager = ({ isCollapsed, setIsCollapsed }: DataManagerProps) => {
         p_bom_level: editBomLevel,
         p_user_id: user.id,
         p_user_email: user.email,
-        p_simulation_start: editSimulationStart ? editSimulationStart.toISOString().split('T')[0] : null,
-        p_simulation_end: editSimulationEnd ? editSimulationEnd.toISOString().split('T')[0] : null,
+        p_simulation_start: formatDateForDatabase(editSimulationStart),
+        p_simulation_end: formatDateForDatabase(editSimulationEnd),
         p_data_type: editDataType,
         p_deep_tier_enabled: editDeepTierEnabled,
       });
@@ -682,8 +695,8 @@ const DataManager = ({ isCollapsed, setIsCollapsed }: DataManagerProps) => {
     setEditPlantName(selectedProject.plant_name);
     setEditSupplyChainModel(selectedProject.supply_chain_model);
     setEditBomLevel(selectedProject.bom_level);
-    setEditSimulationStart(selectedProject.simulation_start ? new Date(selectedProject.simulation_start) : undefined);
-    setEditSimulationEnd(selectedProject.simulation_end ? new Date(selectedProject.simulation_end) : undefined);
+    setEditSimulationStart(parseDateFromDatabase(selectedProject.simulation_start));
+    setEditSimulationEnd(parseDateFromDatabase(selectedProject.simulation_end));
     setEditDeepTierEnabled(selectedProject.deep_tier_enabled || false);
   };
 
@@ -977,8 +990,8 @@ const DataManager = ({ isCollapsed, setIsCollapsed }: DataManagerProps) => {
                     setEditDataType(project.data_type || 'curated');
                     setEditSupplyChainModel(project.supply_chain_model);
                     setEditBomLevel(project.bom_level);
-                    setEditSimulationStart(project.simulation_start ? new Date(project.simulation_start) : undefined);
-                    setEditSimulationEnd(project.simulation_end ? new Date(project.simulation_end) : undefined);
+                    setEditSimulationStart(parseDateFromDatabase(project.simulation_start));
+                    setEditSimulationEnd(parseDateFromDatabase(project.simulation_end));
                   }}
                   onDelete={handleDeleteProject}
                   onCombine={handleCombineProject}
@@ -1198,6 +1211,12 @@ const DataManager = ({ isCollapsed, setIsCollapsed }: DataManagerProps) => {
               />
             </div>
           </div>
+          <ProjectWindowLength
+            idPrefix="new-project-window"
+            start={simulationStart}
+            end={simulationEnd}
+            onEndChange={setSimulationEnd}
+          />
             <div className="flex gap-2">
               <Button
                 onClick={handleCreateProject}

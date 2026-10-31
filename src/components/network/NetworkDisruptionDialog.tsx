@@ -15,6 +15,10 @@ import { useValidatedBaseline } from "@/hooks/useValidatedBaseline";
 import { buildScenarioSeed, uniqueName } from "@/lib/sim/scenarioSeed";
 import { isValidationBaseline } from "@/lib/sim/validationBaseline";
 import { engineWeeks } from "@/lib/sim/planningTime";
+import { useProjectCalendar } from "@/hooks/useProjectCalendar";
+import { isCalendarDate } from "@/lib/sim/calendarWeeks";
+import { projectWindow, windowHorizonDays } from "@/lib/sim/projectWindow";
+import { calendarReading, withStart } from "@/lib/sim/startAnchor";
 import {
   DISRUPTION_RULE,
   DISRUPTION_TERMS,
@@ -38,6 +42,7 @@ import {
   Field,
   Segmented,
   TargetSelect,
+  StartTimeControl,
   WeeksStepper,
   durationHint,
   hintOf,
@@ -100,7 +105,12 @@ function Body({
   const { currentHash: policyHash } = usePolicies(projectId);
   const { suppliers } = useItemMasters(projectId);
   const cred = useModelValidation(projectId);
-  const validated = useValidatedBaseline({ scenarios, cred, policyHash });
+  const calendarRow = useProjectCalendar(projectId);
+  const projWindow = projectWindow(calendarRow.projectStart, calendarRow.projectEnd);
+  const validated = useValidatedBaseline({
+    scenarios, cred, policyHash,
+    windowHorizonDays: projWindow ? windowHorizonDays(projWindow) : null,
+  });
 
   const supplierIds = useMemo(() => suppliers.map((s) => s.supplier_id).filter(Boolean), [suppliers]);
 
@@ -159,7 +169,10 @@ function Body({
       (dest === "existing" && !existing ? "Choose the scenario that receives this event." : null) ??
       (dest === "new" && !name.trim() ? "Name the new scenario." : null);
 
-  const calendar = useCalendarHint(projectId, ev.start_day);
+  // Run week 0 is the project start (PLAN.md §4 D318). The old hint dated
+  // week t as start + 7(t − 1) — one week early against the engine's 0-based clock.
+  const { projectStart } = calendarRow;
+  const calendar = isCalendarDate(projectStart) ? calendarReading(projectStart, ev.start_day) : null;
 
   const submit = async () => {
     if (blocker) return;
@@ -291,16 +304,14 @@ function Body({
           ) : null}
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field label={DISRUPTION_TERMS.startTime} htmlFor="disruption-start" hint={startHint(horizonWeeks)}>
-            <WeeksStepper
+            <StartTimeControl
               id="disruption-start"
-              ariaLabel="Disruption event start time"
-              kind="point"
-              days={ev.start_day}
-              min={DISRUPTION_RULE.start_week_min}
-              max={horizonWeeks}
-              onDays={(d) => setEvent((e) => ({ ...e, start_day: d }))}
+              event={ev}
+              projectStart={projectStart}
+              horizonWeeks={horizonWeeks}
+              onChange={(d, anchor) => setEvent((e) => withStart(e, d, anchor))}
             />
           </Field>
           <Field
@@ -378,7 +389,7 @@ function Body({
             <>
               <p className="font-medium text-foreground">{describeEvent(ev)}</p>
               <p className="mt-0.5 text-[#52525b]">
-                {calendar ? <>Starts ≈ {calendar} · </> : null}
+                {calendar ? <>Starts {calendar} · </> : null}
                 {destName ? <>saved to {dest === "new" ? "new scenario" : "scenario"} “{destName}”</> : null}
               </p>
             </>
@@ -396,34 +407,4 @@ function Body({
       </ResponsiveDialogFooter>
     </>
   );
-}
-
-/**
- * "12 Jan 2027" for a simulation week, when the project states a simulation start.
- * A display aid only: the engine counts weeks from the run's week 1, not from a
- * calendar date, so the date is labelled approximate and never stored.
- */
-function useCalendarHint(projectId: string, startDay: number): string | null {
-  const [start, setStart] = useState<string | null>(null);
-  useEffect(() => {
-    let live = true;
-    // The generated client types predate `simulation_start` (as for `scenarios`).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    void (supabase as any)
-      .from("projects")
-      .select("simulation_start")
-      .eq("id", projectId)
-      .maybeSingle()
-      .then(({ data }: { data: unknown }) => {
-        if (live) setStart((data as { simulation_start?: string | null } | null)?.simulation_start ?? null);
-      });
-    return () => {
-      live = false;
-    };
-  }, [projectId]);
-  if (!start) return null;
-  const d = new Date(start);
-  if (Number.isNaN(d.getTime())) return null;
-  d.setDate(d.getDate() + (engineWeeks(startDay) - 1) * 7);
-  return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 }

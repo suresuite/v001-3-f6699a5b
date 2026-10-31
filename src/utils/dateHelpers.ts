@@ -29,11 +29,26 @@ export function getDefaultSimulationDateRange(): { start: Date; end: Date } {
 }
 
 /**
- * Format date for database (YYYY-MM-DD)
+ * Format date for database (YYYY-MM-DD) — the calendar day the user PICKED.
+ *
+ * A date picker yields local midnight; `toISOString()` converted that to UTC
+ * first, so east of Greenwich (UTC+1 … UTC+14) a picked 4 Jan was stored as
+ * 3 Jan. Since `simulation_start` is run week 0 (PLAN.md §4 D318), that moved
+ * every calendar-entered disruption by a day. Local Y-M-D is the day picked.
  */
 export function formatDateForDatabase(date: Date | null | undefined): string | null {
-  if (!date) return null;
-  return date.toISOString().split('T')[0];
+  if (!date || Number.isNaN(date.getTime())) return null;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/**
+ * A stored `YYYY-MM-DD` as a picker's Date (local midnight of that day).
+ * `new Date('2027-01-04')` is UTC midnight, which west of Greenwich is 3 Jan.
+ */
+export function parseDateFromDatabase(value: string | null | undefined): Date | undefined {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value ?? ''));
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : undefined;
 }
 
 /**
@@ -46,7 +61,7 @@ export function getFallbackSimulationDates(
   const defaults = getDefaultSimulationDateRange();
   
   return {
-    start: startDate ? new Date(startDate) : defaults.start,
-    end: endDate ? new Date(endDate) : defaults.end
+    start: parseDateFromDatabase(startDate) ?? defaults.start,
+    end: parseDateFromDatabase(endDate) ?? defaults.end
   };
 }

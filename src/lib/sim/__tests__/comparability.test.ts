@@ -4,6 +4,7 @@ import {
   comparabilityNotes,
   dataDifference,
   differingComponents,
+  canonicalSchedule,
   runVersions,
   type ComparableSide,
 } from "../comparability";
@@ -117,8 +118,18 @@ describe("a missing engine version is unknown, not the same engine (§4 D316)", 
 describe("runVersions labels what each run used", () => {
   it("short labels, and says when nothing was recorded", () => {
     const v = runVersions({ ...side().run, hash_simulation: "abcdef0123456789", code_version: "scsim-0.8.3+6483d4e3f6f6" });
-    expect(v).toEqual({ data: "data abcdef01", policies: "version v1", engine: "0.8.3", seed: "42" });
+    expect(v).toEqual({ data: "data abcdef01", policies: "version v1", engine: "0.8.3", seed: "42", calendar: "not recorded" });
     const none = runVersions({ policy_version_id: null });
-    expect(none).toEqual({ data: "not recorded", policies: "not recorded", engine: "not recorded", seed: "not recorded" });
+    expect(none).toEqual({ data: "not recorded", policies: "not recorded", engine: "not recorded", seed: "not recorded", calendar: "not recorded" });
+    expect(runVersions({ policy_version_id: null, calendar_start: "2027-01-04", calendar_start_source: "dispatch" }).calendar)
+      .toBe("week 0 = 2027-01-04");
+    expect(runVersions({ policy_version_id: null, calendar_start: "2027-01-04", calendar_start_source: "backfill" }).calendar)
+      .toBe("week 0 = 2027-01-04 (filled later)");
+  });
+
+  it("a start entered as a date runs the same events as one entered as a run week (§4 D318)", () => {
+    const anchored = { ...ev, start_anchor: { kind: "date", value: "2027-05-24", project_start: "2027-01-04" } };
+    expect(canonicalSchedule([anchored])).toBe(canonicalSchedule([ev]));
+    expect(canonicalSchedule([{ ...ev, start_day: 147 }])).not.toBe(canonicalSchedule([ev]));
   });
 });

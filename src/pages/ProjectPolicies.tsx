@@ -28,6 +28,8 @@ import { useStageGuards } from "@/hooks/useStageGuards";
 import { useItemMasters } from "@/hooks/useItemMasters";
 import { useUnsavedDraftsGuard } from "@/hooks/useUnsavedDraftsGuard";
 import { usePolicySearchIndex, type SearchObjectType, type SearchResult } from "@/hooks/usePolicySearchIndex";
+import { formatCalendarDate, formatRunWeekRange, isCalendarDate, parseCalendarDate, toCalendarDate } from "@/lib/sim/calendarWeeks";
+import { projectWindow } from "@/lib/sim/projectWindow";
 import { useTimeUnit, DAYS_PER_UNIT, UNIT_LABEL_PLURAL } from "@/hooks/useTimeUnit";
 import { FocusedStage } from "@/components/policies/FocusedStage";
 import { GuidePanel } from "@/components/policies/GuidePanel";
@@ -81,34 +83,35 @@ function highlightMatch(text: string, query: string) {
   );
 }
 
-/** Horizon + "Week 1 = …" calendar mapping, from the project's sim window. */
+/** Horizon + "Week 1 = …" calendar mapping, from the project's sim window —
+ *  the one run length (`projectWindow`) and the one week↔date rule
+ *  (`calendarWeeks`), PLAN.md §4 D318. Week 1 here is the delivery schedule's
+ *  first cell, which feeds the engine's first tick (run week 0). */
 function useHorizon(
   startDate: string | null | undefined,
   endDate: string | null | undefined,
   unit: PlanningUnit,
 ) {
   return useMemo(() => {
-    const s = startDate ? new Date(startDate) : null;
-    const e = endDate ? new Date(endDate) : null;
-    const valid = s && e && Number.isFinite(s.getTime()) && Number.isFinite(e.getTime()) && e > s;
-    const days = valid ? Math.round((e!.getTime() - s!.getTime()) / 86_400_000) : null;
+    const w = projectWindow(startDate, endDate);
     const span = DAYS_PER_UNIT[unit];
     const horizon =
-      days === null
+      w === null
         ? "not set"
         : unit === "day"
-          ? `${days} days`
-          : `${days} days · ${(days / span).toFixed(1)} ${UNIT_LABEL_PLURAL[unit]}`;
+          ? `${w.days} days`
+          : `${w.days} days · ${(w.days / span).toFixed(1)} ${UNIT_LABEL_PLURAL[unit]}` +
+            (w.boundReason ? ` — ${w.boundReason}` : "");
 
     let unitMap = "";
-    if (s && Number.isFinite(s.getTime())) {
-      const fmt = (d: Date) =>
-        d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    if (isCalendarDate(startDate)) {
       const label = unit === "day" ? "Day" : unit === "week" ? "Week" : "Month";
       unitMap =
-        unit === "day"
-          ? `${label} 1 = ${fmt(s)}`
-          : `${label} 1 = ${fmt(s)} → ${fmt(new Date(s.getTime() + (span - 1) * 86_400_000))} (${span} days each)`;
+        unit === "week"
+          ? `${label} 1 = ${formatRunWeekRange(startDate, 0)} (${span} days each)`
+          : unit === "day"
+            ? `${label} 1 = ${formatCalendarDate(startDate)}`
+            : `${label} 1 = ${formatCalendarDate(startDate)} → ${formatCalendarDate(toCalendarDate(parseCalendarDate(startDate) + (span - 1) * 86_400_000))} (${span} days each)`;
     }
     return { horizon, unitMap };
   }, [startDate, endDate, unit]);
