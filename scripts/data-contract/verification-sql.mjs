@@ -5328,6 +5328,71 @@ async function phase15EngineLedger() {
     (rows) => { out("**(5) the bucket (after the first publish with `--backfill`, `versions_json` is 1 and every committed wheel set is archived):**"); out(...table(rows)); });
 }
 
+// ── Phase 18 · WP 18.2 — the run calendar, read after the merge (§28, §4 D318) ──
+//
+// `20261101000001` stamps `simulation_runs.calendar_start` at insert and backfilled
+// every earlier run from its project's start. Read in the push AFTER the merge (D153).
+// Three numbers are gates: a run whose project has a start but no calendar; a
+// backfilled run whose calendar is not its project's start (nothing may have moved
+// it yet); and a RunKey spec that names the calendar (it must move no key).
+async function phase18RunCalendar() {
+  section("Phase 18 · WP 18.2 — the run calendar and the project window (§4 D318)");
+
+  report("(1) runs by how their calendar was recorded",
+    await tryQ(`
+      select coalesce(calendar_start_source, '(none)') as source, count(*)::int as runs,
+             count(calendar_start)::int as with_calendar,
+             min(created_at)::date as first_run, max(created_at)::date as last_run
+        from public.simulation_runs group by 1 order by 1`),
+    (rows) => { out("**(1) runs by calendar source (`backfill` = runs before the migration; `dispatch` = runs since; `(none)` only where the project has no start):**"); out(...table(rows)); });
+
+  const gate = async (label, sql, why) => {
+    const rows = report(label, await tryQ(sql), (r) => { out(`**${label}** (must be 0):`); out(...table(r)); });
+    const n = Number(rows?.[0]?.n ?? NaN);
+    if (!Number.isFinite(n)) gateFailures.push(`${label}: unreadable, so the WP 18.2 reading is not taken (§4 D318).`);
+    else if (n !== 0) gateFailures.push(`${label}: ${n} — ${why} (§4 D318).`);
+  };
+
+  await gate("(2) a run whose project has a start but which carries no calendar",
+    `select count(*)::int as n from public.simulation_runs r join public.projects p on p.id = r.project_id
+      where p.simulation_start is not null and r.calendar_start is null`,
+    "the insert stamp or the backfill missed runs");
+  await gate("(3) a backfilled run whose calendar is not its project's start",
+    `select count(*)::int as n from public.simulation_runs r join public.projects p on p.id = r.project_id
+      where r.calendar_start_source = 'backfill' and r.calendar_start is distinct from p.simulation_start`,
+    "a backfilled run was given a start its project does not have — or the project start was edited since, which this first reading cannot tell apart");
+  await gate("(4) a RunKey spec that names the calendar",
+    `select count(*)::int as n from public.simulation_runs
+      where run_spec is not null and (run_spec ? 'calendar_start' or (run_spec -> 'scenario') ? 'calendar_start')`,
+    "the calendar reached the RunKey spec, so identical simulations would get new keys");
+
+  report("(5) per project: the window and its runs",
+    await tryQ(`
+      select p.name, p.simulation_start, p.simulation_end,
+             case when p.simulation_start is null or p.simulation_end is null or p.simulation_end <= p.simulation_start
+                  then null else ceil((p.simulation_end - p.simulation_start) / 7.0)::int end as window_weeks,
+             count(r.id)::int as runs,
+             count(r.id) filter (where r.calendar_start_source = 'backfill')::int as backfilled,
+             count(r.id) filter (where r.calendar_start_source = 'dispatch')::int as dispatched
+        from public.projects p left join public.simulation_runs r on r.project_id = p.id
+       group by p.id, p.name, p.simulation_start, p.simulation_end
+       order by count(r.id) desc, p.name`),
+    (rows) => { out("**(5) every project — its window in weeks (the engine runs 52–520) and its runs by calendar source:**"); out(...table(rows)); });
+
+  report("(6) scenarios: calendar-entered starts, and horizons that differ from the window",
+    await tryQ(`
+      select p.name, count(s.id)::int as scenarios,
+             count(s.id) filter (where exists (select 1 from jsonb_array_elements(
+               case when jsonb_typeof(s.disruption_schedule) = 'array' then s.disruption_schedule else '[]'::jsonb end) e
+               where e ? 'start_anchor'))::int as with_calendar_start,
+             count(s.id) filter (where p.simulation_start is not null and p.simulation_end > p.simulation_start
+               and round(s.horizon_days / 7.0) <> least(520, greatest(52, ceil((p.simulation_end - p.simulation_start) / 7.0))))::int
+               as horizon_differs_from_window
+        from public.projects p join public.scenarios s on s.project_id = p.id
+       group by p.name order by count(s.id) desc, p.name`),
+    (rows) => { out("**(6) per project — scenarios with a start entered in calendar time (adoption), and scenarios the Lab will warn run another length than the window (informational):**"); out(...table(rows)); });
+}
+
 // ── Phase 11 · WP 11.5 — the levels, read after the merge (§21) ───────────
 //
 // Every query here reads tables and columns `20261001000019`–`22` create, so before
@@ -5598,6 +5663,7 @@ async function main() {
   await phase11Levels();
   await phase12Library();
   await phase15EngineLedger();
+  await phase18RunCalendar();
   await d278AccountRoleGaps();
   await tronV2Readiness();
 
