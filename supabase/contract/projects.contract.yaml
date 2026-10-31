@@ -366,6 +366,10 @@ fields:
       scenario with no validated or baseline world takes its horizon from it, and a scenario
       that runs another length says so. The engine's demand calendar is a second anchor (the
       earliest `demand_forecasts.period_start`); the Lab says when the two differ.
+      Until WP 18.1 the form stored a picked date through `toISOString()`, a day early east
+      of UTC; `20261101000002` (WP 18.3) moved every window carrying that signature
+      (`YYYY-12-31 → (YYYY+1)-12-30`) to the days picked. Runs backfilled before it keep the
+      31 December they recorded.
   simulation_end:
     type: date
     unit: null

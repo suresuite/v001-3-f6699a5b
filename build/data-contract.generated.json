@@ -5,9 +5,9 @@
   "sources": {
     "introspected": {
       "generator": "scripts/data-contract/introspect.mjs",
-      "migrations_found": 413,
-      "migrations_applied": 405,
-      "last_migration": "20261101000001_run_calendar_start.sql"
+      "migrations_found": 414,
+      "migrations_applied": 406,
+      "last_migration": "20261101000002_project_dates_day_early.sql"
     },
     "sidecars": 77,
     "registry": {
@@ -31107,7 +31107,7 @@
             }
           ],
           "resolution": null,
-          "note": "NOT TRACED into `scsim` from this column: the engine reads run weeks only, and the worker takes the horizon from the run request. Since WP 18.1 (§4 D318) it is RUN WEEK 0 — the anchor through which a disruption start entered as an ISO week or a date becomes the run week that is stored (`start_day`), with what was entered kept beside it (`scenarios.disruption_schedule[].start_anchor`). Every new run records it (`simulation_runs.calendar_start`), so a later edit here never re-dates a past run. With `simulation_end` it is the project window, the one authored run length: a new scenario with no validated or baseline world takes its horizon from it, and a scenario that runs another length says so. The engine's demand calendar is a second anchor (the earliest `demand_forecasts.period_start`); the Lab says when the two differ.",
+          "note": "NOT TRACED into `scsim` from this column: the engine reads run weeks only, and the worker takes the horizon from the run request. Since WP 18.1 (§4 D318) it is RUN WEEK 0 — the anchor through which a disruption start entered as an ISO week or a date becomes the run week that is stored (`start_day`), with what was entered kept beside it (`scenarios.disruption_schedule[].start_anchor`). Every new run records it (`simulation_runs.calendar_start`), so a later edit here never re-dates a past run. With `simulation_end` it is the project window, the one authored run length: a new scenario with no validated or baseline world takes its horizon from it, and a scenario that runs another length says so. The engine's demand calendar is a second anchor (the earliest `demand_forecasts.period_start`); the Lab says when the two differ. Until WP 18.1 the form stored a picked date through `toISOString()`, a day early east of UTC; `20261101000002` (WP 18.3) moved every window carrying that signature (`YYYY-12-31 → (YYYY+1)-12-30`) to the days picked. Runs backfilled before it keep the 31 December they recorded.",
           "engine_requirement": null
         },
         {
@@ -45273,5 +45273,5 @@
   },
   "orphans": [],
   "phantom_tables": [],
-  "contract_version": "23066b5e2f0e"
+  "contract_version": "984857e696e8"
 }
