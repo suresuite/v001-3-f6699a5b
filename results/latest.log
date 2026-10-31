@@ -1,0 +1,10 @@
+run_id: 41241263102  outcome: success
+trigger: push  ref: main  sha: a6f11f6cd8916023e14ddd4484247ef9f86ed407
+──────────────────────────────────────
+Warning: supabase db push will target the local database by default in the next major version. Pass --linked to keep targeting the linked project.
+Connecting to remote database...
+Do you want to push these migrations to the remote database?
+ • 20261101000002_project_dates_day_early.sql
+ [Y/n] 
+Applying migration 20261101000002_project_dates_day_early.sql...
+Finished supabase db push.
