@@ -5357,10 +5357,16 @@ async function phase18RunCalendar() {
     `select count(*)::int as n from public.simulation_runs r join public.projects p on p.id = r.project_id
       where p.simulation_start is not null and r.calendar_start is null`,
     "the insert stamp or the backfill missed runs");
-  await gate("(3) a backfilled run whose calendar is not its project's start",
+  // WP 18.3 (`20261101000002`) moved the day-early project starts from 31 December to
+  // 1 January and, by decision, left each run's recorded calendar alone — so a backfilled
+  // run may now read the 31 December its project used to have, and nothing else.
+  await gate("(3) a backfilled run whose calendar is neither its project's start nor the 31 December WP 18.3 replaced",
     `select count(*)::int as n from public.simulation_runs r join public.projects p on p.id = r.project_id
-      where r.calendar_start_source = 'backfill' and r.calendar_start is distinct from p.simulation_start`,
-    "a backfilled run was given a start its project does not have — or the project start was edited since, which this first reading cannot tell apart");
+      where r.calendar_start_source = 'backfill'
+        and r.calendar_start is distinct from p.simulation_start
+        and not (extract(month from p.simulation_start) = 1 and extract(day from p.simulation_start) = 1
+                 and r.calendar_start = p.simulation_start - 1)`,
+    "a backfilled run was given a start its project does not have, or the project start was edited since");
   await gate("(4) a RunKey spec that names the calendar",
     `select count(*)::int as n from public.simulation_runs
       where run_spec is not null and (run_spec ? 'calendar_start' or (run_spec -> 'scenario') ? 'calendar_start')`,

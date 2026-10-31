@@ -97,6 +97,9 @@ export default function Disruptions() {
           A run records the date of its week 0 when it is dispatched, so later edits to the project
           start never re-date it. Runs made before that record existed were given the project start
           as it stood on 31 Oct 2026, and every place that shows it says it was filled in afterwards.
+          Those starts had been saved a day early (31 December instead of 1 January) and were then
+          corrected on the projects; the runs keep the 31 December they recorded, so a past run&apos;s
+          week 0 can read one day before its project&apos;s start.
         </P>
         <P>
           It is a column on the scenario rather than a table of its own, which is why it has no
