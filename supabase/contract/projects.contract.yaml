@@ -24,7 +24,7 @@ surfaces:
   - page: "DataManager.tsx"
     via: "rpc list_projects"
     grain: table
-    evidence: "src/pages/DataManager.tsx:213"
+    evidence: "src/pages/DataManager.tsx:215"
     confirmed: true
   - page: "DeveloperApi.tsx"
     via: "rpc list_projects"
@@ -337,26 +337,35 @@ fields:
       - page: "FirmLevelNetwork.tsx"
         via: "table read"
         grain: column
-        evidence: "src/components/network/NetworkDisruptionDialog.tsx:414"
+        evidence: "src/hooks/useProjectCalendar.ts:37"
         confirmed: true
       - page: "ProcessLevelNetwork.tsx"
         via: "table read"
         grain: column
-        evidence: "src/components/network/NetworkDisruptionDialog.tsx:414"
+        evidence: "src/hooks/useProjectCalendar.ts:37"
         confirmed: true
       - page: "ProductLevelNetwork.tsx"
         via: "table read"
         grain: column
-        evidence: "src/components/network/NetworkDisruptionDialog.tsx:414"
+        evidence: "src/hooks/useProjectCalendar.ts:37"
+        confirmed: true
+      - page: "SimulationLab.tsx"
+        via: "table read"
+        grain: column
+        evidence: "src/hooks/useProjectCalendar.ts:37"
         confirmed: true
     resolution: null
     note: >-
-      NOT TRACED into `scsim` from this column: the worker takes the horizon from
-      the run request, not from the project row. The two can disagree, and
-      nothing today reconciles them — recorded rather than implied (§5 T1). Since
-      WP 9.4 the network pages' disruption dialog reads it for ONE thing: an
-      approximate calendar date beside a run week, labelled as such and never
-      stored — the event itself is authored in run weeks.
+      NOT TRACED into `scsim` from this column: the engine reads run weeks only, and the
+      worker takes the horizon from the run request. Since WP 18.1 (§4 D318) it is RUN WEEK 0
+      — the anchor through which a disruption start entered as an ISO week or a date becomes
+      the run week that is stored (`start_day`), with what was entered kept beside it
+      (`scenarios.disruption_schedule[].start_anchor`). Every new run records it
+      (`simulation_runs.calendar_start`), so a later edit here never re-dates a past run.
+      With `simulation_end` it is the project window, the one authored run length: a new
+      scenario with no validated or baseline world takes its horizon from it, and a scenario
+      that runs another length says so. The engine's demand calendar is a second anchor (the
+      earliest `demand_forecasts.period_start`); the Lab says when the two differ.
   simulation_end:
     type: date
     unit: null
@@ -366,12 +375,19 @@ fields:
     engine: {consumed_by: null, transform: null, missing_default: null}
     substitutions: []
     ingest: {csv_header: null, required: false, validate: null}
-    surfaces: []
+    surfaces:
+      - page: "SimulationLab.tsx"
+        via: "table read"
+        grain: column
+        evidence: "src/hooks/useProjectCalendar.ts:37"
+        confirmed: true
     resolution: null
     note: >-
-      As `simulation_start` — the run request is what the engine actually reads. No screen
-      reads it since WP 9.4: the network pages' disruption dialog used it to bound a date
-      picker, and the dialog now authors run weeks (§4 D228).
+      As `simulation_start` — the run request is what the engine actually reads. Since WP 18.1
+      (§4 D318) the start and end are the project window, the one authored run length: project
+      settings state it in weeks, refuse a window outside the engine's 52–520 weeks, and the
+      /policies delivery schedule, a new scenario's horizon and the Lab's mismatch note all
+      read it through `src/lib/sim/projectWindow.ts`.
   completed:
     type: boolean
     unit: null

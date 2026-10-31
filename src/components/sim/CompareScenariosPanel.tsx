@@ -647,7 +647,7 @@ export function CompareScenariosPanel({
             <table className="w-full border-collapse">
               <thead>
                 <tr>
-                  {["Scenario", "Data", "Policies", "Engine", "Seed"].map((h) => (
+                  {["Scenario", "Data", "Policies", "Engine", "Seed", "Calendar"].map((h) => (
                     <th key={h} className={cn(TH, "text-left")}>
                       {h}
                     </th>
@@ -676,6 +676,7 @@ export function CompareScenariosPanel({
                         {cell("policies")}
                         {cell("engine")}
                         {cell("seed")}
+                        {cell("calendar")}
                       </tr>
                     );
                   },

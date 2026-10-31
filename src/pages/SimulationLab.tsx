@@ -16,6 +16,9 @@ import { useSimulationRun } from "@/hooks/useSimulationRun";
 import { useScenarioRuns } from "@/hooks/useScenarioRuns";
 import { usePolicies } from "@/hooks/usePolicies";
 import { useItemMasters } from "@/hooks/useItemMasters";
+import { ProjectCalendarProvider, useProjectCalendar, type ProjectCalendar } from "@/hooks/useProjectCalendar";
+import { earliestPeriodStart } from "@/lib/sim/calendarWeeks";
+import { projectWindow, windowHorizonDays } from "@/lib/sim/projectWindow";
 import { useModelValidation } from "@/hooks/useModelValidation";
 import { StageRail, buildStages, type PaneId } from "@/components/sim/StageRail";
 import { ExperimentLibraryBox, ScenarioList } from "@/components/sim/ScenarioRail";
@@ -186,6 +189,14 @@ export default function SimulationLab({ isCollapsed, setIsCollapsed }: Props) {
   // the shared module, so the findings are visible (and fixable) before the
   // Run click — and render the server's own typed copy after a 422.
   const itemMasters = useItemMasters(projectId);
+  // PLAN.md §4 D318 — run week 0 and the engine's demand week 0, read once for
+  // every disruption editor on the page (desktop and phone).
+  const projectCalendarRead = useProjectCalendar(projectId);
+  const forecastBuckets = itemMasters.lanes.forecasts;
+  const projectCalendar = useMemo<ProjectCalendar>(
+    () => ({ ...projectCalendarRead, demandStart: earliestPeriodStart(forecastBuckets) }),
+    [projectCalendarRead, forecastBuckets],
+  );
   const clientFindings = useMemo<Finding[] | null>(() => {
     if (!projectId || itemMasters.loading || !itemMasters.lanes.loaded) return null;
     const gate = compileGateFindings(
@@ -309,7 +320,11 @@ export default function SimulationLab({ isCollapsed, setIsCollapsed }: Props) {
   });
   const runBlockedReason = runGate.reason;
 
-  const validated = useValidatedBaseline({ scenarios, cred, policyHash });
+  const projWindow = projectWindow(projectCalendar.projectStart, projectCalendar.projectEnd);
+  const validated = useValidatedBaseline({
+    scenarios, cred, policyHash,
+    windowHorizonDays: projWindow ? windowHorizonDays(projWindow) : null,
+  });
   const [newOpen, setNewOpen] = useState(false);
   const [newStart, setNewStart] = useState<NewScenarioStart>("baseline");
   const newName = uniqueName(
@@ -794,6 +809,7 @@ export default function SimulationLab({ isCollapsed, setIsCollapsed }: Props) {
   // set and the reason they work.
   if (isMobile) {
     return (
+      <ProjectCalendarProvider value={projectCalendar}>
       <PageLayout isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed}>
         <MobileSimulationLab
           projects={projects as Array<{ id: string; name: string }>}
@@ -882,10 +898,12 @@ export default function SimulationLab({ isCollapsed, setIsCollapsed }: Props) {
           />
         )}
       </PageLayout>
+      </ProjectCalendarProvider>
     );
   }
 
   return (
+    <ProjectCalendarProvider value={projectCalendar}>
     <PageLayout isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed}>
       <div ref={gutterRef} className={PAGE_GUTTER}>
         <PageHeader
@@ -1099,5 +1117,6 @@ export default function SimulationLab({ isCollapsed, setIsCollapsed }: Props) {
         />
       )}
     </PageLayout>
+    </ProjectCalendarProvider>
   );
 }

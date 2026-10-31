@@ -16,7 +16,7 @@
 import { SCENARIO_ENGINE_DEFAULTS, type Scenario } from "@/hooks/useScenarios";
 
 /** Where a new scenario's world came from — said on screen, never assumed. */
-export type WorldSource = "validation" | "baseline" | "defaults";
+export type WorldSource = "validation" | "baseline" | "project_window" | "defaults";
 
 export interface SeedWorld {
   horizon_days: number;
@@ -29,12 +29,17 @@ type Fingerprint = Record<string, unknown> | null | undefined;
 
 /**
  * The world a new scenario starts in: the active card's fingerprint when there
- * is one (that is what was certified), else the baseline row, else the engine
- * defaults. A fingerprint missing a field falls back per field to the row.
+ * is one (that is what was certified), else the baseline row (the world a
+ * comparison pairs with), else the engine defaults — with the horizon taken
+ * from the project window when the project states one (PLAN.md §4 D318: the
+ * window is the authored run length). A fingerprint missing a field falls back
+ * per field to the row. A validated or baseline horizon that differs from the
+ * window is never rewritten; the Lab says so (`horizonMismatch`).
  */
 export function worldOf(
   baseline: Pick<Scenario, "horizon_days" | "time_step" | "demand_model"> | null | undefined,
   cardFingerprint?: Fingerprint,
+  windowHorizonDays?: number | null,
 ): SeedWorld {
   const fp = cardFingerprint ?? null;
   const fromCard =
@@ -55,11 +60,12 @@ export function worldOf(
       source: "baseline",
     };
   }
+  const fromWindow = Number(windowHorizonDays) > 0;
   return {
-    horizon_days: SCENARIO_ENGINE_DEFAULTS.horizon_days,
+    horizon_days: fromWindow ? Number(windowHorizonDays) : SCENARIO_ENGINE_DEFAULTS.horizon_days,
     time_step: SCENARIO_ENGINE_DEFAULTS.time_step as Scenario["time_step"],
     demand_model: SCENARIO_ENGINE_DEFAULTS.demand_model,
-    source: "defaults",
+    source: fromWindow ? "project_window" : "defaults",
   };
 }
 

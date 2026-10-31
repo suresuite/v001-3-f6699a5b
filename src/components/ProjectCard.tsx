@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { getCombineStatusStyle, getCombineStatusIcon, getCombineStatusText } from '@/utils/combineStatus';
 import { getFallbackSimulationDates } from '@/utils/dateHelpers';
+import { ProjectWindowLength } from '@/components/ProjectWindowLength';
 import { useIsMobile } from '@/hooks/use-is-mobile';
 import { useProjectRights } from '@/hooks/useProjectRights';
 import { MobileSheet } from '@/components/shared/MobileSheet';
@@ -269,6 +270,12 @@ export function ProjectCard({
               />
             </div>
           </div>
+          <ProjectWindowLength
+            idPrefix={`edit-window-${project.id}`}
+            start={editSimulationStart}
+            end={editSimulationEnd}
+            onEndChange={onEditSimulationEndChange}
+          />
           
           <div className="flex gap-2">
             <Button

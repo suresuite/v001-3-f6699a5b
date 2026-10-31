@@ -206,7 +206,11 @@ fields:
     meaning: >-
       THE WHAT-IF ITSELF — the events, their timing and their targets. Copied from a template
       when one is applied and diverging from that moment. §4 D112's unresolvable targets arrive
-      here.
+      here. Timing is `start_day` (days from run week 0) and `duration_days`; an event whose
+      start was entered as an ISO week or a date also carries `start_anchor` {kind: iso_week |
+      date, value, project_start} — what was typed and the project start it was converted
+      against (§4 D318). The engine never reads `start_anchor`
+      (`scsim/tests/test_start_anchor_ignored.py`); Compare ignores it too.
     grain: metadata
     engine: {consumed_by: null, transform: null, missing_default: null}
     substitutions: []
@@ -353,7 +357,7 @@ surfaces:
   - page: "SimulationLab.tsx"
     via: "table read"
     grain: table
-    evidence: "src/hooks/useScenarios.tsx:109"
+    evidence: "src/hooks/useScenarios.tsx:117"
     confirmed: true
   - page: "SimulationLab.tsx"
     via: "table read"

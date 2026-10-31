@@ -5,6 +5,7 @@
 // "Members & access" lists who is on the project and what each may do (D215).
 // Model column shows a mono BOM/data chip pair; status is an outlined chip; row
 // actions live in a menu.
+import { projectWindow } from '@/lib/sim/projectWindow';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -285,6 +286,9 @@ function MetaDialog({ project, actorArgs, onClose, onDone }: { project: ProjectR
   const [completed, setCompleted] = useState(project.completed);
   const [saving, setSaving] = useState(false);
   const save = async () => {
+    // PLAN.md §4 D318 — the window is the run's length; the engine's bounds apply.
+    const windowRefusal = projectWindow(simStart || null, simEnd || null)?.boundReason;
+    if (windowRefusal) return toast.error(`Simulation period: ${windowRefusal}`);
     setSaving(true);
     const { error } = await db.rpc('admin_update_project_meta', { ...actorArgs(), p_project_id: project.id, p_plant: plant.trim() || null, p_model: model, p_bom_level: bomLevel, p_data_type: dataType, p_simulation_start: simStart || null, p_simulation_end: simEnd || null, p_completed: completed });
     setSaving(false);

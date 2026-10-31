@@ -1115,7 +1115,7 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
     ]
   },
   "disruptions": {
-    "minutes": 16,
+    "minutes": 17,
     "sections": [
       {
         "id": "the-live-one",
@@ -2020,7 +2020,7 @@ export const DOCS_INDEX: Record<string, DocsIndexEntry> = {
     ]
   },
   "all-tables": {
-    "minutes": 220,
+    "minutes": 222,
     "sections": [
       {
         "id": "how-to-read-this",

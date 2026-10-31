@@ -164,6 +164,6 @@ When the row was first written.
 
 ---
 
-*Generated from data contract `3800b7221efd`, engine `0.8.3`,
+*Generated from data contract `23066b5e2f0e`, engine `0.8.3`,
 sidecar `supabase/contract/analysis_kinds.contract.yaml`, table created by `20261001000007_graph_levels_compute_once.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

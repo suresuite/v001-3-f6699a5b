@@ -71,6 +71,10 @@ export interface SimulationRun {
   protocol_overrides?: Record<string, unknown> | null;
   /** Ran under no Validated Model, or explicitly as an exploratory model. */
   exploratory?: boolean | null;
+  /** §4 D318 — run week 0's calendar date, as the run recorded it. */
+  calendar_start?: string | null;
+  /** 'dispatch' (stamped at insert) or 'backfill' (filled later from the project). */
+  calendar_start_source?: "dispatch" | "backfill" | null;
 }
 
 // The dispatch types and client live in lib/sim/dispatch.ts (WP 9.4 slice 8),

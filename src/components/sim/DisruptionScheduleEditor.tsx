@@ -18,11 +18,16 @@ import {
   type ScheduleEvent,
 } from "@/lib/sim/disruptionEvents";
 import type { Scenario } from "@/hooks/useScenarios";
+import { withStart } from "@/lib/sim/startAnchor";
+import { useProjectCalendar } from "@/hooks/useProjectCalendar";
+import { demandAnchorNote } from "@/lib/sim/calendarWeeks";
 import {
+  AnchorDriftNote,
   CapacityLostStepper,
   EffectControl,
   FIELD_H,
   Field,
+  StartTimeControl,
   TargetSelect,
   WeeksStepper,
   durationHint,
@@ -41,6 +46,10 @@ interface Props {
   supplierIds?: string[];
   /** Suppliers with no finite weekly capacity: a partial cut on one runs as an outage. */
   uncapacitated?: string[];
+  /** Overrides `projects.simulation_start` — run week 0, the anchor for a start
+   *  entered as an ISO week or a date (PLAN.md §4 D318). Read from the project
+   *  calendar when omitted. */
+  projectStart?: string | null;
 }
 
 /**
@@ -56,10 +65,15 @@ interface Props {
 export function DisruptionScheduleEditor({
   value,
   onChange,
+  projectId,
   warmup,
   supplierIds = [],
   uncapacitated = [],
+  projectStart: projectStartProp,
 }: Props) {
+  const calendar = useProjectCalendar(projectId);
+  const projectStart = projectStartProp !== undefined ? projectStartProp : calendar.projectStart;
+  const demandNote = demandAnchorNote(projectStart, calendar.demandStart);
   const [local, setLocal] = useState<ScheduleEvent[]>(value);
   useEffect(() => setLocal(value), [value]);
 
@@ -70,6 +84,12 @@ export function DisruptionScheduleEditor({
   const patchNow = (i: number, fields: Partial<ScheduleEvent>) => {
     const next = [...local];
     next[i] = { ...next[i], target_type: "node", ...fields };
+    commit(next);
+  };
+
+  const replaceAt = (i: number, ev: ScheduleEvent) => {
+    const next = [...local];
+    next[i] = ev;
     commit(next);
   };
 
@@ -88,6 +108,9 @@ export function DisruptionScheduleEditor({
           No disruption events — this scenario runs undisrupted.
         </p>
       )}
+      {local.length > 0 && demandNote ? (
+        <p className="text-[11.5px] text-[--warn-ink,#92400e]">{demandNote}</p>
+      ) : null}
       {local.length > 0 && warmup && String(warmup.mode).toLowerCase() !== "manual" && (
         <p className="text-[10px] text-muted-foreground">{AUTO_WARMUP_RULE}</p>
       )}
@@ -128,14 +151,12 @@ export function DisruptionScheduleEditor({
                 </Field>
               </div>
               <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                <Field label={DISRUPTION_TERMS.startTime} hint={startHint(horizonWeeks)}>
-                  <WeeksStepper
-                    ariaLabel="Disruption event start time"
-                    kind="point"
-                    days={d.start_day}
-                    min={DISRUPTION_RULE.start_week_min}
-                    max={horizonWeeks}
-                    onDays={(v) => patchNow(i, { start_day: v })}
+                <Field label={DISRUPTION_TERMS.startTime} hint={startHint(horizonWeeks)} className="col-span-2 md:col-span-1">
+                  <StartTimeControl
+                    event={d}
+                    projectStart={projectStart}
+                    horizonWeeks={horizonWeeks}
+                    onChange={(day, anchor) => replaceAt(i, withStart({ ...d, target_type: "node" }, day, anchor))}
                   />
                 </Field>
                 <Field label={DISRUPTION_TERMS.duration} {...hintOf(durationHint(d.start_day, d.duration_days, horizonWeeks))}>
@@ -159,6 +180,12 @@ export function DisruptionScheduleEditor({
               warmupNote(disruptionWeeks(d.start_day, d.duration_days).startWeek, warmup) ? (
                 <EngineTicks startDay={d.start_day} durationDays={d.duration_days} warmup={warmup} />
               ) : null}
+              <AnchorDriftNote
+                event={d}
+                projectStart={projectStart}
+                horizonWeeks={horizonWeeks}
+                onChange={(ev) => replaceAt(i, ev)}
+              />
               {reason ? (
                 <p className="text-[11.5px] text-[#b3261e]">{reason}</p>
               ) : outageOnly ? (

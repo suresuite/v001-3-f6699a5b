@@ -92,7 +92,7 @@ export type RefTable = {
   columns: RefColumn[];
 };
 
-export const REFERENCE_COLUMN_COUNT = 1024;
+export const REFERENCE_COLUMN_COUNT = 1026;
 
 export const REFERENCE_TABLES: RefTable[] = [
   {
@@ -2021,7 +2021,7 @@ export const REFERENCE_TABLES: RefTable[] = [
       {
         "page": "DataManager.tsx",
         "via": "rpc get_project_dataset_status",
-        "evidence": "src/pages/DataManager.tsx:434"
+        "evidence": "src/pages/DataManager.tsx:447"
       },
       {
         "page": "InteractiveNetworkSpace.tsx",
@@ -2384,7 +2384,7 @@ export const REFERENCE_TABLES: RefTable[] = [
       {
         "page": "DataManager.tsx",
         "via": "rpc get_project_dataset_status",
-        "evidence": "src/pages/DataManager.tsx:434"
+        "evidence": "src/pages/DataManager.tsx:447"
       },
       {
         "page": "ProjectPolicies.tsx",
@@ -7182,7 +7182,7 @@ export const REFERENCE_TABLES: RefTable[] = [
       {
         "page": "DataManager.tsx",
         "via": "rpc get_project_dataset_status",
-        "evidence": "src/pages/DataManager.tsx:434"
+        "evidence": "src/pages/DataManager.tsx:447"
       },
       {
         "page": "ProjectPolicies.tsx",
@@ -12093,7 +12093,7 @@ export const REFERENCE_TABLES: RefTable[] = [
       {
         "page": "DataManager.tsx",
         "via": "rpc delete_project_dataset",
-        "evidence": "src/pages/DataManager.tsx:724"
+        "evidence": "src/pages/DataManager.tsx:737"
       },
       {
         "page": "ProjectPolicies.tsx",
@@ -12361,7 +12361,7 @@ export const REFERENCE_TABLES: RefTable[] = [
       {
         "page": "DataManager.tsx",
         "via": "rpc get_project_dataset_status",
-        "evidence": "src/pages/DataManager.tsx:434"
+        "evidence": "src/pages/DataManager.tsx:447"
       }
     ],
     "governance": {
@@ -12761,7 +12761,7 @@ export const REFERENCE_TABLES: RefTable[] = [
       {
         "page": "DataManager.tsx",
         "via": "rpc get_project_dataset_status",
-        "evidence": "src/pages/DataManager.tsx:434"
+        "evidence": "src/pages/DataManager.tsx:447"
       },
       {
         "page": "ProductLevelNetwork.tsx",
@@ -13897,7 +13897,7 @@ export const REFERENCE_TABLES: RefTable[] = [
       {
         "page": "DataManager.tsx",
         "via": "rpc get_node_list",
-        "evidence": "src/pages/DataManager.tsx:446"
+        "evidence": "src/pages/DataManager.tsx:459"
       },
       {
         "page": "FirmLevelNetwork.tsx",
@@ -15376,7 +15376,7 @@ export const REFERENCE_TABLES: RefTable[] = [
       {
         "page": "DataManager.tsx",
         "via": "rpc get_project_dataset_status",
-        "evidence": "src/pages/DataManager.tsx:434"
+        "evidence": "src/pages/DataManager.tsx:447"
       },
       {
         "page": "ProjectPolicies.tsx",
@@ -19860,7 +19860,7 @@ export const REFERENCE_TABLES: RefTable[] = [
       {
         "page": "DataManager.tsx",
         "via": "rpc list_projects",
-        "evidence": "src/pages/DataManager.tsx:213"
+        "evidence": "src/pages/DataManager.tsx:215"
       },
       {
         "page": "DeveloperApi.tsx",
@@ -21384,12 +21384,12 @@ export const REFERENCE_TABLES: RefTable[] = [
       {
         "page": "ProjectPolicies.tsx",
         "via": "hook useSimulationRun → select * from run_replications",
-        "evidence": "src/hooks/useSimulationRun.tsx:115"
+        "evidence": "src/hooks/useSimulationRun.tsx:119"
       },
       {
         "page": "SimulationLab.tsx",
         "via": "hook useSimulationRun::loadReps → select * from run_replications",
-        "evidence": "src/hooks/useSimulationRun.tsx:230"
+        "evidence": "src/hooks/useSimulationRun.tsx:234"
       },
       {
         "page": "ProjectPolicies.tsx",
@@ -22551,7 +22551,7 @@ export const REFERENCE_TABLES: RefTable[] = [
       {
         "page": "SimulationLab.tsx",
         "via": "table read",
-        "evidence": "src/hooks/useScenarios.tsx:109"
+        "evidence": "src/hooks/useScenarios.tsx:117"
       }
     ],
     "governance": {
@@ -22871,7 +22871,7 @@ export const REFERENCE_TABLES: RefTable[] = [
         "csvHeader": null,
         "required": false,
         "validate": null,
-        "meaning": "THE WHAT-IF ITSELF — the events, their timing and their targets. Copied from a template when one is applied and diverging from that moment. §4 D112's unresolvable targets arrive here.",
+        "meaning": "THE WHAT-IF ITSELF — the events, their timing and their targets. Copied from a template when one is applied and diverging from that moment. §4 D112's unresolvable targets arrive here. Timing is `start_day` (days from run week 0) and `duration_days`; an event whose start was entered as an ISO week or a date also carries `start_anchor` {kind: iso_week | date, value, project_start} — what was typed and the project start it was converted against (§4 D318). The engine never reads `start_anchor` (`scsim/tests/test_start_anchor_ignored.py`); Compare ignores it too.",
         "primaryKey": false,
         "unique": false,
         "references": null,
@@ -25885,6 +25885,10 @@ export const REFERENCE_TABLES: RefTable[] = [
       {
         "name": "simulation_runs_retention_expiry_check",
         "definition": "CHECK ((retention = 'standard' OR series_expires_at IS NULL) AND (series_expired_at IS NULL OR series_object IS NULL))"
+      },
+      {
+        "name": "simulation_runs_calendar_start_source_check",
+        "definition": "CHECK ((calendar_start IS NULL) = (calendar_start_source IS NULL) AND (calendar_start_source IS NULL OR calendar_start_source IN ('dispatch', 'backfill')))"
       }
     ],
     "ingestDataset": null,
@@ -25892,7 +25896,7 @@ export const REFERENCE_TABLES: RefTable[] = [
       {
         "page": "SimulationLab.tsx",
         "via": "hook useSimulationRun → select * from simulation_runs",
-        "evidence": "src/hooks/useSimulationRun.tsx:105"
+        "evidence": "src/hooks/useSimulationRun.tsx:109"
       },
       {
         "page": "ProjectPolicies.tsx",
@@ -26874,6 +26878,54 @@ export const REFERENCE_TABLES: RefTable[] = [
         "normalizeAtPromotion": null,
         "quantityGrain": "identifier",
         "computedBy": null
+      },
+      {
+        "name": "calendar_start",
+        "type": "date",
+        "nullable": true,
+        "unit": null,
+        "csvHeader": null,
+        "required": false,
+        "validate": null,
+        "meaning": "Run week 0's calendar date — `projects.simulation_start` as it stood when the run was inserted, stamped by the `simulation_runs_calendar_ins` trigger and never changed after (PLAN.md §4 D318). Every date shown for this run's weeks reads it, never the project's current start. NULL when the project had no start. The engine never reads a calendar date, so it is not in `run_spec` and moves no RunKey.",
+        "primaryKey": false,
+        "unique": false,
+        "references": null,
+        "substitutions": [],
+        "engineChain": null,
+        "engineLevel": null,
+        "blank": null,
+        "engineField": null,
+        "engineMissingDefault": null,
+        "engineTransform": null,
+        "unitColumn": null,
+        "normalizeAtPromotion": null,
+        "quantityGrain": "metadata",
+        "computedBy": null
+      },
+      {
+        "name": "calendar_start_source",
+        "type": "text",
+        "nullable": true,
+        "unit": null,
+        "csvHeader": null,
+        "required": false,
+        "validate": null,
+        "meaning": "How `calendar_start` was recorded: 'dispatch' (stamped at insert) or 'backfill' (filled by `20261101000001` for a run that predates the column, from the project's start as of that day — the run itself recorded none, and the reproducibility record and Compare say so). NULL exactly when `calendar_start` is (CHECK).",
+        "primaryKey": false,
+        "unique": false,
+        "references": null,
+        "substitutions": [],
+        "engineChain": null,
+        "engineLevel": null,
+        "blank": null,
+        "engineField": null,
+        "engineMissingDefault": null,
+        "engineTransform": null,
+        "unitColumn": null,
+        "normalizeAtPromotion": null,
+        "quantityGrain": "metadata",
+        "computedBy": null
       }
     ]
   },
@@ -27252,7 +27304,7 @@ export const REFERENCE_TABLES: RefTable[] = [
       {
         "page": "DataManager.tsx",
         "via": "rpc combine_project_into_supply_chain",
-        "evidence": "src/pages/DataManager.tsx:661"
+        "evidence": "src/pages/DataManager.tsx:674"
       },
       {
         "page": "ProductLevelNetwork.tsx",
@@ -27806,7 +27858,7 @@ export const REFERENCE_TABLES: RefTable[] = [
       {
         "page": "DataManager.tsx",
         "via": "rpc combine_project_into_supply_chain",
-        "evidence": "src/pages/DataManager.tsx:661"
+        "evidence": "src/pages/DataManager.tsx:674"
       },
       {
         "page": "InteractiveNetworkSpace.tsx",

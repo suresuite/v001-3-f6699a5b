@@ -6,7 +6,7 @@ import { DISRUPTION_RULE } from "../disruptionEvents";
 // a range while the event fits the run, a warning once it runs past the end.
 describe("disruption field hints", () => {
   it("states the start-time range against the run", () => {
-    expect(startHint(52)).toBe(`Week ${DISRUPTION_RULE.start_week_min}–52 of the run`);
+    expect(startHint(52)).toBe(`Week ${DISRUPTION_RULE.start_week_min}–51 of the run`);
     expect(startHint()).toBe(`From week ${DISRUPTION_RULE.start_week_min} of the run`);
   });
   it("states the duration range while the event ends inside the run", () => {

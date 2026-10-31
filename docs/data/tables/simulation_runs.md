@@ -26,6 +26,7 @@ partially or get corrected — the write fails.
 |---|---|---|
 | `simulation_runs_retention_check` | `CHECK (retention IN ('standard', 'pinned', 'evidence'))` | `20261001000010_result_tiers.sql` |
 | `simulation_runs_retention_expiry_check` | `CHECK ((retention = 'standard' OR series_expires_at IS NULL) AND (series_expired_at IS NULL OR series_object IS NULL))` | `20261001000010_result_tiers.sql` |
+| `simulation_runs_calendar_start_source_check` | `CHECK ((calendar_start IS NULL) = (calendar_start_source IS NULL) AND (calendar_start_source IS NULL OR calendar_start_source IN ('dispatch', 'backfill')))` | `20261101000001_run_calendar_start.sql` |
 
 | Constraint | Kind | Definition |
 |---|---|---|
@@ -69,7 +70,7 @@ partially or get corrected — the write fails.
 
 | Page | Via | Evidence | Confirmed |
 |---|---|---|---|
-| `SimulationLab.tsx` | hook useSimulationRun → select * from simulation_runs | `src/hooks/useSimulationRun.tsx:105` | yes |
+| `SimulationLab.tsx` | hook useSimulationRun → select * from simulation_runs | `src/hooks/useSimulationRun.tsx:109` | yes |
 | `ProjectPolicies.tsx` | useVerifiableExports → select * from simulation_runs | `src/hooks/useVerifiableExports.tsx:216` | yes |
 
 Each row says the page READS the table by that path, at that line. It does
@@ -123,6 +124,8 @@ that gap is defect D21. A dash means the column has no CSV origin.
 | `series_expired_at` | — | `timestamp with time zone` | — | — | When `sweep_expired_run_series` removed the series (object, JSONB, per-item rows). The run row, its aggregates and every replication's KPI row are kept; the screen says the series expired and which RunKey reproduces them. |
 | `hash_simulation` | — | `text` | — | — | The simulation scope's hash — the `inputs` domain of the run's snapshot, what the engine read (WP 11.2, §4 D260). RunKey v2 hashes it, so a deep-tier upload no run reads does not make an identical simulation a new key. Read by `create_simulation_run` off the snapshot row itself; history learnt it from its own snapshot. NULL where the run has no snapshot that carries one. |
 | `simulation_version_id` | — | `uuid` | — | — | The simulation scope's level version the run computed over ("simulation inputs v4", `graph_level_versions`). NULL exactly where `hash_simulation` names no version. |
+| `calendar_start` | — | `date` | — | — | Run week 0's calendar date — `projects.simulation_start` as it stood when the run was inserted, stamped by the `simulation_runs_calendar_ins` trigger and never changed after (PLAN.md §4 D318). Every date shown for this run's weeks reads it, never the project's current start. NULL when the project had no start. The engine never reads a calendar date, so it is not in `run_spec` and moves no RunKey. |
+| `calendar_start_source` | — | `text` | — | — | How `calendar_start` was recorded: 'dispatch' (stamped at insert) or 'backfill' (filled by `20261101000001` for a run that predates the column, from the project's start as of that day — the run itself recorded none, and the reproducibility record and Compare say so). NULL exactly when `calendar_start` is (CHECK). |
 
 ## Each column in full
 
@@ -665,6 +668,34 @@ The simulation scope's level version the run computed over ("simulation inputs v
 | Validated at ingest | — |
 | Rendered at | *not yet recorded (WP 5.1)* |
 
+### `calendar_start`
+
+Run week 0's calendar date — `projects.simulation_start` as it stood when the run was inserted, stamped by the `simulation_runs_calendar_ins` trigger and never changed after (PLAN.md §4 D318). Every date shown for this run's weeks reads it, never the project's current start. NULL when the project had no start. The engine never reads a calendar date, so it is not in `run_spec` and moves no RunKey.
+
+| | |
+|---|---|
+| Type | `date` |
+| Grain | `metadata` |
+| Unit | dimensionless |
+| Added by | `20261101000001_run_calendar_start.sql` |
+| Read by the engine | **not traced** |
+| Validated at ingest | — |
+| Rendered at | *not yet recorded (WP 5.1)* |
+
+### `calendar_start_source`
+
+How `calendar_start` was recorded: 'dispatch' (stamped at insert) or 'backfill' (filled by `20261101000001` for a run that predates the column, from the project's start as of that day — the run itself recorded none, and the reproducibility record and Compare say so). NULL exactly when `calendar_start` is (CHECK).
+
+| | |
+|---|---|
+| Type | `text` |
+| Grain | `metadata` |
+| Unit | dimensionless |
+| Added by | `20261101000001_run_calendar_start.sql` |
+| Read by the engine | **not traced** |
+| Validated at ingest | — |
+| Rendered at | *not yet recorded (WP 5.1)* |
+
 ## Indexes
 
 | Index | Columns | Unique | Added by |
@@ -676,6 +707,6 @@ The simulation scope's level version the run computed over ("simulation inputs v
 
 ---
 
-*Generated from data contract `3800b7221efd`, engine `0.8.3`,
+*Generated from data contract `23066b5e2f0e`, engine `0.8.3`,
 sidecar `supabase/contract/simulation_runs.contract.yaml`, table created by `20260607121406_fcbd47e9-93de-4b3b-988f-7f4718159c91.sql`. No wall-clock date: a generated
 page that differs from itself tomorrow cannot be drift-gated.*

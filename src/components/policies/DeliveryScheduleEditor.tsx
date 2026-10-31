@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { formatCalendarDate, isCalendarDate, runWeekStart } from "@/lib/sim/calendarWeeks";
 import { cn } from "@/lib/utils";
 import { DIALOG_AS_SHEET } from "@/components/shared";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -108,11 +109,10 @@ function DeliveryScheduleDialog({
   const anyInvalid = invalid.some(Boolean);
   const total = anyInvalid ? null : values.reduce((a, b) => a + b, 0);
 
-  const start = weekOneStart ? Date.parse(weekOneStart) : NaN;
+  // Cell i feeds engine tick i (the schedule is the row's forecast series), so
+  // its first day is the project start + 7i — one rule, `calendarWeeks` (§4 D318).
   const weekDate = (i: number) =>
-    Number.isFinite(start)
-      ? new Date(start + i * 7 * 86_400_000).toLocaleDateString(undefined, { month: "short", day: "numeric" })
-      : null;
+    isCalendarDate(weekOneStart) ? formatCalendarDate(runWeekStart(weekOneStart, i), false) : null;
 
   const applyPaste = () => {
     const r = parseSchedulePaste(paste);

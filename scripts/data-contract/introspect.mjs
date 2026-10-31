@@ -65,6 +65,7 @@ class Schema {
     this.phantom = new Map();     // referenced by DDL, created by no migration
     this.dynamic = [];            // plpgsql this pass could not EVALUATE — see below
     this.impossible = [];         // statements PostgreSQL would REJECT — see CREATE INDEX
+    this.disabledTriggers = new Map(); // "table.trigger" -> migration that disabled it (§4 D318)
   }
 
   table(name) { return this.tables.get(name); }
@@ -868,6 +869,18 @@ function applyAlter(schema, t, action, migration, whole) {
   if (/^FORCE\s+ROW\s+LEVEL\s+SECURITY/i.test(a)) { t.rls.forced = true; return; }
   if ((m = /^REPLICA\s+IDENTITY\s+(\w+)/i.exec(a))) { t.replica_identity = m[1].toUpperCase(); return; }
   if (/^(OWNER\s+TO|SET\s+SCHEMA|VALIDATE\s+CONSTRAINT|CLUSTER\s+ON|SET\s+\()/i.test(a)) return;
+  // `DISABLE TRIGGER x` … `ENABLE TRIGGER x` (§4 D318: a backfill that must not
+  // move `updated_at`). The artifact describes no triggers, so a toggle changes
+  // nothing it records — UNLESS the trigger is left off, which would silently
+  // switch off a rule (an audit trigger, a guard) every gate reads from the
+  // migration text. So the pair is tracked, and a trigger still disabled after
+  // the last migration is reported as unread, with its name.
+  if ((m = /^(ENABLE|DISABLE)\s+TRIGGER\s+("?[\w$]+"?)/i.exec(a))) {
+    const key = `${t.name}.${m[2].replace(/"/g, "").toLowerCase()}`;
+    if (/^DISABLE/i.test(m[1])) schema.disabledTriggers.set(key, migration);
+    else schema.disabledTriggers.delete(key);
+    return;
+  }
 
   note(schema, migration, a, "ALTER TABLE action not recognised");
 }
@@ -1399,6 +1412,12 @@ function build() {
     }))
     .sort((a, b) => a.migration.localeCompare(b.migration));
   for (const v of schema.views.keys()) known.add(v);
+
+  for (const [key, migration] of schema.disabledTriggers) {
+    note(schema, migration, `DISABLE TRIGGER ${key}`,
+      "trigger left disabled after the last migration — no gate that reads triggers from migration text can see it");
+  }
+  schema.disabledTriggers.clear();
 
   const codeRefs = findCodeTableRefs();
   const orphans = [...codeRefs.entries()]

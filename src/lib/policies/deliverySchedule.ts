@@ -10,19 +10,21 @@
  */
 
 /** The schedule's length cap — the agent surface refuses longer (`policyFields.ts`). */
+import { projectWindow } from "@/lib/sim/projectWindow";
+
 export const MAX_SCHEDULE_WEEKS = 520;
 
 /** The run's length in whole weeks from the project's simulation window, or
- *  `fallback` when the window is not set. */
+ *  `fallback` when the window is not set. The window is `projectWindow`'s —
+ *  one rule for every surface that sizes a run (PLAN.md §4 D318). */
 export function horizonWeeksOf(
   start: string | null | undefined,
   end: string | null | undefined,
   fallback = 52,
 ): number {
-  const s = start ? Date.parse(start) : NaN;
-  const e = end ? Date.parse(end) : NaN;
-  if (!Number.isFinite(s) || !Number.isFinite(e) || e <= s) return fallback;
-  return Math.min(MAX_SCHEDULE_WEEKS, Math.max(1, Math.ceil((e - s) / (7 * 86_400_000))));
+  const w = projectWindow(start, end);
+  if (!w) return fallback;
+  return Math.min(MAX_SCHEDULE_WEEKS, Math.max(1, w.weeks));
 }
 
 /** A stored value as a schedule: an array of finite non-negative numbers, or
