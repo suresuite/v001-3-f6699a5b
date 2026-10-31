@@ -25171,6 +25171,31 @@ suites green under UTC, Asia/Ho_Chi_Minh, America/Los_Angeles and Pacific/Kiriti
 `test_project_map.py` 119; `contract:rehearse -- --since main` all rehearsals green against PostgreSQL 16, `940` failing for
 each of its two mutations (guard removed; `updated_at` not held); `contract:check` green with `main`'s two warnings.
 
+### WP 18.2 — The after-merge reading of the run calendar · 2026-10-31 · no migration
+
+**§28 WP 18.2; commitments T1, T4.** Taken in the push after #420's merge (D153): `phase18RunCalendar()` in
+`verification-sql.mjs`, §15 run `41220357251`, migration fence unmoved at `20261101000001` (413 applied).
+
+**What WP 18.1 promised versus what the reading found.**
+1. **Held:** 164 of 167 runs carry a backfilled calendar equal to their project's start; the 3 without one are the only project
+   with no start; no RunKey spec names the calendar. All three gates are 0.
+2. **Found — D318's date bug is in every project's data.** Every `simulation_start` is `20xx-12-31`, every `simulation_end`
+   `…-12-30`: the default "1 Jan – 31 Dec" picked east of UTC and stored through `toISOString()`. So run week 0 is 31 December
+   on every project, and every backfilled run now records that day. WP 18.1 fixed the writer and deliberately did not correct the
+   stored values (nothing records the zone that wrote them). Correcting them is an owner decision: it re-dates every calendar
+   label by a day and cannot change a backfilled run's recorded calendar (fixed once set). `Project AA - ver3`'s window
+   (2023-12-31 → 2024-12-30) is 365 days across a leap year, so it reads **53** weeks.
+3. **Found — 15 scenarios already run another length than their window** (Aumovio 8, TRON v2 4, AA-ver3 3); the Lab now says so
+   on each. None was changed.
+4. **Not yet observable:** a run dispatched after the merge reading `dispatch` — no run has been made since.
+
+**Also in this package — `scsim engine tests` red on `main` since #419.** The `sim-worker` job runs `tests/test_nexus_combine.py`,
+which imports `openpyxl` through `scripts/nexus/nexus_combine.py`, and the job never installed it (1 failed, 197 passed).
+Reproduced locally (fails without, 6/6 with) and fixed in the install step.
+
+**Gate results.** §15 run `41220357251` success; vitest 1 971; `check:docs` holds; the probe's six queries executed against a
+scratch PostgreSQL 16 before the push.
+
 ## 17. Sequencing
 
 | Phase | WPs | Focus | Blocks | Status |
@@ -25193,7 +25218,7 @@ each of its two mutations (guard removed; `updated_at` not held); `contract:chec
 | **15** | **15.0 – 15.7** | **the engine ledger: one build identity, an append-only build ledger, an archive installable by version, one change record with a CI gate, a release quality report, and an "Engine versions & changes" page on /docs** | — | **15.0 ✅** the plan (§25), §4 D292–D297 registered from a verified reading, blueprint gap G21, gate `engine-ledger` named in `CLAUDE.md`. Five owner decisions are open (§25.5). **15.4 ✅** the change record: `scsim/CHANGELOG.yaml` holds all 18 versions back to 0.1.0, with a gate in `scsim-tests.yml` (rules 1–4 as planned, plus 6 and 7, added because rules 1–4 could not catch the unbumped commit that motivated the phase) and two generated views. It found four unbumped engine changes, now amendments, and 44 engine commits no record describes, published as a count. **15.1 ✅** one engine identity: a build is named by a digest of its source (`scsim-0.6.1+<12 hex>`, over scsim and the worker's compute path), the same in the worker, the browser and the library. The plan's commit stamp was replaced because the browser wheels cannot name the commit that holds them. The package version is the engine version. The demo fixture, labelled 0.2.8 for eight versions, was re-recorded with identical numbers. **15.2 ✅** the build ledger (`20261004000001`): every build a boot report, a run (as anon) or history names, append-only, withdrawn and never deleted, with dispatch refusing a withdrawn current build. Four planned design points were not built because each would author a fact twice. **15.3 ✅** the archive: every build ever published is listed in `versions.json` and installable by version or exact build (API and `suresuite`), history is backfilled (46 builds under 17 versions), and every version is tagged from the change record. An archived build, installed from its wheels alone, reproduces its own frozen results byte for byte. **15.5 ✅** the release report: this build against the previous version's archived build on the worker's three frozen reference runs, same seeds, a 95 % interval per KPI; byte-compared in CI, with a gate refusing a change record that understates it. 0.6.1 against 0.6.0 is identical on the reference set. **15.6 ✅** the page: /docs "Engine versions & changes", generated from the record and the measured reports, with the ledger read live. Run badges, comparisons, stale Validated Models and the Reproducibility Record all say what an engine changed and link to it. **Owed: WP 15.7, the after-merge reading.** |
 | **16** | **16.0 – 16.6** | **stochastic lead times configured like demand (per supplier × material lane), a production lead time per product (P-P.13), and the FG inventory band laid out like the Supplier inventory band** | — | **16.0 ✅** the plan (§26), §4 D299–D302 registered from a verified reading (the brief's "`inbound_logistics` carries the spread" and "lead time is read-only" were both wrong by the time it ran — D290 had made the lead time an override), blueprint P-S.6 widened, P-P.13 added, §2.4's W^FG boundary made opt-in. **16.1 ✅** engine shapes (0.7.0): normal / triangular / uniform drawn per lane from a new world stream, CRN-safe under a changed primary, lognormal/gamma bit-identical · **16.2 ✅** per-lane data + mapper (`20261004000003`, rehearsal 840; D302 closed) · **16.3 ✅** Supplier cells: a shape per row and only its parameters, a bounded row's lead time is the bounds' mean (D299 closed) · **16.4 ✅** engine production lead time (0.8.0): starts complete at t + L through a per-product pipeline, the plan offset by E[L] net of WIP, WIP traced and uncharged, the honesty test extended · **16.5 ✅** product data + Plant cells (`20261004000004`, rehearsal 850; D300 closed) · **16.6 ✅** FG inventory laid out like the Supplier band (D301 closed). **PHASE COMPLETE** — §15 reading owed in the push after the merge |
 | **17** | **17.0 – 17.7** | **nexus by stress test: every material and supplier of a project disrupted alone under one shared scenario (full outage starting in week `max(26, t_w + 1)`, 2–9 weeks), the project's policies applied, shown as a table of lost sales in € per duration with an Average column it opens sorted by, stored with its baseline and read by the Nexus card with no Run click — first on `Project AA - ver3`** | — | **17.0 ✅** the plan (§27), §4 D310–D311 registered from a verified reading (a material cannot be disrupted; "week 26" needs a reference; backorder hides lost sales), four owner decisions settled 2026-10-21 (start week, the sortable table, €, GitHub Actions within its limits); targets are suppliers and the materials they supply, nothing else; the run-from-the-card flow written as WP 17.7 (Validated Model required; pick engine, baseline, data version). **17.1 ✅** engine 0.8.1: a material can be disrupted (D311 closed for the engine API; golden digests unmoved). **17.2 ✅** the battery (`scsim.stress.nexus`, 0.8.1 amendment; 12 tests). **17.3 ✅** the store (`20261021000001`, rehearsal 900): opens only on an active Validated Model, the server writes the binding, keyed on the simulation scope. **17.4** the job is built (`nexus-stress.yml`, `nexus_job.py`); its first run, for `Project AA - ver3`, is owed after the merge. **17.5 ✅** the card reads the stored battery: baseline, top three, the sortable table, no Run button |
-| **18** | **18.1 – 18.2** | **calendar time: a disruption start entered as a run week, an ISO 8601 week or a date through the project start (run week 0), what was entered kept beside the run week, every run stamped with the calendar it was read against, and the project window as the one authored run length** | — | **18.1 ✅** `calendarWeeks.ts` and `projectWindow.ts` are the only date↔week and run-length rules; `StartTimeControl` on the Lab and the network dialog; `simulation_runs.calendar_start` stamped at insert, past runs backfilled and labelled (`20261101000001`, rehearsal 940); the dialog's week-early date and the UTC+ day-early project start fixed (§4 D318). **18.2** the after-merge reading is owed in the push after the merge (D153) |
+| **18** | **18.1 – 18.2** | **calendar time: a disruption start entered as a run week, an ISO 8601 week or a date through the project start (run week 0), what was entered kept beside the run week, every run stamped with the calendar it was read against, and the project window as the one authored run length** | — | **18.1 ✅** `calendarWeeks.ts` and `projectWindow.ts` are the only date↔week and run-length rules; `StartTimeControl` on the Lab and the network dialog; `simulation_runs.calendar_start` stamped at insert, past runs backfilled and labelled (`20261101000001`, rehearsal 940); the dialog's week-early date and the UTC+ day-early project start fixed (§4 D318). **18.2 ✅** the after-merge reading (§15 run `41220357251`): 164 backfilled, gates 0, every project start on 31 December — the UTC+ save bug, measured |
 
 **27 work packages** (26 + the five 5.2 sub-packages counted as one). WP 3.0 was added at the Phase 2→3 boundary review, for the reason boundary reviews exist: nine defects had an owner that had already finished, which reads exactly like having an owner.
 Commit convention: `Phase N / WP N.M / <blueprint ref>: <title>`.
@@ -28411,10 +28436,17 @@ reading that came first.
   in weeks, and refuse outside 52–520; `horizonWeeksOf` and /policies' horizon line read it; a new scenario with no validated or
   baseline world takes it; the run-window card warns when a scenario runs another length and offers to set it.
 
-### WP 18.2 — The after-merge reading *(§15 · open — owed in the push AFTER the merge, D153)*
+### WP 18.2 — The after-merge reading ✅ *(§15 · done — run `41220357251`, taken in the push after the merge, D153)*
 
 Every project's runs have `calendar_start_source` in (`dispatch`, `backfill`) or both columns NULL exactly where the project has
 no `simulation_start`; no `run_key` moved; a run dispatched after the merge reads `dispatch`.
+
+**Read** (§15 run `41220357251`, fence unmoved at `20261101000001`, 413 applied): 164 runs `backfill`, 3 with no calendar —
+all in `Example — 1P/2M/3S`, which has no start — and 0 `dispatch` (no run since the merge). The three gates are 0: no run of a
+project with a start lacks a calendar, no backfilled run differs from its project's start, no RunKey spec names the calendar.
+Adoption: 0 scenarios carry a calendar-entered start yet; 15 scenarios in three projects (Aumovio 8, TRON v2 4, AA-ver3 3) run a
+horizon other than their window and now show the mismatch note. **Every project start reads 31 December** — D318's UTC+ save
+bug, now measured in production (§16 · WP 18.2). "A dispatched run reads `dispatch`" is unobserved until the next run.
 
 **Order.** 18.1 → 18.2. **Out of scope:** the stress-test library cleanup to supplier and material disruptions (owner: a later
 package; its material half is D311's platform path); renaming the /policies-vs-Lab "Week 1" labels (D318's open half).
